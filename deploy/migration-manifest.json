@@ -1,0 +1,16 @@
+{
+  "host_id": "f082089b7cc3446c8085be905fde5008",
+  "mediamtx_sha256": "a10c39ab668b05841737eb6d49de46fda45110378179e5f673dadf0b3d5eb3ee",
+  "dependencies": [
+    "legacy",
+    "reid",
+    "botsort/pretrained",
+    "detection"
+  ],
+  "source_origin": "/data/nfs_storage/hxjm",
+  "source": "/data/nfs_storage/hxjm",
+  "data_root": "/data/nfs_storage/hxjm_datas",
+  "runtime": "/home/guest/.local/state/hxjm/f082089b7cc3/release",
+  "host_state": "/home/guest/.local/state/hxjm/f082089b7cc3",
+  "business_history_migrated": false
+}

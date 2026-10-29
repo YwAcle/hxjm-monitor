@@ -1,0 +1,116 @@
+/* 顶部装饰图片 */
+.imageWrapper {
+  flex-shrink: 0;
+  width: 100%;
+  height: 71px;
+  margin-top: 4px;
+}
+
+.imageLeft {
+  width: 964px;
+  height: 71px;
+}
+
+.imageRight {
+  width: 964px;
+  height: 71px;
+}
+
+/* 主标题容器 */
+.headerContainer {
+  height: 104px;
+  width: 100%;
+  position: absolute;
+  left: 0;
+  top: -9px;
+}
+
+.headerBlock {
+  height: 96px;
+  background: url('../../view/lanhu_shipinjiankonguisheji1230/assets/img/SketchPngc3031fc1123d1b010190460a04384359b42254dee5d8be030a4bb0ae38107df0.png') 100% no-repeat;
+  background-size: 100% 100%;
+  margin-top: 9px;
+  width: 100%;
+}
+
+.headerRow {
+  width: 100%;
+  height: 93px;
+  background: url('../../view/lanhu_shipinjiankonguisheji1230/assets/img/SketchPngd6d401097b4d283db02035920dd34e7202c84767722521b18b58f2c6419042d6.png') 0px -1px no-repeat;
+  background-size: 2752px 95px;
+  margin-top: -9px;
+  justify-content: center;
+  position: relative;
+}
+
+.decorLeft {
+  width: 648px;
+  height: 70px;
+  margin-left: 229px;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.titleWrapper {
+  position: relative;
+  width: 979px;
+  height: 78px;
+  margin: 15px 0 0 10px;
+}
+
+.titleBg {
+  height: 63px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  margin-top: 15px;
+  width: 979px;
+}
+
+.titleInner {
+  width: 774px;
+  height: 68px;
+  margin: 29px 0 0 113px;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.title {
+  position: absolute;
+  left: 127px;
+  top: 0;
+  width: 724px;
+  height: 67px;
+  object-fit: contain;
+}
+
+.decorRight {
+  width: 648px;
+  height: 70px;
+  margin: 0 229px 0 9px;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+/* 当前时间显示 - 使用和火眼金睛大模型一样的渐变和字体 */
+.currentTime {
+  position: absolute;
+  right: 100px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-top: -5px; /* 微调，使视觉上完全居中 */
+  font-family: AlibabaPuHuiTi_3_85_Bold;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 30px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  background: linear-gradient(0deg, rgba(1,127,194,0.49) 0%, rgba(1,127,194,0.18) 32.4%, rgba(1,127,194,0) 100%), #FFFFFF;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  z-index: 10;
+}
+

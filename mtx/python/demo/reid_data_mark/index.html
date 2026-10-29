@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据标注工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 30px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .navigation-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex: 1;
+        }
+
+        .nav-btn {
+            padding: 12px 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+            min-width: 100px;
+        }
+
+        .nav-btn:hover:not(:disabled) {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .nav-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .folder-info {
+            flex: 1;
+            text-align: center;
+            font-size: 16px;
+            color: #666;
+            padding: 10px;
+        }
+
+        .date-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .date-selector label {
+            font-weight: 500;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .date-selector select {
+            padding: 10px 15px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            min-width: 200px;
+        }
+
+        .date-selector select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .date-info {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .download-all-btn {
+            padding: 10px 20px;
+            background: #17a2b8;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-left: auto;
+        }
+
+        .download-all-btn:hover {
+            background: #138496;
+        }
+
+        .download-btn {
+            padding: 12px 30px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .download-btn:hover {
+            background: #218838;
+        }
+
+        .download-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .images-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .images-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .image-wrapper {
+                height: 500px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .images-container {
+                grid-template-columns: 1fr;
+            }
+            .image-wrapper {
+                height: 400px;
+            }
+        }
+
+        .image-wrapper {
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #f8f9fa;
+            transition: transform 0.3s, box-shadow 0.3s;
+            width: 100%;
+            height: 600px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .image-wrapper:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+        }
+
+        .image-wrapper img {
+            height: 100%;
+            width: auto;
+            max-width: 100%;
+            display: block;
+            object-fit: contain;
+        }
+
+        .current-folder {
+            text-align: center;
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 8px;
+        }
+
+        .current-annotation {
+            text-align: center;
+            font-size: 20px;
+            color: #28a745;
+            font-weight: bold;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #d4edda;
+            border-radius: 8px;
+        }
+
+        .names-section {
+            margin-top: 30px;
+        }
+
+        .names-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .names-section h2 {
+            color: #333;
+            margin: 0;
+            font-size: 1.5em;
+        }
+
+        .add-name-btn {
+            padding: 10px 20px;
+            background: #17a2b8;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .add-name-btn:hover {
+            background: #138496;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 30px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: #333;
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: #000;
+        }
+
+        .modal-body {
+            margin-bottom: 20px;
+        }
+
+        .modal-body input {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+
+        .modal-body input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .modal-btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .modal-btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .modal-btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .modal-btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .names-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+        }
+
+        .name-btn {
+            padding: 15px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .name-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .name-btn:active {
+            transform: scale(0.98);
+        }
+
+        .name-btn.selected {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            box-shadow: 0 0 20px rgba(40, 167, 69, 0.5);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-size: 18px;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-item .label {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .stat-item .value {
+            color: #333;
+            font-size: 24px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>数据标注工具</h1>
+        
+        <div class="date-selector">
+            <label for="dateSelect">选择日期：</label>
+            <select id="dateSelect" onchange="onDateChange()">
+                <option value="">请选择日期...</option>
+            </select>
+            <span class="date-info" id="dateInfo"></span>
+            <button class="download-all-btn" onclick="downloadAllDates()">下载所有日期数据 (ZIP)</button>
+        </div>
+        
+        <div class="controls">
+            <div class="navigation-controls">
+                <button class="nav-btn" id="prevBtn" onclick="navigateFolder(-1)">← 上一个</button>
+                <div class="folder-info" id="folderInfo">加载中...</div>
+                <button class="nav-btn" id="nextBtn" onclick="navigateFolder(1)">下一个 →</button>
+            </div>
+            <button class="download-btn" id="downloadBtn" onclick="downloadAnnotations()">下载标注 (TXT)</button>
+        </div>
+
+        <div class="stats">
+            <div class="stat-item">
+                <div class="label">总文件夹数</div>
+                <div class="value" id="totalFolders">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="label">已标注</div>
+                <div class="value" id="annotatedCount">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="label">未标注</div>
+                <div class="value" id="unannotatedCount">0</div>
+            </div>
+        </div>
+
+        <div id="currentFolder" class="current-folder" style="display: none;"></div>
+        <div id="currentAnnotation" class="current-annotation" style="display: none;"></div>
+
+        <div id="imagesContainer" class="images-container"></div>
+
+        <div class="names-section">
+            <div class="names-section-header">
+                <h2>选择姓名进行标注</h2>
+                <button class="add-name-btn" onclick="showAddNameModal()">+ 新增人员</button>
+            </div>
+            <div class="names-grid" id="namesGrid"></div>
+        </div>
+    </div>
+
+    <!-- 新增人员模态框 -->
+    <div id="addNameModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>新增人员</h3>
+                <span class="close" onclick="closeAddNameModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="newNameInput" placeholder="请输入姓名" onkeypress="handleNameInputKeyPress(event)">
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-secondary" onclick="closeAddNameModal()">取消</button>
+                <button class="modal-btn modal-btn-primary" onclick="addName()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let folders = [];
+        let currentFolderIndex = -1;
+        let currentFolder = '';
+        let annotations = {};
+        let currentDate = null;
+
+        // 初始化
+        async function init() {
+            await loadNames();
+            await loadDates();
+        }
+
+        // 加载日期列表
+        async function loadDates() {
+            try {
+                const response = await fetch('/api/dates');
+                const dates = await response.json();
+                const select = document.getElementById('dateSelect');
+                select.innerHTML = '<option value="">请选择日期...</option>';
+                dates.forEach(date => {
+                    const option = document.createElement('option');
+                    option.value = date;
+                    option.textContent = date;
+                    select.appendChild(option);
+                });
+                // 如果有日期，默认选择第一个
+                if (dates.length > 0) {
+                    select.value = dates[0];
+                    await onDateChange();
+                }
+            } catch (error) {
+                console.error('加载日期列表失败:', error);
+            }
+        }
+
+        // 日期选择变化
+        async function onDateChange() {
+            const dateSelect = document.getElementById('dateSelect');
+            const date = dateSelect.value;
+            
+            if (!date) {
+                currentDate = null;
+                folders = [];
+                currentFolderIndex = -1;
+                currentFolder = '';
+                annotations = {};
+                document.getElementById('imagesContainer').innerHTML = '';
+                document.getElementById('currentFolder').style.display = 'none';
+                document.getElementById('currentAnnotation').style.display = 'none';
+                updateStats();
+                updateFolderInfo();
+                return;
+            }
+
+            try {
+                // 设置日期
+                const response = await fetch('/api/set_date', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ date: date })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    currentDate = date;
+                    document.getElementById('dateInfo').textContent = `已加载 ${data.annotations_count} 条标注`;
+                    // 加载文件夹列表
+                    await loadFolders();
+                    await loadAnnotations();
+                    // 获取最后一个标注的位置并跳转
+                    if (folders.length > 0) {
+                        try {
+                            const indexResponse = await fetch('/api/last_annotated_index');
+                            const indexData = await indexResponse.json();
+                            const targetIndex = indexData.index >= 0 && indexData.index < folders.length ? indexData.index : 0;
+                            currentFolderIndex = targetIndex;
+                            await loadFolderByIndex(targetIndex);
+                        } catch (error) {
+                            console.error('获取最后标注位置失败:', error);
+                            // 如果失败，默认跳转到第一个
+                            currentFolderIndex = 0;
+                            await loadFolderByIndex(0);
+                        }
+                    } else {
+                        updateFolderInfo();
+                    }
+                } else {
+                    alert(data.error || '设置日期失败');
+                }
+            } catch (error) {
+                console.error('设置日期失败:', error);
+                alert('设置日期失败，请重试');
+            }
+        }
+
+        // 加载人员列表
+        async function loadNames() {
+            try {
+                const response = await fetch('/api/names');
+                const name2rawpid = await response.json();
+                createNameButtons(Object.keys(name2rawpid));
+            } catch (error) {
+                console.error('加载人员列表失败:', error);
+            }
+        }
+
+        // 加载文件夹列表
+        async function loadFolders() {
+            if (!currentDate) {
+                folders = [];
+                updateStats();
+                updateNavigationButtons();
+                return;
+            }
+            try {
+                const response = await fetch('/api/folders');
+                if (response.ok) {
+                    folders = await response.json();
+                } else {
+                    const data = await response.json();
+                    if (data.error) {
+                        folders = [];
+                    }
+                }
+                updateStats();
+                updateNavigationButtons();
+            } catch (error) {
+                console.error('加载文件夹失败:', error);
+                folders = [];
+                updateStats();
+                updateNavigationButtons();
+            }
+        }
+
+        // 通过索引加载文件夹
+        async function loadFolderByIndex(index) {
+            if (index < 0 || index >= folders.length) {
+                return;
+            }
+            currentFolderIndex = index;
+            currentFolder = folders[index];
+            await loadImages(currentFolder);
+            updateNavigationButtons();
+            updateFolderInfo();
+        }
+
+        // 更新文件夹信息显示
+        function updateFolderInfo() {
+            const infoDiv = document.getElementById('folderInfo');
+            if (folders.length > 0 && currentFolderIndex >= 0) {
+                infoDiv.textContent = `文件夹 ${currentFolderIndex + 1} / ${folders.length}`;
+            } else {
+                infoDiv.textContent = '没有可用的文件夹';
+            }
+        }
+
+        // 更新导航按钮状态
+        function updateNavigationButtons() {
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            
+            prevBtn.disabled = currentFolderIndex <= 0;
+            nextBtn.disabled = currentFolderIndex >= folders.length - 1;
+        }
+
+        // 导航到上一个/下一个文件夹
+        async function navigateFolder(direction) {
+            const newIndex = currentFolderIndex + direction;
+            if (newIndex >= 0 && newIndex < folders.length) {
+                await loadFolderByIndex(newIndex);
+            }
+        }
+
+        // 获取下一个未标注的文件夹索引
+        function getNextUnannotatedIndex(startIndex = currentFolderIndex) {
+            for (let i = startIndex + 1; i < folders.length; i++) {
+                if (!annotations[folders[i]]) {
+                    return i;
+                }
+            }
+            // 如果后面没有未标注的，从开头找
+            for (let i = 0; i <= startIndex; i++) {
+                if (!annotations[folders[i]]) {
+                    return i;
+                }
+            }
+            return -1; // 所有文件夹都已标注
+        }
+
+        // 加载图片
+        async function loadImages(folderName) {
+            const container = document.getElementById('imagesContainer');
+            container.innerHTML = '<div class="loading">加载中...</div>';
+
+            try {
+                const response = await fetch(`/api/images/${encodeURIComponent(folderName)}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    container.innerHTML = `<div class="loading">${data.error}</div>`;
+                    return;
+                }
+
+                // 显示当前文件夹
+                const folderDiv = document.getElementById('currentFolder');
+                folderDiv.textContent = `当前文件夹: ${folderName}`;
+                folderDiv.style.display = 'block';
+
+                // 显示当前标注
+                const annotationDiv = document.getElementById('currentAnnotation');
+                if (data.current_annotation) {
+                    annotationDiv.textContent = `已标注为: ${data.current_annotation}`;
+                    annotationDiv.style.display = 'block';
+                    highlightSelectedName(data.current_annotation);
+                } else {
+                    annotationDiv.style.display = 'none';
+                    clearNameSelection();
+                }
+
+                // 显示图片
+                container.innerHTML = '';
+                data.images.forEach((imagePath, index) => {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'image-wrapper';
+                    const img = document.createElement('img');
+                    img.src = `/images/${imagePath}`;
+                    img.alt = `图片 ${index + 1}`;
+                    img.onerror = function() {
+                        this.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/20000/svg" width="300" height="200"><rect fill="%23ddd" width="300" height="200"/><text x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999">图片加载失败</text></svg>';
+                    };
+                    wrapper.appendChild(img);
+                    container.appendChild(wrapper);
+                });
+            } catch (error) {
+                console.error('加载图片失败:', error);
+                container.innerHTML = '<div class="loading">加载失败，请重试</div>';
+            }
+        }
+
+        // 创建姓名按钮
+        function createNameButtons(names) {
+            const grid = document.getElementById('namesGrid');
+            grid.innerHTML = ''; // 清空现有按钮
+            names.forEach(name => {
+                const btn = document.createElement('button');
+                btn.className = 'name-btn';
+                btn.textContent = name;
+                btn.onclick = () => annotate(name);
+                grid.appendChild(btn);
+            });
+        }
+
+        // 显示新增人员模态框
+        function showAddNameModal() {
+            const modal = document.getElementById('addNameModal');
+            modal.style.display = 'block';
+            document.getElementById('newNameInput').focus();
+        }
+
+        // 关闭新增人员模态框
+        function closeAddNameModal() {
+            const modal = document.getElementById('addNameModal');
+            modal.style.display = 'none';
+            document.getElementById('newNameInput').value = '';
+        }
+
+        // 处理输入框回车键
+        function handleNameInputKeyPress(event) {
+            if (event.key === 'Enter') {
+                addName();
+            }
+        }
+
+        // 添加新人员
+        async function addName() {
+            const name = document.getElementById('newNameInput').value.trim();
+            if (!name) {
+                alert('请输入姓名');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/add_name', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name: name })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    // 重新加载人员列表
+                    await loadNames();
+                    closeAddNameModal();
+                    alert(`已成功添加: ${name}`);
+                } else {
+                    alert(data.error || '添加失败');
+                }
+            } catch (error) {
+                console.error('添加人员失败:', error);
+                alert('添加失败，请重试');
+            }
+        }
+
+        // 点击模态框外部关闭
+        window.onclick = function(event) {
+            const modal = document.getElementById('addNameModal');
+            if (event.target === modal) {
+                closeAddNameModal();
+            }
+        }
+
+        // 标注
+        async function annotate(name) {
+            if (!currentDate) {
+                alert('请先选择日期');
+                return;
+            }
+            if (!currentFolder) {
+                alert('请先选择一个文件夹');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/annotate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        folder_name: currentFolder,
+                        name: name
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    annotations[currentFolder] = name;
+                    const annotationDiv = document.getElementById('currentAnnotation');
+                    annotationDiv.textContent = `已标注为: ${name}`;
+                    annotationDiv.style.display = 'block';
+                    highlightSelectedName(name);
+                    updateStats();
+                    
+                    // 自动跳转到下一个未标注的文件夹
+                    setTimeout(async () => {
+                        const nextIndex = getNextUnannotatedIndex();
+                        if (nextIndex >= 0) {
+                            await loadFolderByIndex(nextIndex);
+                        } else {
+                            alert('所有文件夹都已标注完成！');
+                        }
+                    }, 300); // 延迟300ms，让用户看到标注成功的反馈
+                } else {
+                    alert(data.error || '标注失败');
+                }
+            } catch (error) {
+                console.error('标注失败:', error);
+                alert('标注失败，请重试');
+            }
+        }
+
+        // 高亮选中的姓名按钮
+        function highlightSelectedName(name) {
+            const buttons = document.querySelectorAll('.name-btn');
+            buttons.forEach(btn => {
+                if (btn.textContent === name) {
+                    btn.classList.add('selected');
+                } else {
+                    btn.classList.remove('selected');
+                }
+            });
+        }
+
+        // 清除姓名选择
+        function clearNameSelection() {
+            const buttons = document.querySelectorAll('.name-btn');
+            buttons.forEach(btn => btn.classList.remove('selected'));
+        }
+
+        // 加载所有标注
+        async function loadAnnotations() {
+            try {
+                const response = await fetch('/api/annotations');
+                annotations = await response.json();
+                updateStats();
+            } catch (error) {
+                console.error('加载标注失败:', error);
+            }
+        }
+
+        // 键盘快捷键支持
+        document.addEventListener('keydown', function(event) {
+            // 左箭头：上一个文件夹
+            if (event.key === 'ArrowLeft' && !event.ctrlKey && !event.metaKey) {
+                event.preventDefault();
+                if (currentFolderIndex > 0) {
+                    navigateFolder(-1);
+                }
+            }
+            // 右箭头：下一个文件夹
+            else if (event.key === 'ArrowRight' && !event.ctrlKey && !event.metaKey) {
+                event.preventDefault();
+                if (currentFolderIndex < folders.length - 1) {
+                    navigateFolder(1);
+                }
+            }
+        });
+
+        // 更新统计信息
+        function updateStats() {
+            document.getElementById('totalFolders').textContent = folders.length;
+            const annotated = Object.keys(annotations).length;
+            document.getElementById('annotatedCount').textContent = annotated;
+            document.getElementById('unannotatedCount').textContent = folders.length - annotated;
+        }
+
+        // 下载标注
+        function downloadAnnotations() {
+            if (!currentDate) {
+                alert('请先选择日期');
+                return;
+            }
+            if (Object.keys(annotations).length === 0) {
+                alert('还没有任何标注，无法下载');
+                return;
+            }
+            window.location.href = '/api/download';
+        }
+
+        // 下载所有日期数据
+        function downloadAllDates() {
+            window.location.href = '/api/download_all';
+        }
+
+        // 页面加载时初始化
+        init();
+    </script>
+</body>
+</html>
+

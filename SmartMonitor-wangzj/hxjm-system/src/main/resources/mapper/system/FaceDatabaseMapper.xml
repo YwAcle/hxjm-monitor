@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="edu.cqupt.hxjm.system.mapper.FaceDatabaseMapper">
+    
+    <resultMap type="FaceDatabase" id="FaceDatabaseResult">
+        <result property="id"    column="id"    />
+        <result property="faceId"    column="face_id"    />
+        <result property="userName"    column="user_name"    />
+        <result property="faceEncoding"    column="face_encoding"    />
+        <result property="faceImage"    column="face_image"    />
+        <result property="faceImageThumbnail"    column="face_image_thumbnail"    />
+        <result property="metadata"    column="metadata"    />
+        <result property="status"    column="status"    />
+        <result property="gender"    column="gender"    />
+        <result property="age"    column="age"    />
+        <result property="quality"    column="quality"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateTime"    column="update_time"    />
+    </resultMap>
+
+    <sql id="selectFaceDatabaseVo">
+        select id, face_id, user_name, face_encoding, face_image, face_image_thumbnail, metadata, status, gender, age, quality, create_time, update_time from face_database
+    </sql>
+
+    <select id="selectFaceDatabaseList" parameterType="FaceDatabase" resultMap="FaceDatabaseResult">
+        <include refid="selectFaceDatabaseVo"/>
+        <where>  
+            <if test="userName != null  and userName != ''"> and user_name like concat('%', #{userName}, '%')</if>
+            <if test="status != null "> and status = #{status}</if>
+            <if test="gender != null "> and gender = #{gender}</if>
+            <if test="age != null "> and age = #{age}</if>
+            <if test="quality != null "> and quality = #{quality}</if>
+        </where>
+    </select>
+    
+    <select id="selectFaceDatabaseById" parameterType="Long" resultMap="FaceDatabaseResult">
+        <include refid="selectFaceDatabaseVo"/>
+        where id = #{id}
+    </select>
+
+    <insert id="insertFaceDatabase" parameterType="FaceDatabase" useGeneratedKeys="true" keyProperty="id">
+        insert into face_database
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="faceId != null and faceId != ''">face_id,</if>
+            <if test="userName != null">user_name,</if>
+            <if test="faceEncoding != null and faceEncoding != ''">face_encoding,</if>
+            <if test="faceImage != null">face_image,</if>
+            <if test="faceImageThumbnail != null">face_image_thumbnail,</if>
+            <if test="metadata != null">metadata,</if>
+            <if test="status != null">status,</if>
+            <if test="gender != null">gender,</if>
+            <if test="age != null">age,</if>
+            <if test="quality != null">quality,</if>
+            create_time
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="faceId != null and faceId != ''">#{faceId},</if>
+            <if test="userName != null">#{userName},</if>
+            <if test="faceEncoding != null and faceEncoding != ''">#{faceEncoding},</if>
+            <if test="faceImage != null">#{faceImage},</if>
+            <if test="faceImageThumbnail != null">#{faceImageThumbnail},</if>
+            <if test="metadata != null">#{metadata},</if>
+            <if test="status != null">#{status},</if>
+            <if test="gender != null">#{gender},</if>
+            <if test="age != null">#{age},</if>
+            <if test="quality != null">#{quality},</if>
+            sysdate()
+         </trim>
+    </insert>
+
+    <update id="updateFaceDatabase" parameterType="FaceDatabase">
+        update face_database
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="faceId != null and faceId != ''">face_id = #{faceId},</if>
+            <if test="userName != null">user_name = #{userName},</if>
+            <if test="faceEncoding != null and faceEncoding != ''">face_encoding = #{faceEncoding},</if>
+            <if test="faceImage != null">face_image = #{faceImage},</if>
+            <if test="faceImageThumbnail != null">face_image_thumbnail = #{faceImageThumbnail},</if>
+            <if test="metadata != null">metadata = #{metadata},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="gender != null">gender = #{gender},</if>
+            <if test="age != null">age = #{age},</if>
+            <if test="quality != null">quality = #{quality},</if>
+            update_time = sysdate()
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteFaceDatabaseById" parameterType="Long">
+        delete from face_database where id = #{id}
+    </delete>
+
+    <delete id="deleteFaceDatabaseByIds" parameterType="String">
+        delete from face_database where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="selectAllFaceInfo" resultType="java.util.Map">
+        SELECT 
+            face_id,
+            CONVERT(face_encoding USING utf8) as embedding,
+            quality,
+            age,
+            gender
+        FROM face_database
+        WHERE status = 1
+    </select>
+</mapper>

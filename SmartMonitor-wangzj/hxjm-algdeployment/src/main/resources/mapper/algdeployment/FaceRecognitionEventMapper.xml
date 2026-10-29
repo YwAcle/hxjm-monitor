@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="edu.cqupt.hxjm.algdeployment.mapper.FaceRecognitionEventMapper">
+    
+    <resultMap type="FaceRecognitionEvent" id="FaceRecognitionEventResult">
+        <result property="id"    column="id"    />
+        <result property="trackId"    column="track_id"    />
+        <result property="machineId"    column="machine_id"    />
+        <result property="faceId"    column="face_id"    />
+        <result property="confidence"    column="confidence"    />
+        <result property="recognitionTime"    column="recognition_time"    />
+        <result property="departureTime"    column="departure_time"    />
+        <result property="detectionImg"    column="detection_img"    />
+    </resultMap>
+
+    <sql id="selectFaceRecognitionEventVo">
+        select id, track_id, machine_id, face_id, confidence, recognition_time, departure_time, detection_img 
+        from face_recognition_events
+    </sql>
+
+    <select id="selectFaceRecognitionEventList" parameterType="FaceRecognitionEvent" resultMap="FaceRecognitionEventResult">
+        <include refid="selectFaceRecognitionEventVo"/>
+        <where>  
+            <if test="trackId != null  and trackId != ''"> and track_id = #{trackId}</if>
+            <if test="machineId != null "> and machine_id = #{machineId}</if>
+            <if test="faceId != null  and faceId != ''"> and face_id = #{faceId}</if>
+            <if test="confidence != null "> and confidence = #{confidence}</if>
+            <if test="recognitionTime != null "> and recognition_time = #{recognitionTime}</if>
+            <if test="departureTime != null "> and departure_time = #{departureTime}</if>
+        </where>
+    </select>
+    
+    <select id="selectFaceRecognitionEventById" parameterType="Long" resultMap="FaceRecognitionEventResult">
+        <include refid="selectFaceRecognitionEventVo"/>
+        where id = #{id}
+    </select>
+        
+    <insert id="insertFaceRecognitionEvent" parameterType="FaceRecognitionEvent">
+        insert into face_recognition_events
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="trackId != null and trackId != ''">track_id,</if>
+            <if test="machineId != null">machine_id,</if>
+            <if test="faceId != null and faceId != ''">face_id,</if>
+            <if test="confidence != null">confidence,</if>
+            <if test="recognitionTime != null">recognition_time,</if>
+            <if test="departureTime != null">departure_time,</if>
+            <if test="detectionImg != null">detection_img,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="trackId != null and trackId != ''">#{trackId},</if>
+            <if test="machineId != null">#{machineId},</if>
+            <if test="faceId != null and faceId != ''">#{faceId},</if>
+            <if test="confidence != null">#{confidence},</if>
+            <if test="recognitionTime != null">#{recognitionTime},</if>
+            <if test="departureTime != null">#{departureTime},</if>
+            <if test="detectionImg != null">#{detectionImg},</if>
+         </trim>
+    </insert>
+
+    <update id="updateFaceRecognitionEvent" parameterType="FaceRecognitionEvent">
+        update face_recognition_events
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="trackId != null and trackId != ''">track_id = #{trackId},</if>
+            <if test="machineId != null">machine_id = #{machineId},</if>
+            <if test="faceId != null and faceId != ''">face_id = #{faceId},</if>
+            <if test="confidence != null">confidence = #{confidence},</if>
+            <if test="recognitionTime != null">recognition_time = #{recognitionTime},</if>
+            <if test="departureTime != null">departure_time = #{departureTime},</if>
+            <if test="detectionImg != null">detection_img = #{detectionImg},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteFaceRecognitionEventById" parameterType="Long">
+        delete from face_recognition_events where id = #{id}
+    </delete>
+
+    <delete id="deleteFaceRecognitionEventByIds" parameterType="String">
+        delete from face_recognition_events where id in
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="selectTodayEvents" resultType="java.util.Map">
+        SELECT 
+            e.id,
+            e.track_id,
+            e.machine_id,
+            e.face_id,
+            e.confidence,
+            e.recognition_time,
+            e.departure_time,
+            e.detection_img,
+            m.machine_name as deviceName,
+            f.user_name as faceName
+        FROM face_recognition_events e
+        LEFT JOIN ba_machine m ON e.machine_id = m.machine_id
+        LEFT JOIN face_database f ON e.face_id = f.face_id
+        WHERE e.recognition_time >= CURDATE()
+        ORDER BY e.recognition_time DESC
+    </select>
+
+    <select id="countTodayFlow" resultType="java.util.Map">
+        SELECT 
+            hours.hour,
+            IFNULL(COUNT(e.id), 0) as count
+        FROM (
+            SELECT 
+                n as hour_num,
+                CONCAT(LPAD(n, 2, '0'), ':00') as hour
+            FROM (
+                SELECT @row := @row + 1 as n
+                FROM information_schema.tables, (SELECT @row := -1) r
+                LIMIT 24
+            ) hours_gen
+            WHERE n &lt;= HOUR(NOW())
+        ) hours
+        LEFT JOIN face_recognition_events e ON 
+            DATE(e.recognition_time) = CURDATE() 
+            AND HOUR(e.recognition_time) = hours.hour_num
+        GROUP BY hours.hour, hours.hour_num
+        ORDER BY hours.hour_num
+    </select>
+
+    <!-- ================= 新增：大屏 v1 表查询 ================= -->
+
+    <!--
+        今日事件列表（大屏）
+        说明：
+        - 使用 face_recognition_events_v1
+        - 按 identity_type 决定去关联 face_person / face_stranger
+        - 仅查询当天数据：DATE(e.recognition_time) = CURDATE()
+    -->
+    <select id="selectTodayEventsV1"
+            resultType="edu.cqupt.hxjm.algdeployment.domain.VO.TodayFaceEventVO">
+        SELECT
+            e.id AS eventId,
+            e.identity_type AS identityType,
+            e.face_id AS faceId,
+            CASE
+                WHEN e.identity_type = 'PERSON' THEN p.user_name
+                WHEN e.identity_type = 'STRANGER' THEN s.display_name
+                ELSE '未知'
+                END AS displayName,
+            e.machine_id AS machineId,
+            m.machine_name AS deviceName,
+            e.recognition_time AS recognitionTime,
+            e.departure_time AS departureTime,
+            e.confidence AS confidence,
+            e.detection_img AS detectionImg
+        FROM face_recognition_events_v1 e
+                 LEFT JOIN ba_machine m
+                           ON e.machine_id = m.machine_id
+                 LEFT JOIN face_person p
+                           ON e.identity_type = 'PERSON'
+                               AND e.face_id = p.id
+                 LEFT JOIN face_stranger s
+                           ON e.identity_type = 'STRANGER'
+                               AND e.face_id = s.id
+        <!-- WHERE DATE(e.recognition_time) = CURDATE() -->
+        ORDER BY e.recognition_time DESC
+        LIMIT 10
+    </select>
+
+    <!--
+        根据事件ID查询“事件 + 身份详情”（弹窗用）
+        返回 Map，Service 里手动组装 VO
+    -->
+    <select id="selectEventIdentityDetail"
+            parameterType="long"
+            resultType="java.util.Map">
+        SELECT
+            -- 事件信息
+            e.id               AS eventId,
+            e.machine_id       AS machineId,
+            m.machine_name     AS deviceName,
+            e.recognition_time AS recognitionTime,
+            e.departure_time   AS departureTime,
+            e.confidence       AS confidence,
+            e.detection_img    AS detectionImg,
+            e.identity_type    AS identityType,
+            e.face_id          AS faceId,
+
+            -- 正式人员信息（PERSON 时才有值）
+            p.user_name        AS personName,
+            p.person_type      AS personType,
+            p.job_no           AS jobNo,
+            p.dept_name        AS deptName,
+            p.phone            AS phone,
+            p.id_card          AS idCard,
+            p.face_image       AS personFaceImg,
+            p.gender           AS personGender,
+            p.age              AS personAge,
+            p.status           AS personStatus,
+
+            -- 陌生人信息（STRANGER 时才有值）
+            s.display_name     AS strangerDisplayName,
+            s.face_image       AS strangerFaceImg,
+            s.gender           AS strangerGender,
+            s.age              AS strangerAge,
+            s.status           AS strangerStatus,
+            s.remark           AS strangerRemark
+        FROM face_recognition_events_v1 e
+                 LEFT JOIN ba_machine m
+                           ON e.machine_id = m.machine_id
+                 LEFT JOIN face_person p
+                           ON e.identity_type = 'PERSON'
+                               AND e.face_id = p.id
+                 LEFT JOIN face_stranger s
+                           ON e.identity_type = 'STRANGER'
+                               AND e.face_id = s.id
+        WHERE e.id = #{id}
+            LIMIT 1
+    </select>
+
+    <!--
+    将指定陌生人ID的历史事件，从 STRANGER 改为 PERSON
+-->
+    <update id="updateEventsIdentityFromStrangerToPerson">
+        UPDATE face_recognition_events_v1
+        SET identity_type = 'PERSON',
+            face_id = #{personId}
+        WHERE identity_type = 'STRANGER'
+          AND face_id = #{strangerId}
+    </update>
+
+</mapper>

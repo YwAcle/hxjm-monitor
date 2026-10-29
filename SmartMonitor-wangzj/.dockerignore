@@ -1,0 +1,10 @@
+.git
+.gitignore
+.idea
+.vscode
+**/target
+**/*.iml
+logs
+*.log
+uploadPath
+.DS_Store

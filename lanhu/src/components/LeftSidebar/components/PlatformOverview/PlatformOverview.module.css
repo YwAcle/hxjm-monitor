@@ -1,0 +1,167 @@
+.decorLine {
+  width: 392px;
+  height: 2px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+
+.titleBar {
+  width: 100%;
+  height: 42px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  margin-top: 4px;
+}
+
+.titleIcon {
+  width: 22px;
+  height: 21px;
+  background-position: 0px 0px;
+  background-repeat: no-repeat;
+  background-size: 22px 22px;
+  margin: 7px 0 0 8px;
+}
+
+.titleText {
+  width: 100px;
+  height: 33px;
+  font-family: AlibabaPuHuiTi_3_85_Bold;
+  font-size: 24px;
+  color: #ECF6FF;
+  line-height: 33px;
+  letter-spacing: 1px;
+  text-align: left;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+  background: linear-gradient(0deg, rgba(1,127,194,0.49) 0%, rgba(1,127,194,0.18) 32.4%, rgba(1,127,194,0) 100%), #FFFFFF;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 2px 515px 0 8px;
+}
+
+.statsContainer {
+  background-color: rgba(62, 135, 206, 0.08);
+  height: 152px;
+  width: 100%;
+  position: relative;
+}
+
+.statsRow {
+  width: 619px;
+  height: 94px;
+  margin: 35px 0 0 16px;
+}
+
+.statIcon {
+  width: 100px;
+  height: 100px;
+  object-fit: contain;
+}
+
+.statIconAi {
+  width: 100px;
+  height: 100px;
+  object-fit: contain;
+  /* margin-left: 10px; */
+}
+
+.statIconAlert {
+  width: 100px;
+  height: 100px;
+  object-fit: contain;
+  margin-left: 60px;
+}
+
+.statInfo {
+  width: 72px;
+  height: 72px;
+  margin: 14px 0 0 10px;
+}
+
+.statLabel {
+  width: 72px;
+  height: 26px;
+  overflow-wrap: break-word;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 18px;
+  font-family: PingFangSC-Regular;
+  font-weight: normal;
+  text-align: left;
+  white-space: nowrap;
+  line-height: 26px;
+}
+
+.statValueWrapper {
+  width: 70px;
+  height: 44px;
+  overflow-wrap: break-word;
+  font-size: 0;
+  font-family: PingFangSC-Medium;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  line-height: 44px;
+  margin-top: 2px;
+}
+
+.statValue {
+  width: 70px;
+  height: 44px;
+  overflow-wrap: break-word;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 36px;
+  font-family: PingFangSC-Medium;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  line-height: 44px;
+}
+
+.statValueSpace {
+  width: 70px;
+  height: 44px;
+  overflow-wrap: break-word;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 24px;
+  font-family: PingFangSC-Regular;
+  font-weight: normal;
+  text-align: left;
+  white-space: nowrap;
+  line-height: 44px;
+}
+
+.statUnit {
+  width: 70px;
+  height: 44px;
+  overflow-wrap: break-word;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 18px;
+  font-family: PingFangSC-Regular;
+  font-weight: normal;
+  text-align: left;
+  line-height: 44px;
+}
+
+.dotDecor {
+  width: 6px;
+  height: 6px;
+  margin: 17px 0 0 auto;
+}
+
+.dot {
+  background-color: rgba(62, 161, 250, 1);
+  width: 6px;
+  height: 6px;
+}
+
+.cornerDeco {
+  position: absolute;
+  left: 0;
+  top: -24px;
+  width: 100%;
+  height: 64px;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+

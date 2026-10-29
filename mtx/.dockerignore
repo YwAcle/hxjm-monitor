@@ -1,0 +1,36 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# macOS
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Compiled binaries
+*.o
+*.exe
+ai_stream
+
+# Python cache
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Logs
+*.log
+
+# Test data
+python/garden/data/
+models/
+# Local configs (use volume mount instead)
+# config.json

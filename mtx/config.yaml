@@ -1,0 +1,97 @@
+# ============================================================
+# AI 流媒体处理配置
+# ============================================================
+#
+# 配置字段说明:
+#
+# mediamtx_url       - MediaMTX 推流服务器地址
+#
+# ai_tasks_ipc       - 各 AI 任务的全局 IPC 地址
+#   <task_name>: <ipc_address>
+#
+# ai_config          - 全局 AI 配置 (可被任务级别覆盖)
+#   frame_skip_mode  - 跳帧模式: interleaved(交叉) / continuous(连续)
+#   frame_skip       - 交叉模式: 每 N 帧处理一次 (1=每帧都处理)
+#   frame_skip_ratio - 连续模式: "M:N" 表示每 N 帧中前 M 帧做 AI
+#   ai_thread_num    - AI 处理线程数
+#   queue_size       - 帧队列大小
+#   zmq_timeout      - ZeroMQ 超时时间 (ms)
+#
+# streams            - 视频流配置列表
+#   name             - 流名称 (用于生成推流地址)
+#   rtsp_url         - RTSP 拉流地址
+#   keep_original    - 是否保留原始流 (true/false)
+#   enabled          - 是否启用该流 (true/false)
+#   ai_tasks         - AI 任务列表
+#     type           - 任务名称 (必填)
+#     transport      - 传输模式: shm(共享内存,需渲染) / base64(发送后不回读)
+#     ipc_addr       - IPC 地址 (覆盖全局)
+#     frame_skip_mode  - 跳帧模式: interleaved / continuous
+#     frame_skip     - 交叉模式参数 (覆盖全局 frame_skip)
+#     frame_skip_ratio - 连续模式参数 "做AI帧数:周期总帧数"
+#     ai_thread_num  - 覆盖全局 ai_thread_num
+#     queue_size     - 覆盖全局 queue_size
+#     zmq_timeout    - 覆盖全局 zmq_timeout
+#
+# ============================================================
+
+mediamtx_url: rtsp://127.0.0.1:18554/live
+
+control:
+  enabled: true
+  listen_host: 127.0.0.1
+  listen_port: 19090
+  token: change-me-before-production
+
+# 各 AI 任务的 IPC 地址
+ai_tasks_ipc:
+  reid: ipc:///tmp/py_ai_reid.ipc
+  garden: ipc:///tmp/py_ai_garden.ipc
+  sam3: ipc:///tmp/py_ai_sam3.ipc
+  fastsam: ipc:///tmp/py_ai_fastsam.ipc
+  boxmot: ipc:///tmp/py_ai_boxmot.ipc
+  vad: ipc:///tmp/py_ai_vad.ipc
+  savereid: ipc:///tmp/py_ai_save_reid.ipc
+  deepsort: ipc:///tmp/py_ai_deepsort.ipc
+
+
+# Runtime task templates. Camera URLs are supplied by the Java control plane.
+task_templates:
+  boxmot:
+    transport: shm
+    ai_thread_num: 1
+    queue_size: 1
+    max_frame_age_ms: 700
+  deepsort:
+    transport: shm
+    ai_thread_num: 1
+    queue_size: 1
+    # SAHI 切片推理偶尔需要超过 700ms；过小会导致算法流被误判为离线。
+    max_frame_age_ms: 1500
+    zmq_timeout: 10000
+  vad:
+    transport: base64
+    frame_skip: 50
+    ai_thread_num: 1
+    queue_size: 10
+    zmq_timeout: 120000
+  savereid:
+    transport: base64
+    frame_skip: 10
+  garden:
+    transport: base64
+    frame_skip: 25
+    ai_thread_num: 1
+    queue_size: 1
+    zmq_timeout: 120000
+
+# 全局 AI 配置（可被任务级别配置覆盖）
+ai_config:
+  # frame_skip_mode: interleaved
+  frame_skip: 1
+  ai_thread_num: 2
+  queue_size: 25
+  zmq_timeout: 5000
+
+# Dynamic mode resolves all camera sources from ba_machine.video_url.
+streams: []

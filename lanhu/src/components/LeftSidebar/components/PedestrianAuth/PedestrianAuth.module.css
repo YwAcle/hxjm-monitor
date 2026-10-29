@@ -1,0 +1,511 @@
+.decorLine {
+  width: 392px;
+  height: 2px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  margin-top: 12px;
+}
+
+.titleBar {
+  position: relative;
+  width: 100%;
+  height: 42px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  margin-top: 4px;
+}
+
+.titleIcon {
+  width: 22px;
+  height: 21px;
+  background-position: 0px 0px;
+  background-repeat: no-repeat;
+  background-size: 22px 22px;
+  margin: 7px 0 0 8px;
+}
+
+.titleText {
+  width: 150px;
+  height: 33px;
+  font-family: AlibabaPuHuiTi_3_85_Bold;
+  font-size: 24px;
+  color: #ECF6FF;
+  line-height: 33px;
+  letter-spacing: 1px;
+  text-align: left;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+  background: linear-gradient(0deg, rgba(1,127,194,0.49) 0%, rgba(1,127,194,0.18) 32.4%, rgba(1,127,194,0) 100%), #FFFFFF;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 2px 465px 0 8px;
+}
+
+.cornerDeco {
+  position: absolute;
+  left: 0;
+  top: 18px;
+  z-index: 1;
+  width: 100%;
+  height: 64px;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.centerDeco1 {
+  position: absolute;
+  left: 148px;
+  top: 25px;
+  width: 356px;
+  height: 59.6px;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.centerDeco2 {
+  position: absolute;
+  left: 148px;
+  top: 235px;
+  width: 356px;
+  height: 59.6px;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.flowLabel {
+  width: 96px;
+  height: 26px;
+  overflow-wrap: break-word;
+  color: rgba(255, 255, 255, 1);
+  font-size: 16px;
+  font-family: PingFangSC-Regular;
+  font-weight: normal;
+  text-align: left;
+  white-space: nowrap;
+  line-height: 26px;
+  margin: 43px 0 0 auto;
+}
+
+.flowValueWrapper {
+  flex-shrink: 0;
+  width: 49px;
+  height: 32px;
+  overflow-wrap: break-word;
+  font-size: 0;
+  font-family: PingFangSC-Medium;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  line-height: 32px;
+  margin: 37px 24px 0 11px;
+}
+
+.flowValue {
+  width: 49px;
+  height: 32px;
+  overflow-wrap: break-word;
+  color: rgba(65, 177, 255, 1);
+  font-size: 24px;
+  font-family: PingFangSC-Medium;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  line-height: 32px;
+}
+
+.flowUnit {
+  width: 49px;
+  height: 32px;
+  overflow-wrap: break-word;
+  color: rgba(65, 177, 255, 1);
+  font-size: 16px;
+  font-family: PingFangSC-Regular;
+  font-weight: normal;
+  text-align: left;
+  line-height: 32px;
+}
+
+.contentContainer {
+  background-color: rgba(62, 135, 206, 0.08);
+  flex: 1 0 486px;
+  min-height: 486px;
+  border: 1px solid;
+  margin-top: -2px;
+  width: 100%;
+  position: relative;
+}
+
+.chartTitleRow {
+  width: 199px;
+  height: 28px;
+  margin: 20px auto 0;
+}
+
+.chartWrapper {
+  width: calc(100% - 56px);
+  margin: 20px 0 0 28px;
+  position: relative;
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  cursor: crosshair;
+}
+
+/* Tooltip 样式 */
+.chartTooltip {
+  position: absolute;
+  transform: translateX(-50%);
+  background: rgba(20, 40, 60, 0.95);
+  border: 1px solid rgba(65, 177, 255, 0.6);
+  border-radius: 6px;
+  padding: 8px 12px;
+  pointer-events: none;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+}
+
+.tooltipTime {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+}
+
+.tooltipValue {
+  font-family: PingFangSC-Medium;
+  font-size: 20px;
+  font-weight: 600;
+  color: #41B1FF;
+  text-align: center;
+  margin-top: 2px;
+}
+
+.chartArrowLeft {
+  width: 25px;
+  height: 16px;
+  background-position: 0px -1px;
+  background-repeat: no-repeat;
+  background-size: 25px 17px;
+  margin-top: 6px;
+}
+
+.chartArrowRight {
+  width: 25px;
+  height: 16px;
+  background-position: 0px -1px;
+  background-repeat: no-repeat;
+  background-size: 25px 17px;
+  margin-top: 6px;
+}
+
+.chartTitle {
+  width: 104px;
+  height: 28px;
+  font-family: AlibabaPuHuiTi_3_85_Bold;
+  font-size: 20px;
+  color: #ECF6FF;
+  line-height: 28px;
+  letter-spacing: 1px;
+  text-align: center;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+  background: linear-gradient(0deg, rgba(1,127,194,0.49) 0%, rgba(1,127,194,0.18) 32.4%, rgba(1,127,194,0) 100%), #FFFFFF;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gridRow {
+  width: 598px;
+  height: 24px;
+  margin: 4px 0 0 28px;
+}
+
+.gridRowDouble {
+  width: 598px;
+  height: 48px;
+  margin-left: 28px;
+}
+
+.gridRowBottom {
+  width: 596px;
+  height: 66px;
+  margin-left: 31px;
+}
+
+.yLabel {
+  width: 20px;
+  height: 24px;
+  overflow-wrap: break-word;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 16px;
+  font-family: PingFangSC-Regular;
+  font-weight: normal;
+  text-align: right;
+  white-space: nowrap;
+  line-height: 24px;
+}
+
+.yLabelZero {
+  width: 10px;
+  height: 24px;
+  overflow-wrap: break-word;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 16px;
+  font-family: PingFangSC-Regular;
+  font-weight: normal;
+  text-align: right;
+  white-space: nowrap;
+  line-height: 24px;
+  margin-left: 7px;
+}
+
+.yLabelGroup {
+  width: 20px;
+  height: 48px;
+}
+
+.yLabelGroupBottom {
+  width: 17px;
+  height: 48px;
+}
+
+.gridLine {
+  width: 566px;
+  height: 1px;
+  margin-top: 14px;
+}
+
+.gridLineGroup {
+  width: 566px;
+  height: 25px;
+  margin-top: 13px;
+}
+
+.chartBox {
+  width: 565px;
+  height: 54px;
+  margin-top: 12px;
+}
+
+.ticksRow {
+  width: 467px;
+  height: 8px;
+  margin: 20px 0 0 45px;
+}
+
+.tick {
+  width: 2px;
+  height: 8px;
+}
+
+.timeLabelRow {
+  width: 545px;
+  height: 20px;
+  margin: 5px 0 0 6px;
+}
+
+.timeLabel {
+  width: 80px;
+  height: 20px;
+  overflow-wrap: break-word;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 16px;
+  font-family: PingFangSC-Regular;
+  font-weight: normal;
+  text-align: center;
+  white-space: nowrap;
+  line-height: 20px;
+  margin-left: -3px;
+}
+
+.timeLabel:first-child {
+  margin-left: 0;
+}
+
+.infoTitleRow {
+  width: 199px;
+  height: 28px;
+  margin: 20px auto 0;
+}
+
+.arrowLeft {
+  width: 25px;
+  height: 16px;
+  background-position: 0px -1px;
+  background-repeat: no-repeat;
+  background-size: 25px 17px;
+  margin-top: 6px;
+}
+
+.infoTitle {
+  width: 125px;
+  height: 28px;
+  font-family: AlibabaPuHuiTi_3_85_Bold;
+  font-size: 20px;
+  color: #ECF6FF;
+  line-height: 28px;
+  letter-spacing: 1px;
+  text-align: left;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+  margin-left: 12px;
+  background: linear-gradient(0deg, rgba(1,127,194,0.49) 0%, rgba(1,127,194,0.18) 32.4%, rgba(1,127,194,0) 100%), #FFFFFF;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.arrowRight {
+  width: 25px;
+  height: 16px;
+  background-position: 0px -1px;
+  background-repeat: no-repeat;
+  background-size: 25px 17px;
+  margin: 6px 0 0 12px;
+}
+
+/* 人员列表滚动容器 */
+.personListWrapper {
+  width: calc(100% - 60px);
+  flex: 1;
+  min-height: 120px;
+  margin: 15px 30px 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 自定义滚动条样式 */
+.personListWrapper::-webkit-scrollbar {
+  width: 4px;
+}
+
+.personListWrapper::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.personListWrapper::-webkit-scrollbar-thumb {
+  background: rgba(65, 177, 255, 0.5);
+  border-radius: 2px;
+}
+
+.personListWrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(65, 177, 255, 0.8);
+}
+
+.personListContainer {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+}
+
+.personColumn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.personCard {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  padding: 6px;
+}
+
+/* 头像 72px x 72px */
+.avatar {
+  border-radius: 50%;
+  width: 72px;
+  height: 72px;
+  border: 1.5px solid rgba(65, 177, 255, 1);
+  background-size: cover;
+  background-position: top center;
+  background-repeat: no-repeat;
+  flex-shrink: 0;
+}
+
+.personInfo {
+  display: flex;
+  flex-direction: column;
+  margin-left: 16px;
+}
+
+/* 姓名：苹方-简 中黑体，20px，行高28px */
+.personName {
+  color: #FFFFFF;
+  font-size: 20px;
+  font-family: PingFangSC-Medium;
+  font-weight: 500;
+  line-height: 28px;
+  text-align: left;
+}
+
+.personDetail {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 16px;
+  font-family: PingFangSC-Regular;
+  font-weight: normal;
+  line-height: 24px;
+  margin-top: 4px;
+}
+
+.personTime {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 16px;
+  font-family: PingFangSC-Regular;
+  font-weight: normal;
+  line-height: 24px;
+  margin-top: -2px;
+}
+
+.dotDecor {
+  width: 6px;
+  height: 6px;
+  margin: 12px 0 0 auto;
+}
+
+.dot {
+  background-color: rgba(62, 161, 250, 1);
+  width: 6px;
+  height: 6px;
+}
+
+.chartLine {
+  position: absolute;
+  left: 64px;
+  top: 194px;
+  width: 563px;
+  height: 1px;
+}
+
+.chartArea {
+  position: absolute;
+  left: 91px;
+  top: 86px;
+  width: 513px;
+  height: 105px;
+}
+
+.chartDecoTop {
+  position: absolute;
+  left: 148px;
+  top: 23px;
+  width: 356px;
+  height: 60px;
+}
+
+.chartDecoBottom {
+  position: absolute;
+  left: 148px;
+  top: 247px;
+  width: 356px;
+  height: 60px;
+}
+

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC 4分屏播放器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #1a1a2e;
+            font-family: 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        h1 {
+            color: #fff;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .video-container {
+            background: #16213e;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+        .video-header {
+            background: #0f3460;
+            color: #fff;
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+        }
+        .video-header input {
+            flex: 1;
+            margin: 0 10px;
+            padding: 5px 10px;
+            border: none;
+            border-radius: 4px;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 12px;
+        }
+        .video-header button {
+            padding: 5px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        .btn-play {
+            background: #4CAF50;
+            color: white;
+        }
+        .btn-stop {
+            background: #f44336;
+            color: white;
+        }
+        video {
+            width: 100%;
+            height: 300px;
+            background: #000;
+            display: block;
+        }
+        .status {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: #4CAF50;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .status.error {
+            color: #f44336;
+        }
+        .status.connecting {
+            color: #ff9800;
+        }
+        .controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .controls button {
+            padding: 10px 30px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .controls .btn-all-play {
+            background: #4CAF50;
+            color: white;
+        }
+        .controls .btn-all-stop {
+            background: #f44336;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebRTC 4分屏播放器</h1>
+    
+    <div class="controls">
+        <button class="btn-all-play" onclick="playAll()">全部播放</button>
+        <button class="btn-all-stop" onclick="stopAll()">全部停止</button>
+    </div>
+
+    <div class="grid">
+        <div class="video-container">
+            <div class="video-header">
+                <span>Camera 1</span>
+                <input type="text" id="url1" value="http://192.168.5.53:8889/live/camera_1/">
+                <button class="btn-play" onclick="play(1)">播放</button>
+                <button class="btn-stop" onclick="stop(1)">停止</button>
+            </div>
+            <video id="video1" autoplay muted playsinline></video>
+            <div class="status" id="status1">未连接</div>
+        </div>
+
+        <div class="video-container">
+            <div class="video-header">
+                <span>Camera 2</span>
+                <input type="text" id="url2" value="http://192.168.5.53:8889/live/camera_2/">
+                <button class="btn-play" onclick="play(2)">播放</button>
+                <button class="btn-stop" onclick="stop(2)">停止</button>
+            </div>
+            <video id="video2" autoplay muted playsinline></video>
+            <div class="status" id="status2">未连接</div>
+        </div>
+
+        <div class="video-container">
+            <div class="video-header">
+                <span>Camera 3</span>
+                <input type="text" id="url3" value="http://192.168.5.53:8889/live/camera_1_reid/">
+                <button class="btn-play" onclick="play(3)">播放</button>
+                <button class="btn-stop" onclick="stop(3)">停止</button>
+            </div>
+            <video id="video3" autoplay muted playsinline></video>
+            <div class="status" id="status3">未连接</div>
+        </div>
+
+        <div class="video-container">
+            <div class="video-header">
+                <span>Camera 4</span>
+                <input type="text" id="url4" value="http://192.168.5.53:8889/live/camera_2_reid/">
+                <button class="btn-play" onclick="play(4)">播放</button>
+                <button class="btn-stop" onclick="stop(4)">停止</button>
+            </div>
+            <video id="video4" autoplay muted playsinline></video>
+            <div class="status" id="status4">未连接</div>
+        </div>
+    </div>
+
+    <script>
+        const peerConnections = {};
+
+        function setStatus(id, text, type = '') {
+            const status = document.getElementById(`status${id}`);
+            status.textContent = text;
+            status.className = 'status ' + type;
+        }
+
+        async function play(id) {
+            const url = document.getElementById(`url${id}`).value.trim();
+            const video = document.getElementById(`video${id}`);
+            
+            // 停止之前的连接
+            stop(id);
+            
+            setStatus(id, '连接中...', 'connecting');
+
+            try {
+                const pc = new RTCPeerConnection({
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                });
+                peerConnections[id] = pc;
+
+                pc.ontrack = (event) => {
+                    video.srcObject = event.streams[0];
+                    setStatus(id, '播放中', '');
+                };
+
+                pc.oniceconnectionstatechange = () => {
+                    if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+                        setStatus(id, '连接断开', 'error');
+                    }
+                };
+
+                // 添加接收器
+                pc.addTransceiver('video', { direction: 'recvonly' });
+                pc.addTransceiver('audio', { direction: 'recvonly' });
+
+                // 创建 offer
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+
+                // 等待 ICE 收集完成
+                await new Promise((resolve) => {
+                    if (pc.iceGatheringState === 'complete') {
+                        resolve();
+                    } else {
+                        pc.onicegatheringstatechange = () => {
+                            if (pc.iceGatheringState === 'complete') {
+                                resolve();
+                            }
+                        };
+                        // 超时 3 秒
+                        setTimeout(resolve, 3000);
+                    }
+                });
+
+                // 发送 WHEP 请求
+                const whepUrl = url.endsWith('/') ? url + 'whep' : url + '/whep';
+                const response = await fetch(whepUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/sdp',
+                    },
+                    body: pc.localDescription.sdp,
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const answerSdp = await response.text();
+                await pc.setRemoteDescription({
+                    type: 'answer',
+                    sdp: answerSdp,
+                });
+
+            } catch (error) {
+                console.error(`播放器 ${id} 错误:`, error);
+                setStatus(id, `错误: ${error.message}`, 'error');
+                stop(id);
+            }
+        }
+
+        function stop(id) {
+            const video = document.getElementById(`video${id}`);
+            
+            if (peerConnections[id]) {
+                peerConnections[id].close();
+                delete peerConnections[id];
+            }
+            
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+            
+            setStatus(id, '已停止', '');
+        }
+
+        function playAll() {
+            for (let i = 1; i <= 4; i++) {
+                play(i);
+            }
+        }
+
+        function stopAll() {
+            for (let i = 1; i <= 4; i++) {
+                stop(i);
+            }
+        }
+
+        // 页面关闭时清理
+        window.onbeforeunload = () => {
+            stopAll();
+        };
+    </script>
+</body>
+</html>

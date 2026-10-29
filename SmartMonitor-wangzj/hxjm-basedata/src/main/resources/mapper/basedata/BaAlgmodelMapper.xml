@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="edu.cqupt.hxjm.basedata.mapper.BaAlgmodelMapper">
+    
+    <resultMap type="BaAlgmodel" id="BaAlgmodelResult">
+        <result property="algmodelId"    column="algmodel_id"    />
+        <result property="algmodelCode"    column="algmodel_code"    />
+        <result property="algmodelName"    column="algmodel_name"    />
+        <result property="algmodelEngines"    column="algmodel_engines"    />
+        <result property="algmodelInput"    column="algmodel_input"    />
+        <result property="algmodelOutput"    column="algmodel_output"    />
+        <result property="path"    column="path"    />
+        <result property="algtypeId"    column="algtype_id"    />
+        <result property="algtypeName"    column="algtype_name"    />
+        <result property="isvalid"    column="isvalid"    />
+        <result property="remark"    column="remark"    />
+        <result property="preview" column="preview"/>
+        <result property="icon" column="icon"/>
+    </resultMap>
+
+    <sql id="selectBaAlgmodelVo">
+        select a.algmodel_id, a.algmodel_code, a.algmodel_name, a.algmodel_engines,a.algmodel_input,a.algmodel_output ,a.path, a.algtype_id,
+        b.algtype_name, a.isvalid, a.remark,a.preview,a.icon from ba_algmodel a
+        left join ba_algtype b on a.algtype_id = b.algtype_id
+    </sql>
+
+    <select id="selectBaAlgmodelList" parameterType="BaAlgmodel" resultMap="BaAlgmodelResult">
+        <include refid="selectBaAlgmodelVo"/>
+        <where>
+            <if test="algmodelName != null  and algmodelName != ''"> and a.algmodel_name like concat('%', #{algmodelName}, '%')</if>
+            <if test="algmodelEngines != null "> and a.algmodel_engines = #{algmodelEngines}</if>
+            <if test="isvalid != null "> and a.isvalid = #{isvalid}</if>
+        </where>
+    </select>
+
+    <select id="selectBaAlgmodelByAlgmodelId" parameterType="Long" resultMap="BaAlgmodelResult">
+        <include refid="selectBaAlgmodelVo"/>
+        where algmodel_id = #{algmodelId}
+    </select>
+    <insert id="insertBaAlgmodel" parameterType="BaAlgmodel">
+        insert into ba_algmodel
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="algmodelId != null">algmodel_id,</if>
+            <if test="algmodelCode != null">algmodel_code,</if>
+            <if test="algmodelName != null and algmodelName != ''">algmodel_name,</if>
+            <if test="algmodelEngines != null">algmodel_engines,</if>
+            <if test="algmodelInput != null">algmodel_input,</if>
+            <if test="algmodelOutput != null">algmodel_output,</if>
+            <if test="path != null">path,</if>
+            <if test="algtypeId != null">algtype_id,</if>
+            <if test="isvalid != null">isvalid,</if>
+            <if test="remark != null">remark,</if>
+            <if test="preview != null">preview,</if>
+            <if test="icon != null">icon,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="algmodelId != null">#{algmodelId},</if>
+            <if test="algmodelCode != null">#{algmodelCode},</if>
+            <if test="algmodelName != null and algmodelName != ''">#{algmodelName},</if>
+            <if test="algmodelEngines != null">#{algmodelEngines},</if>
+            <if test="algmodelInput != null">#{algmodelInput},</if>
+            <if test="algmodelOutput != null">#{algmodelOutput},</if>
+            <if test="path != null">#{path},</if>
+            <if test="algtypeId != null">#{algtypeId},</if>
+            <if test="isvalid != null">#{isvalid},</if>
+            <if test="remark != null">#{remark},</if>
+            <if test="preview != null">#{preview},</if>
+            <if test="icon != null">#{icon},</if>
+        </trim>
+    </insert>
+    <update id="updateBaAlgmodel" parameterType="BaAlgmodel">
+        update ba_algmodel
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="algmodelCode != null">algmodel_code = #{algmodelCode},</if>
+            <if test="algmodelName != null and algmodelName != ''">algmodel_name = #{algmodelName},</if>
+            <if test="algmodelEngines != null">algmodel_engines = #{algmodelEngines},</if>
+            <if test="algmodelInput != null">algmodel_input = #{algmodelInput},</if>
+            <if test="algmodelOutput != null">algmodel_output = #{algmodelOutput},</if>
+            <if test="path != null">path = #{path},</if>
+            <if test="algtypeId != null">algtype_id = #{algtypeId},</if>
+            <if test="isvalid != null">isvalid = #{isvalid},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="preview != null">preview = #{preview},</if>
+            <if test="icon != null">icon = #{icon},</if>
+        </trim>
+        where algmodel_id = #{algmodelId}
+    </update>
+    <delete id="deleteBaAlgmodelByAlgmodelId" parameterType="Long"> delete from ba_algmodel where algmodel_id = #{algmodelId} </delete>
+    <delete id="deleteBaAlgmodelByAlgmodelIds" parameterType="String">
+        delete from ba_algmodel where algmodel_id in
+        <foreach item="algmodelId" collection="array" open="(" separator="," close=")"> #{algmodelId} </foreach>
+    </delete>
+</mapper>

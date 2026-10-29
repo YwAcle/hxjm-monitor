@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="edu.cqupt.hxjm.basedata.mapper.BaMachineMapper">
+    
+    <resultMap type="BaMachine" id="BaMachineResult">
+        <result property="machineId"    column="machine_id"    />
+        <result property="machineCode"    column="machine_code"    />
+        <result property="machineName"    column="machine_name"    />
+        <result property="videoUrl"    column="video_url"    />
+        <result property="locationId"    column="location_id"    />
+        <result property="status"    column="status"    />
+        <result property="isvalid"    column="isvalid"    />
+        <result property="resolution"    column="resolution"    />
+        <result property="decoder"    column="decoder"    />
+    </resultMap>
+
+    <sql id="selectBaMachineVo">
+        select machine_id, machine_code, machine_name, video_url, location_id, status, isvalid, resolution, decoder 
+        from ba_machine
+    </sql>
+
+    <select id="selectBaMachineList" parameterType="BaMachine" resultMap="BaMachineResult">
+        <include refid="selectBaMachineVo"/>
+        <where>  
+            <if test="machineName != null  and machineName != ''"> and machine_name like concat('%', #{machineName}, '%')</if>
+            <if test="status != null "> and status = #{status}</if>
+        </where>
+    </select>
+    
+    <select id="selectBaMachineByMachineId" parameterType="Long" resultMap="BaMachineResult">
+        <include refid="selectBaMachineVo"/>
+        where machine_id = #{machineId}
+    </select>
+
+    <insert id="insertBaMachine" parameterType="BaMachine">
+        insert into ba_machine
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="machineId != null">machine_id,</if>
+            <if test="machineCode != null">machine_code,</if>
+            <if test="machineName != null and machineName != ''">machine_name,</if>
+            <if test="videoUrl != null">video_url,</if>
+            <if test="locationId != null">location_id,</if>
+            <if test="status != null">status,</if>
+            <if test="isvalid != null">isvalid,</if>
+            <if test="resolution != null">resolution,</if>
+            <if test="decoder != null">decoder,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="machineId != null">#{machineId},</if>
+            <if test="machineCode != null">#{machineCode},</if>
+            <if test="machineName != null and machineName != ''">#{machineName},</if>
+            <if test="videoUrl != null">#{videoUrl},</if>
+            <if test="locationId != null">#{locationId},</if>
+            <if test="status != null">#{status},</if>
+            <if test="isvalid != null">#{isvalid},</if>
+            <if test="resolution != null">#{resolution},</if>
+            <if test="decoder != null">#{decoder},</if>
+         </trim>
+    </insert>
+
+    <update id="updateBaMachine" parameterType="BaMachine">
+        update ba_machine
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="machineCode != null">machine_code = #{machineCode},</if>
+            <if test="machineName != null and machineName != ''">machine_name = #{machineName},</if>
+            <if test="videoUrl != null">video_url = #{videoUrl},</if>
+            <if test="locationId != null">location_id = #{locationId},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="isvalid != null">isvalid = #{isvalid},</if>
+            <if test="resolution != null">resolution = #{resolution},</if>
+            <if test="decoder != null">decoder = #{decoder},</if>
+        </trim>
+        where machine_id = #{machineId}
+    </update>
+
+    <delete id="deleteBaMachineByMachineId" parameterType="Long">
+        delete from ba_machine where machine_id = #{machineId}
+    </delete>
+
+    <delete id="deleteBaMachineByMachineIds" parameterType="String">
+        delete from ba_machine where machine_id in 
+        <foreach item="machineId" collection="array" open="(" separator="," close=")">
+            #{machineId}
+        </foreach>
+    </delete>
+</mapper>

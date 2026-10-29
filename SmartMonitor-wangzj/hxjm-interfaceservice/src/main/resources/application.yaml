@@ -1,0 +1,6 @@
+##python算法模型接口地址
+service-reid-img: 'http://127.0.0.1:5000/receive_data'
+
+server:
+  proxy:
+    url: 'https://sample-videos.com'

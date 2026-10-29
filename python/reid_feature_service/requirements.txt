@@ -1,0 +1,9 @@
+# Add these to a Python 3.10+ environment compatible with python/reid.
+# Existing model dependencies: torch, torchvision, numpy, Pillow, timm, yacs, ftfy, regex, tqdm.
+fastapi==0.115.12
+uvicorn==0.34.3
+python-multipart==0.0.20
+pydantic>=2.7,<3
+httpx==0.28.1
+# Reuse the YOLO runtime version already installed in the reid environment.
+ultralytics==8.4.33

@@ -1,0 +1,181 @@
+/local-ports.env
+
+# Local scripts (kept on disk, not versioned)
+/scripts/
+
+# Local runtime state and logs
+/scripts/
+.run/
+.agents/
+.codex/
+.aws/
+log/
+logs/
+*.log
+*.log.*
+hs_err_pid*.log
+
+# Dependencies, caches, and editor output
+**/node_modules/
+**/.node/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.cache/
+**/.eggs/
+**/*.egg-info/
+**/.venv/
+**/.venv-*/
+**/venv/
+**/env/
+**/dist/
+**/build/
+# This frontend source directory is named "build"; keep its source files.
+!SmartMonitor-wangzj/ruoyi-ui/src/views/tool/build/
+!SmartMonitor-wangzj/ruoyi-ui/src/views/tool/build/**
+**/target/
+**/out/
+**/.idea/
+**/.project
+**/.classpath
+**/.settings/
+**/.vscode/
+**/.codex*
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Local environment and generated archives
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+.git-credentials
+**/*-secrets.env
+**/*.secrets.env
+# Host-specific rendered deployment config containing service tokens.
+/deploy/hosts/*/yh-business.yml
+/deploy/hosts/*/local-ports.env
+# Generated database migration/backup reports.
+/deploy/database-reports/
+*.tar
+*.zip
+*.7z
+*.rar
+
+# Model weights and inference artifacts
+*.pt
+*.pth
+*.onnx
+*.engine
+*.trt
+*.t7
+*.safetensors
+*.bin
+*.ckpt
+*.weights
+*.h5
+*.hdf5
+*.joblib
+*.pkl
+*.pickle
+*.tflite
+*.whl
+**/weights/
+**/pretrained_models/
+
+# Downloaded model repositories (weights + tokenizer) are kept on disk only.
+/Agent/models/
+
+# Local caches produced by the runtime
+/Agent/.runtime-cache/
+
+# Runtime media and recordings
+# Ignore directory symlinks as well as directories used by the private launcher.
+/python/garden/data
+/python/reid/save
+/python/reid/output
+/python/vad/output
+/python/face_sr/face_service/person_save_input
+/python/face_sr/face_service/person_save_output
+/mtx/python/garden/data
+/mtx/python/reid/save
+/mtx/python/vad/output
+*.avi
+*.mp4
+*.mkv
+**/recordings/
+**/output_videos/
+**/runs/
+mtx/build/
+mtx/mediamtx/recordings/
+llm-service/garden/
+python/vad/output/
+python/vad/demo/runs/
+python/sam3/runs/
+python/deep_sort-master/MOTSChallenge/
+python/deep_sort-master/output_videos/
+python/deep_sort-master/tools/detections/
+python/garden/data/
+python/reid/query/
+python/reid/person_db.json
+python/reid/demo/output/
+python/reid/demo/frame/
+python/reid/demo/tracklet_vis/
+python/reid/demo/tracklet_vis_redraw/
+*.npy
+*.ppm
+
+# Compiled/native binaries
+*.o
+*.obj
+*.so
+*.dylib
+*.a
+*.exe
+*.class
+*.dll
+*.pid
+*.pid.lock
+**/.runtime/
+**/.ipynb_checkpoints/
+**/coverage/
+**/.coverage
+**/htmlcov/
+**/.ruff_cache/
+**/.gradle/
+**/.next/
+**/.nuxt/
+**/.parcel-cache/
+*.tsbuildinfo
+mtx/mediamtx/mediamtx
+
+# Git metadata and backups of the original nested repositories.
+# Keep .gitignore, .gitattributes, and .github files under version control.
+**/.git
+**/.git/
+.git-root/
+
+# Private worktree port configuration
+/local-ports.env
+
+/python/tracker/BoT-SORT/videos/
+
+# Version the shared deployment launcher; keep other private scripts local.
+!/scripts/
+/scripts/*
+!/scripts/start-local.sh
+!/scripts/stop-local.sh
+!/scripts/local-common.sh
+!/scripts/local-config.py
+!/scripts/local-runtime.py
+!/scripts/local-infra.compose.yml
+!/scripts/test_local_runtime.py

@@ -1,0 +1,15 @@
+# 忽略模型目录
+garden/
+
+# 忽略大模型文件
+*.tar
+*.bin
+*.safetensors
+
+# Python
+__pycache__/
+*.pyc
+
+# 环境
+.env
+*.log

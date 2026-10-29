@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="edu.cqupt.hxjm.algdeployment.mapper.AlgDeploymentManagementMapper">
+    
+    <resultMap type="AlgDeploymentManagement" id="AlgDeploymentManagementResult">
+        <result property="id"    column="id"    />
+        <result property="algBkName"    column="alg_bk_name"    />
+        <result property="algBkType"    column="alg_bk_type"    />
+        <result property="algBkApiHead"    column="alg_bk_api_head"    />
+        <result property="status"    column="status"    />
+        <result property="tableName"    column="table_name"    />
+        <result property="remark"    column="remark"    />
+    </resultMap>
+
+    <sql id="selectAlgDeploymentManagementVo">
+        select id, alg_bk_name, alg_bk_type, alg_bk_api_head, status, table_name, remark
+        from alg_bk_management
+    </sql>
+
+    <select id="selectAlgDeploymentManagementList" parameterType="AlgDeploymentManagement" resultMap="AlgDeploymentManagementResult">
+        <include refid="selectAlgDeploymentManagementVo"/>
+        <where>  
+            <if test="algBkName != null  and algBkName != ''"> and alg_bk_name like concat('%', #{algBkName}, '%')</if>
+            <if test="algBkType != null "> and alg_bk_type = #{algBkType}</if>
+            <if test="algBkApiHead != null  and algBkApiHead != ''"> and alg_bk_api_head = #{algBkApiHead}</if>
+            <if test="status != null "> and status = #{status}</if>
+            <if test="tableName != null  and tableName != ''"> and table_name like concat('%', #{tableName}, '%')</if>
+        </where>
+    </select>
+    
+    <select id="selectAlgDeploymentManagementById" parameterType="Long" resultMap="AlgDeploymentManagementResult">
+        <include refid="selectAlgDeploymentManagementVo"/>
+        where id = #{id}
+    </select>
+        
+    <insert id="insertAlgDeploymentManagement" parameterType="AlgDeploymentManagement">
+        insert into alg_bk_management
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="id != null">id,</if>
+            <if test="algBkName != null">alg_bk_name,</if>
+            <if test="algBkType != null">alg_bk_type,</if>
+            <if test="algBkApiHead != null">alg_bk_api_head,</if>
+            <if test="status != null">status,</if>
+            <if test="tableName != null">table_name,</if>
+            <if test="remark != null">remark,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="id != null">#{id},</if>
+            <if test="algBkName != null">#{algBkName},</if>
+            <if test="algBkType != null">#{algBkType},</if>
+            <if test="algBkApiHead != null">#{algBkApiHead},</if>
+            <if test="status != null">#{status},</if>
+            <if test="tableName != null">#{tableName},</if>
+            <if test="remark != null">#{remark},</if>
+         </trim>
+    </insert>
+
+    <update id="updateAlgDeploymentManagement" parameterType="AlgDeploymentManagement">
+        update alg_bk_management
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="algBkName != null">alg_bk_name = #{algBkName},</if>
+            <if test="algBkType != null">alg_bk_type = #{algBkType},</if>
+            <if test="algBkApiHead != null">alg_bk_api_head = #{algBkApiHead},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="tableName != null">table_name = #{tableName},</if>
+            <if test="remark != null">remark = #{remark},</if>
+        </trim>
+        where id = #{id}
+    </update>
+
+    <delete id="deleteAlgDeploymentManagementById" parameterType="Long">
+        delete from alg_bk_management where id = #{id}
+    </delete>
+
+    <delete id="deleteAlgDeploymentManagementByIds" parameterType="String">
+        delete from alg_bk_management where id in 
+        <foreach item="id" collection="array" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+    
+    <select id="getMachineList" resultType="java.util.Map">
+        SELECT 
+            m.machine_id,
+            m.machine_name as machineName,
+            m.machine_code as machineCode,
+            m.video_url as videoUrl,
+            m.location_id as locationId,
+            m.status as status,
+            m.isvalid as isvalid,
+            m.resolution,
+            m.decoder,
+            abm.status as deployStatus
+        FROM ba_machine m
+        LEFT JOIN alg_bk_machine_fr abm ON m.machine_id = abm.machine_id
+        WHERE m.isvalid = 1 AND m.status = 1
+        ORDER BY m.machine_id ASC
+    </select>
+</mapper> 

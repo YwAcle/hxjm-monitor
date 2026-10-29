@@ -1,0 +1,8 @@
+{
+  "cameras": [
+    {"id": "camera_1", "name": "机器狗 · 前摄像头", "source": "m20", "camera": "front", "url": ""},
+    {"id": "camera_2", "name": "机器狗 · 后摄像头", "source": "disabled"},
+    {"id": "camera_3", "name": "机械臂 · D435 彩色画面", "source": "disabled"},
+    {"id": "camera_4", "name": "机器狗 · D455 彩色画面", "source": "disabled"}
+  ]
+}

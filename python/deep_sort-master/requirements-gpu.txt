@@ -1,0 +1,7 @@
+numpy<2.0.0
+opencv-python
+scipy
+tf-slim
+tf-keras
+ultralytics
+sahi

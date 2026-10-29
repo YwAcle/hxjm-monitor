@@ -1,0 +1,214 @@
+/* 视频弹窗遮罩 */
+.videoModalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 视频弹窗内容 */
+.videoModalContent {
+  background: linear-gradient(180deg, #0c1e3c 0%, #0a1628 100%);
+  border: 1px solid rgba(65, 177, 255, 0.4);
+  border-radius: 8px;
+  width: 1280px;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 40px rgba(65, 177, 255, 0.3);
+  animation: scaleIn 0.2s ease;
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* 弹窗标题栏 */
+.videoModalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(65, 177, 255, 0.2);
+}
+
+.videoModalTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.videoModalTitleText {
+  font-family: PingFangSC-Medium;
+  font-size: 18px;
+  color: #FFFFFF;
+  font-weight: 500;
+}
+
+.videoModalTime {
+  font-family: PingFangSC-Regular;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.videoModalClose {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.videoModalClose:hover {
+  background: rgba(249, 71, 71, 0.8);
+  color: #fff;
+}
+
+/* 视频播放器区域 */
+.videoModalBody {
+  padding: 20px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  position: relative;
+}
+
+.videoPlayer {
+  width: 100%;
+  height: auto;
+  max-height: 720px;
+  background: #000;
+  border-radius: 4px;
+  display: block;
+  object-fit: contain;
+}
+
+/* WebRTC 播放器容器 */
+.webrtcPlayerContainer {
+  position: relative;
+  width: 100%;
+  height: auto;
+  min-height: 400px;
+  max-height: 720px;
+  background: #0a0a1a;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 播放器状态遮罩 */
+.playerOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #0a0a1a;
+  z-index: 10;
+  gap: 12px;
+}
+
+.playerStatus {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: PingFangSC-Regular;
+}
+
+.playerError {
+  font-size: 18px;
+  color: #F94747;
+  font-family: PingFangSC-Medium;
+}
+
+.playerHint {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: PingFangSC-Regular;
+}
+
+/* 进度条容器 */
+.progressContainer {
+  width: 300px;
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.progressBar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #41B1FF 0%, #3A9EFF 100%);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px rgba(65, 177, 255, 0.5);
+}
+
+.progressText {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: PingFangSC-Regular;
+}
+
+/* 重试按钮 */
+.retryButton {
+  margin-top: 16px;
+  padding: 8px 24px;
+  background: rgba(65, 177, 255, 0.2);
+  border: 1px solid rgba(65, 177, 255, 0.5);
+  border-radius: 4px;
+  color: #41B1FF;
+  font-size: 14px;
+  font-family: PingFangSC-Medium;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.retryButton:hover {
+  background: rgba(65, 177, 255, 0.3);
+  border-color: #41B1FF;
+  box-shadow: 0 0 10px rgba(65, 177, 255, 0.3);
+}
+
+.assetPlayback { width: 100%; }
+.historyToolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-bottom: 10px; color: #bdd9eb; font: 14px/1.5 system-ui, sans-serif; }
+.historyToolbar label { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.historyToolbar span { overflow-wrap: anywhere; }
+.historyCanvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+

@@ -1,0 +1,15 @@
+.
+├── app/
+│   ├── __init__.py
+│   ├── main.py                 # FastAPI 应用主入口
+│   ├── api/
+│   │   ├── __init__.py
+│   │   └── endpoints.py        # API 路由定义
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── image_processor.py  # 图片处理模型
+│   │   └── video_processor.py  # 视频处理模型
+│   └── core/
+│       ├── __init__.py
+│       └── config.py           # 配置文件
+└── requirements.txt            # 项目依赖 

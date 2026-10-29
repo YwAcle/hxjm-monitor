@@ -1,0 +1,20 @@
+{
+    "code1": {
+        "name": "ReID",
+        "file": "rtsp_face_test-0.1.0-py3-none-any.whl",
+        "code": "code1",
+        "path": "resource/models\\rtsp_face_test-0.1.0-py3-none-any.whl"
+    },
+    "code2": {
+        "name": "\u7ffb\u5899\u68c0\u6d4b",
+        "file": "rtsp_face_test-0.1.0-py3-none-any.whl",
+        "code": "code2",
+        "path": "resource/models\\rtsp_face_test-0.1.0-py3-none-any.whl"
+    },
+    "code5": {
+        "name": "\u706b\u707e\u68c0\u6d4b",
+        "file": "run.py",
+        "code": "code5",
+        "path": "resource/models\\run.py"
+    }
+}

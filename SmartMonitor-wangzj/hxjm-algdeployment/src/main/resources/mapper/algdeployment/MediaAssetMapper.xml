@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="edu.cqupt.hxjm.algdeployment.mapper.MediaAssetMapper">
+
+    <resultMap type="MediaAsset" id="MediaAssetResult">
+        <result property="id" column="id"/>
+        <result property="streamId" column="stream_id"/>
+        <result property="assetType" column="asset_type"/>
+        <result property="startTs" column="start_ts"/>
+        <result property="durationMs" column="duration_ms"/>
+        <result property="playUrl" column="play_url"/>
+        <result property="ossBucket" column="oss_bucket"/>
+        <result property="ossKey" column="oss_key"/>
+        <result property="contentType" column="content_type"/>
+        <result property="meta" column="meta"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insertMediaAsset" parameterType="MediaAsset">
+        insert into media_asset (
+            id,
+            stream_id,
+            asset_type,
+            start_ts,
+            duration_ms,
+            play_url,
+            oss_bucket,
+            oss_key,
+            content_type,
+            meta,
+            created_at
+        ) values (
+            #{id}::uuid,
+            #{streamId},
+            #{assetType},
+            #{startTs},
+            #{durationMs},
+            #{playUrl},
+            #{ossBucket},
+            #{ossKey},
+            #{contentType},
+            #{meta},
+            #{createdAt}
+        )
+    </insert>
+
+    <select id="selectLatestMediaAssets" resultMap="MediaAssetResult">
+        select
+            id::text as id,
+            stream_id as stream_id,
+            asset_type,
+            start_ts,
+            duration_ms,
+            play_url,
+            oss_bucket,
+            oss_key,
+            content_type,
+            meta,
+            created_at
+        from media_asset
+        order by created_at desc
+        limit 200
+    </select>
+
+</mapper>

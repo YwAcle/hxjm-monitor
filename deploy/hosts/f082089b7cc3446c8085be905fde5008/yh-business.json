@@ -1,0 +1,43 @@
+{
+  "api_url": "http://127.0.0.1:18480/api/v1/business",
+  "service_id": "yh-pipeline",
+  "token_env": "HXJM_YH_BUSINESS_TOKEN",
+  "source_streams": {
+    "3180e74c-e18c-4288-97ea-ddc394efc15d": "ea932945-8758-4c2f-920f-b98c7a599970",
+    "b01796f4-14ef-4125-b0bd-9f21419bd4e5": "10b8a99a-c11f-4fb7-9d58-d659a1d8ed26",
+    "1206ff4c-e3ed-48c8-937a-8ff9eb63ca15": "a59359ef-8ad9-4400-bba8-31463760054c",
+    "a6dd6e98-0aae-4f5a-8436-e1fbfbc8316a": "f1171c95-4eb3-4419-9875-cd36de5cfe0f"
+  },
+  "instances": [
+    {
+      "source_id": "3180e74c-e18c-4288-97ea-ddc394efc15d",
+      "algorithm": "botsort",
+      "instance_id": "d661b162-27f5-4946-aab6-4dc8979fd82d",
+      "capability_code": "person.tracking"
+    },
+    {
+      "source_id": "b01796f4-14ef-4125-b0bd-9f21419bd4e5",
+      "algorithm": "botsort",
+      "instance_id": "ad81cf4c-0dc0-4a11-8bfa-1353912c144b",
+      "capability_code": "person.tracking"
+    },
+    {
+      "source_id": "1206ff4c-e3ed-48c8-937a-8ff9eb63ca15",
+      "algorithm": "botsort",
+      "instance_id": "2fe43d48-8a18-4993-bed0-12c555fa2e97",
+      "capability_code": "person.tracking"
+    },
+    {
+      "source_id": "a6dd6e98-0aae-4f5a-8436-e1fbfbc8316a",
+      "algorithm": "botsort",
+      "instance_id": "08469f75-813e-4f81-9de9-eab222adf802",
+      "capability_code": "person.tracking"
+    }
+  ],
+  "sample_pipeline": {
+    "feature_url": "http://127.0.0.1:28024",
+    "instance_id": "70f07ec0-459c-40a8-bc0f-3c2346434b0e",
+    "threshold": 0.88
+  },
+  "spool_dir": "/data/nfs_storage/hxjm_datas/result-spool"
+}

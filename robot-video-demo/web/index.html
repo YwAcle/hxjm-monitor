@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>M20 Pro · 机器狗协同作业监控平台</title>
+  <link rel="icon" href="data:,"><link rel="stylesheet" href="/static/style.css">
+  <script type="module" src="/static/player.js"></script>
+  <script type="module" src="/static/telemetry.js"></script>
+</head>
+<body>
+<main class="dashboard">
+  <header class="masthead">
+    <a href="/" class="brand"><span class="brand-mark">◈</span><span>ROBOT VISION<small>多视角 · 实时感知</small></span></a>
+    <div class="masthead-title"><span class="title-kicker">INTELLIGENT ROBOT MONITORING</span><h1>机器狗协同作业监控平台</h1><span class="title-line"></span></div>
+    <div class="header-time"><time id="clock">---- -- -- --:--:--</time><span><i class="live-dot"></i> LIVE MONITORING</span></div>
+  </header>
+
+  <div class="status-ribbon">
+    <div class="ribbon-location"><span class="location-icon">⌖</span> 监控中心 <span class="slash">/</span> M20 Pro × DM-B601</div>
+    <div class="ribbon-status"><span id="mode" class="badge amber">载入配置</span><span class="server"><i id="server-dot"></i><span id="server-state">服务连接中</span></span></div>
+  </div>
+
+  <div class="dashboard-grid">
+    <aside class="left-rail" aria-label="平台概览与机器狗状态">
+      <section class="panel overview-panel">
+        <div class="section-title"><h2>平台概览</h2><small>OVERVIEW</small></div>
+        <div class="overview-metrics">
+          <div><span class="metric-symbol">▧</span><strong id="online-count">0 / 4</strong><span>视频实时在线</span></div>
+          <div><span class="metric-symbol">⌁</span><strong id="state-online-count">0 / 2</strong><span>设备状态新鲜</span></div>
+        </div>
+        <div class="robot-illustration" aria-hidden="true">
+          <svg viewBox="0 0 300 130" fill="none">
+            <defs><linearGradient id="body-fill" x1="90" y1="20" x2="180" y2="110" gradientUnits="userSpaceOnUse"><stop stop-color="#236baa" stop-opacity=".7"/><stop offset="1" stop-color="#072747"/></linearGradient></defs>
+            <ellipse cx="150" cy="110" rx="108" ry="13" stroke="#1375a3" stroke-dasharray="4 4"/><ellipse cx="150" cy="110" rx="75" ry="8" fill="#11bdf3" fill-opacity=".08"/>
+            <path d="m83 46 104-9 25 15-5 30-100 9-24-17Z" fill="url(#body-fill)" stroke="#65d4ff" stroke-width="1.5"/>
+            <path d="m83 46 25 16 104-10M108 62l-1 29M144 42v18" stroke="#2c93c5"/>
+            <path d="m195 40 17-9 20 7 1 21-22 2-8-9" fill="#103c61" stroke="#65d4ff" stroke-width="1.5"/>
+            <path d="m122 43 3-18 25-3 10 17M132 24l-3-12 13-5 17 7-7 9" stroke="#52caff" stroke-width="2"/>
+            <path d="m152 12 19 9 5 13" stroke="#52caff" stroke-width="3"/><circle cx="157" cy="16" r="3" fill="#8cedff"/>
+            <path d="m98 77-7 19 9 12h16M125 85l11 12-5 17h16M186 76l-6 19 13 12h15M204 70l12 17-4 20h16" stroke="#50b6eb" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="224" cy="45" r="4" fill="#61eeff"/><path d="m237 43 28-7v20l-28-7" stroke="#28a5d9" stroke-dasharray="3 3"/>
+          </svg>
+          <span>M20 PRO <b>×</b> DM-B601</span>
+        </div>
+        <div class="overview-caption"><i class="live-dot"></i> 多视角感知 · 协同作业状态监测</div>
+      </section>
+
+      <section class="device-section" aria-label="机器狗实时状态">
+        <div class="section-title"><h2>机器狗状态机</h2><small>QUADRUPED</small></div>
+        <div id="device-states" class="device-grid"></div>
+      </section>
+
+      <section class="panel task-panel">
+        <div class="section-title"><h2>作业状态说明</h2><small>WORKFLOW</small></div>
+        <div class="workflow-item"><span class="workflow-number">01</span><div><h3>导航与目标发现</h3><p>通过前后视角观察环境，设备上报导航状态。</p></div></div>
+        <div class="workflow-item"><span class="workflow-number">02</span><div><h3>抓取位置调整</h3><p>“移动”指扫描到垃圾后，相对目标调整最终抓取位置和姿态。</p></div></div>
+        <div class="workflow-item"><span class="workflow-number">03</span><div><h3>机械臂协同抓取</h3><p>抓取、回位等待与放置进度，以设备实时上报为准。</p></div></div>
+      </section>
+    </aside>
+
+    <section class="center-column" aria-label="四路视频监控">
+      <div class="panel video-panel">
+        <div class="section-title video-heading"><div><h2>多视角实时监控</h2><small>LIVE VIDEO / 4 CHANNELS</small></div><div class="buttons"><button class="primary" id="reconnect-all">↻ 连接全部</button><button id="disconnect-all">停止全部</button></div></div>
+        <div class="banner" id="banner">等待后端配置，尚未接收视频。</div>
+        <section id="cameras" class="camera-grid" aria-label="四路摄像头画面"></section>
+        <div class="video-legend"><span><i class="live-dot"></i> 收到新解码帧时显示在线</span><span>前后视角 / 抓取视角 / 环境视角</span></div>
+      </div>
+      <section class="panel activity-panel">
+        <div class="section-title"><h2>实时连接记录</h2><small>LIVE ACTIVITY</small></div>
+        <div id="logs" class="logs" aria-live="polite"></div>
+      </section>
+    </section>
+
+    <aside class="right-rail" aria-label="机械臂状态与接入信息">
+      <section class="device-section" aria-label="机械臂实时状态">
+        <div class="section-title"><h2>机械臂状态机</h2><small>MANIPULATOR</small></div>
+        <div id="arm-states" class="device-grid"></div>
+      </section>
+
+      <section class="panel camera-access">
+        <div class="section-title"><h2>摄像头接入信息</h2><small>VISION INPUT</small></div>
+        <div class="access-row"><span class="channel-no">01</span><div><strong>M20 前摄像头</strong><span>前方环境 · 原生摄像头</span></div><span>RGB</span></div>
+        <div class="access-row"><span class="channel-no">02</span><div><strong>M20 后摄像头</strong><span>后方环境 · 原生摄像头</span></div><span>RGB</span></div>
+        <div class="access-row"><span class="channel-no">03</span><div><strong>RealSense D435</strong><span>机械臂固定 · 抓取视角</span></div><span>RGB-D</span></div>
+        <div class="access-row"><span class="channel-no">04</span><div><strong>RealSense D455</strong><span>机器狗固定 · 环境视角</span></div><span>RGB-D</span></div>
+        <p class="access-note">D435 / D455 此处展示彩色画面。工作时能否同时外传，需验证设备采集能力与带宽；深度数据需另行接入。</p>
+      </section>
+
+      <details class="panel diagnostics">
+        <summary class="section-title"><span>服务运行状态</span><small>SYSTEM · 展开</small></summary>
+        <div id="processes"></div>
+        <p class="note">进程运行不代表视频已连接，以实际解码画面为准。</p>
+      </details>
+    </aside>
+  </div>
+
+  <footer><span class="footer-connection"><i class="live-dot"></i><span id="telemetry-connection">正在连接状态服务…</span></span><span>状态与视频独立接入 · 5 秒未上报自动标记过期</span><span>只读监控 · 不发送运动指令</span></footer>
+</main>
+
+<template id="camera-template">
+  <article class="camera-card">
+    <div class="camera-title"><div><small data-role="channel"></small><h2 data-role="name"></h2></div><span class="badge" data-role="state">未连接</span></div>
+    <div class="stage" data-role="stage">
+      <video autoplay muted playsinline data-role="video"></video>
+      <div class="overlay"><span class="viewfinder-icon" aria-hidden="true"></span><h3 data-role="overlay-title">准备连接</h3><p data-role="overlay-detail">等待视频流。</p></div>
+      <div class="on-video"><b data-role="source-tag"></b><span>H.264 / WEBRTC</span></div>
+      <div class="bottom-video"><span data-role="frame-info">尚未收到解码帧</span><button data-role="fullscreen">⛶ 全屏</button></div>
+    </div>
+    <div class="metrics">
+      <div><span>解码帧率</span><strong data-role="fps">—</strong></div>
+      <div><span>画面尺寸</span><strong data-role="size">—</strong></div>
+      <div><span>已解码帧</span><strong data-role="frames">0</strong></div>
+      <div><span>视频接收</span><strong data-role="bitrate">—</strong></div>
+    </div>
+    <details class="stream-details"><summary>连接管理与接入详情</summary>
+      <div class="camera-actions"><span data-role="source-label"></span><div class="buttons"><button class="primary" data-role="reconnect">↻ 连接</button><button data-role="disconnect">停止</button></div></div>
+      <p class="source-diagnostic" data-role="source-diagnostic">接收状态等待更新</p>
+      <code data-role="endpoint"></code><p class="note" data-role="hint"></p>
+    </details>
+  </article>
+</template>
+</body>
+</html>
+

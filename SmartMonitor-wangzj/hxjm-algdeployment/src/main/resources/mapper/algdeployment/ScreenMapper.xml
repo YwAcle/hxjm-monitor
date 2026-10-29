@@ -1,0 +1,389 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="edu.cqupt.hxjm.algdeployment.mapper.ScreenMapper">
+
+    <select id="selectDeviceCount" resultType="java.lang.Long">
+        select count(1)
+        from camera
+    </select>
+
+    <select id="selectVadAnomalyTotal" resultType="java.lang.Long">
+        select count(1)
+        from vad
+        where anomaly_name in ('fight', 'fire', 'fall')
+    </select>
+
+    <select id="selectVadAnomalyTypeCounts" resultType="java.util.Map">
+        select
+            anomaly_name as type,
+            count(1) as count
+        from vad
+        where anomaly_name in ('fight', 'fire', 'fall')
+        group by anomaly_name
+    </select>
+
+    <select id="selectVadAnomalyTotalToday" resultType="java.lang.Long">
+        select count(1)
+        from vad
+        where anomaly_name in ('fight', 'fire', 'fall')
+          and created_at >= date_trunc('day', now())
+          and created_at &lt; date_trunc('day', now()) + interval '1 day'
+    </select>
+
+    <select id="selectVadAnomalyTypeCountsToday" resultType="java.util.Map">
+        select
+            anomaly_name as type,
+            count(1) as count
+        from vad
+        where anomaly_name in ('fight', 'fire', 'fall')
+          and created_at >= date_trunc('day', now())
+          and created_at &lt; date_trunc('day', now()) + interval '1 day'
+        group by anomaly_name
+    </select>
+
+    <select id="selectTrackletStrangerCount" resultType="java.lang.Long">
+        select greatest(
+            0,
+            (
+                select count(1)
+                from tracklet t
+                where t.start_ts >= date_trunc('day', now())
+                  and t.start_ts &lt; date_trunc('day', now()) + interval '1 day'
+            ) - (
+                select count(1)
+                from tracklet t
+                where t.gallery_target_id is not null
+                  and t.start_ts >= date_trunc('day', now())
+                  and t.start_ts &lt; date_trunc('day', now()) + interval '1 day'
+            )
+        )
+    </select>
+
+    <select id="selectLatestStrangerTrackletToday" resultType="java.util.Map">
+        select
+            t.id::text as id,
+            to_char(t.start_ts, 'YYYY-MM-DD HH24:MI:SS') as start_time
+        from tracklet t
+        where t.start_ts >= date_trunc('day', now())
+          and t.start_ts &lt; date_trunc('day', now()) + interval '1 day'
+          and t.stranger_target_id is not null
+        order by t.start_ts desc
+        limit 1
+    </select>
+
+    <select id="selectReidMatchCount" resultType="java.lang.Long">
+        select count(1)
+        from reid_match
+    </select>
+
+    <select id="selectLlmReportCount" resultType="java.lang.Long">
+        select count(1)
+        from llm_report
+    </select>
+
+    <select id="selectChatCount" resultType="java.lang.Long">
+        select 0
+    </select>
+
+    <select id="selectRecentAlarms" resultType="java.util.Map">
+        select
+            a.id,
+            a.alarm_level,
+            a.event_type_key,
+            a.camera_id,
+            a.thumbnail,
+            a.record_url,
+            a.stream_id,
+            a.asset_start_ts,
+            a.duration_ms,
+            a."timestamp",
+            a.alarm_ts
+        from (
+            select
+                v.id::text as id,
+                case
+                    when v.anomaly_name = 'fire' then 'error'
+                    when v.anomaly_name = 'fight' then 'warning'
+                    when v.anomaly_name = 'fall' then 'warning'
+                    else 'info'
+                end as alarm_level,
+                v.anomaly_name as event_type_key,
+                coalesce(c.camera_code, substring(trim(v.stream_id) from '(camera_[0-9]+)')) as camera_id,
+                case
+                    when v.frame_vad_base64 is null then ma.play_url
+                    else ('data:image/jpeg;base64:' || v.frame_vad_base64)
+                end as thumbnail,
+                ma.play_url as record_url,
+                case
+                    when substring(trim(v.stream_id) from '(camera_[0-9]+)') is not null then ('live/' || substring(trim(v.stream_id) from '(camera_[0-9]+)'))
+                    else null
+                end as stream_id,
+                ma.start_ts as asset_start_ts,
+                ma.duration_ms as duration_ms,
+                to_char(v.created_at, 'YYYY-MM-DD HH24:MI:SS') as "timestamp",
+                v.created_at as alarm_ts,
+                v.created_at as sort_ts
+            from vad v
+            left join media_asset ma on ma.id = v.media_asset_id
+            left join camera_stream cs on cs.stream_name = substring(trim(v.stream_id) from '(camera_[0-9]+)')
+            left join camera c on c.id = cs.camera_id
+            where v.anomaly_name in ('fight', 'fire', 'fall')
+        ) a
+        order by a.sort_ts desc
+        limit 5
+    </select>
+
+    <select id="selectLatestAlarm" resultType="java.util.Map">
+        select
+            a.id,
+            a.alarm_level,
+            a.event_type_key,
+            a.camera_id,
+            a.thumbnail,
+            a.record_url,
+            a.stream_id,
+            a.asset_start_ts,
+            a.duration_ms,
+            a."timestamp",
+            a.alarm_ts
+        from (
+            select
+                v.id::text as id,
+                case
+                    when v.anomaly_name = 'fire' then 'error'
+                    when v.anomaly_name = 'fight' then 'warning'
+                    when v.anomaly_name = 'fall' then 'warning'
+                    else 'info'
+                end as alarm_level,
+                v.anomaly_name as event_type_key,
+                coalesce(c.camera_code, substring(trim(v.stream_id) from '(camera_[0-9]+)')) as camera_id,
+                case
+                    when v.frame_vad_base64 is null then ma.play_url
+                    else ('data:image/jpeg;base64:' || v.frame_vad_base64)
+                end as thumbnail,
+                ma.play_url as record_url,
+                case
+                    when substring(trim(v.stream_id) from '(camera_[0-9]+)') is not null then ('live/' || substring(trim(v.stream_id) from '(camera_[0-9]+)'))
+                    else null
+                end as stream_id,
+                ma.start_ts as asset_start_ts,
+                ma.duration_ms as duration_ms,
+                to_char(v.created_at, 'YYYY-MM-DD HH24:MI:SS') as "timestamp",
+                v.created_at as alarm_ts,
+                v.created_at as sort_ts
+            from vad v
+            left join media_asset ma on ma.id = v.media_asset_id
+            left join camera_stream cs on cs.stream_name = substring(trim(v.stream_id) from '(camera_[0-9]+)')
+            left join camera c on c.id = cs.camera_id
+            where v.anomaly_name in ('fight', 'fire', 'fall')
+        ) a
+        order by a.sort_ts desc
+        limit 1
+    </select>
+
+    <select id="selectTodayFlowTotal" resultType="java.lang.Long">
+        select count(1)
+        from tracklet t
+        where t.start_ts >= date_trunc('day', now())
+          and t.start_ts &lt; date_trunc('day', now()) + interval '1 day'
+          and (t.gallery_target_id is not null or t.stranger_target_id is not null)
+    </select>
+
+    <select id="selectLatestTrackletToday" resultType="java.util.Map">
+        select
+            t.id::text as id,
+            to_char(t.start_ts, 'YYYY-MM-DD HH24:MI:SS') as start_time
+        from tracklet t
+        where t.start_ts >= date_trunc('day', now())
+          and t.start_ts &lt; date_trunc('day', now()) + interval '1 day'
+          and (t.gallery_target_id is not null or t.stranger_target_id is not null)
+        order by t.start_ts desc
+        limit 1
+    </select>
+
+    <select id="selectFlowCountsBy10Min" parameterType="java.util.Map" resultType="java.util.Map">
+        select
+            to_char(
+                date_trunc('hour', t.start_ts) + (floor(extract(minute from t.start_ts) / 10) * interval '10 minutes'),
+                'HH24:MI'
+            ) as time,
+            count(1) as count
+        from tracklet t
+        where t.start_ts >= #{startTs}
+          and t.start_ts &lt; #{endTs}
+          and (t.gallery_target_id is not null or t.stranger_target_id is not null)
+        group by 1
+    </select>
+
+    <select id="selectFlowCountBetween" parameterType="java.util.Map" resultType="java.lang.Long">
+        select count(1)
+        from tracklet t
+        where t.start_ts >= #{startTs}
+          and t.start_ts &lt; #{endTs}
+          and (t.gallery_target_id is not null or t.stranger_target_id is not null)
+    </select>
+
+    <select id="selectLatestIdentitiesToday" resultType="java.util.Map">
+        select
+            t.id::text as id,
+            rt.id::text as target_id,
+            rt.name as name,
+            case
+                when rt.image_base64 is not null then ('data:image/jpeg;base64:' || rt.image_base64)
+                else null
+            end as avatar,
+            null as age,
+            null as gender,
+            '学生' as identity_type,
+            c.camera_code as camera_id,
+            to_char(t.start_ts, 'YYYY-MM-DD HH24:MI:SS') as detected_time,
+            t.start_ts as sort_ts
+        from tracklet t
+        left join camera_stream cs on cs.stream_name = t.stream_id
+        left join camera c on c.id = cs.camera_id
+        left join reid_target rt on rt.id = t.gallery_target_id
+        where t.gallery_target_id is not null
+          and t.start_ts >= date_trunc('day', now())
+          and t.start_ts &lt; date_trunc('day', now()) + interval '1 day'
+        order by t.start_ts desc
+        limit 20
+    </select>
+
+    <select id="selectLatestIdentityToday" resultType="java.util.Map">
+        select
+            t.id::text as id,
+            rt.id::text as target_id,
+            rt.name as name,
+            case
+                when rt.image_base64 is not null then ('data:image/jpeg;base64:' || rt.image_base64)
+                else null
+            end as avatar,
+            null as age,
+            null as gender,
+            '学生' as identity_type,
+            c.camera_code as camera_id,
+            to_char(t.start_ts, 'YYYY-MM-DD HH24:MI:SS') as detected_time,
+            t.start_ts as sort_ts
+        from tracklet t
+        left join camera_stream cs on cs.stream_name = t.stream_id
+        left join camera c on c.id = cs.camera_id
+        left join reid_target rt on rt.id = t.gallery_target_id
+        where t.gallery_target_id is not null
+          and t.start_ts >= date_trunc('day', now())
+          and t.start_ts &lt; date_trunc('day', now()) + interval '1 day'
+        order by t.start_ts desc
+        limit 1
+    </select>
+
+    <select id="selectLatestLlmReports" parameterType="java.util.Map" resultType="java.util.Map">
+        select
+            r.id::text as id,
+            r.episode_id::text as episode_id,
+            r.vad_id as vad_id,
+            coalesce(nullif(trim(r.prompt_type), ''),
+                     case
+                         when r.vad_id is not null then 'vad'
+                         when r.episode_id is not null then 'reid'
+                         else null
+                     end) as prompt_type,
+            r.report_json::text as report_json,
+            r.report_text as report_text,
+            r.created_at as created_at,
+            e.meta::text as episode_meta,
+            tr.frame_end_base64 as reid_frame_end_base64,
+            v.frame_vad_base64 as frame_vad_base64,
+            coalesce(
+                case
+                    when tr.stream_id is null then null
+                    when position('live/' in tr.stream_id) = 1 then tr.stream_id
+                    else ('live/' || tr.stream_id)
+                end,
+                case
+                    when substring(trim(v.stream_id) from '(camera_[0-9]+)') is not null then ('live/' || substring(trim(v.stream_id) from '(camera_[0-9]+)'))
+                    else null
+                end
+            ) as stream_id,
+            ma.start_ts as asset_start_ts,
+            ma.duration_ms as duration_ms,
+            ma.play_url as record_url,
+            coalesce(v.created_at, tr.start_ts, r.created_at) as alarm_ts,
+            r.created_at as sort_ts
+        from llm_report r
+        left join episode e on e.id = r.episode_id
+        left join vad v on v.id = r.vad_id
+        left join media_asset ma on ma.id = v.media_asset_id
+        left join lateral (
+            select
+                t.stream_id as stream_id,
+                t.start_ts as start_ts,
+                t.end_ts as end_ts,
+                t.frame_end_base64 as frame_end_base64
+            from episode_tracklet_link l
+            join tracklet t on t.id = l.tracklet_id
+            where l.episode_id = r.episode_id
+            order by t.end_ts desc nulls last, t.start_ts desc
+            limit 1
+        ) tr on true
+        where r.created_at &gt;= now() - (#{lookbackSeconds} * interval '1 second')
+        order by r.created_at desc, r.id desc
+        limit #{limit}
+    </select>
+
+    <select id="selectLlmReportsAfter" parameterType="java.util.Map" resultType="java.util.Map">
+        select
+            r.id::text as id,
+            r.episode_id::text as episode_id,
+            r.vad_id as vad_id,
+            coalesce(nullif(trim(r.prompt_type), ''),
+                     case
+                         when r.vad_id is not null then 'vad'
+                         when r.episode_id is not null then 'reid'
+                         else null
+                     end) as prompt_type,
+            r.report_json::text as report_json,
+            r.report_text as report_text,
+            r.created_at as created_at,
+            e.meta::text as episode_meta,
+            tr.frame_end_base64 as reid_frame_end_base64,
+            v.frame_vad_base64 as frame_vad_base64,
+            coalesce(
+                case
+                    when tr.stream_id is null then null
+                    when position('live/' in tr.stream_id) = 1 then tr.stream_id
+                    else ('live/' || tr.stream_id)
+                end,
+                case
+                    when substring(trim(v.stream_id) from '(camera_[0-9]+)') is not null then ('live/' || substring(trim(v.stream_id) from '(camera_[0-9]+)'))
+                    else null
+                end
+            ) as stream_id,
+            ma.start_ts as asset_start_ts,
+            ma.duration_ms as duration_ms,
+            ma.play_url as record_url,
+            coalesce(v.created_at, tr.start_ts, r.created_at) as alarm_ts,
+            r.created_at as sort_ts
+        from llm_report r
+        left join episode e on e.id = r.episode_id
+        left join vad v on v.id = r.vad_id
+        left join media_asset ma on ma.id = v.media_asset_id
+        left join lateral (
+            select
+                t.stream_id as stream_id,
+                t.start_ts as start_ts,
+                t.end_ts as end_ts,
+                t.frame_end_base64 as frame_end_base64
+            from episode_tracklet_link l
+            join tracklet t on t.id = l.tracklet_id
+            where l.episode_id = r.episode_id
+            order by t.end_ts desc nulls last, t.start_ts desc
+            limit 1
+        ) tr on true
+        where r.created_at &gt; #{createdAt}
+           or (r.created_at = #{createdAt} and r.id &gt; #{id}::uuid)
+        order by r.created_at asc, r.id asc
+        limit #{limit}
+    </select>
+
+</mapper>

@@ -1,0 +1,13 @@
+{
+  "role": "business",
+  "data_root": "/data/nfs_storage/hxjm_datas",
+  "environment": {
+    "VIDEO_ANALYSIS_MODE": "local",
+    "START_VIDEO_ANALYSIS": "yes",
+    "START_REID_FEATURE": "yes",
+    "START_ALGORITHMS": "no",
+    "REID_FEATURE_WEIGHTS": "/data/nfs_storage/hxjm_datas/models/reid/MSMT17_clipreid_RN50_120.pth",
+    "REID_FEATURE_YOLO_WEIGHTS": "/data/nfs_storage/hxjm_datas/models/reid/yolov8n.pt",
+    "HXJM_UPLOAD_ROOT": "/data/nfs_storage/hxjm_datas/uploads"
+  }
+}

@@ -1,0 +1,1875 @@
+.container {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin-left: 0;
+}
+
+.decorLine {
+  width: 392px;
+  height: 2px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+
+.titleBar {
+  flex-shrink: 0;
+  position: relative;
+  width: 100%;
+  height: 42px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  margin-top: 4px;
+}
+
+.titleIcon {
+  width: 22px;
+  height: 21px;
+  background-position: 0px 0px;
+  background-repeat: no-repeat;
+  background-size: 22px 22px;
+  margin: 7px 0 0 8px;
+}
+
+.titleText {
+  width: 175px;
+  height: 33px;
+  font-family: AlibabaPuHuiTi_3_85_Bold;
+  font-size: 24px;
+  color: #ECF6FF;
+  line-height: 33px;
+  letter-spacing: 1px;
+  text-align: left;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+  background: linear-gradient(0deg, rgba(1,127,194,0.49) 0%, rgba(1,127,194,0.18) 32.4%, rgba(1,127,194,0) 100%), #FFFFFF;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 2px auto 0 8px;
+  flex: 1;
+}
+
+/* 对话管理按钮 */
+.conversationControls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-right: 12px;
+  z-index: 10;
+  position: relative;
+}
+
+/* 当前对话名字 */
+.currentConversationTitle {
+  color: #FFFFFF;
+  font-size: 20px;
+  font-family: PingFangSC-Medium;
+  font-weight: 500;
+  line-height: 28px;
+  text-align: left;
+  white-space: nowrap;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 4px;
+}
+
+/* 对话列表下拉菜单 */
+.conversationDropdown {
+  position: relative;
+  margin-top: 4px; /* 按钮向下移动一点 */
+}
+
+.conversationListBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid rgba(65, 177, 255, 0.5);
+  background: rgba(65, 177, 255, 0.1);
+  color: #41B1FF;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  padding: 0;
+  font-weight: bold;
+}
+
+.conversationListBtn:hover {
+  background: rgba(65, 177, 255, 0.2);
+  border-color: rgba(65, 177, 255, 0.8);
+}
+
+.conversationDropdownMenu {
+  position: absolute;
+  bottom: calc(100% + 2px); /* 顶部固定在按钮上方一点点 */
+  right: 0;
+  min-width: 200px;
+  max-width: 300px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.95);
+  border: 1px solid rgba(65, 177, 255, 0.5);
+  border-radius: 6px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 8px rgba(65, 177, 255, 0.3);
+  z-index: 1000;
+  backdrop-filter: blur(10px);
+  animation: fadeIn 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.conversationDropdownMenu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.conversationDropdownMenu::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+}
+
+.conversationDropdownMenu::-webkit-scrollbar-thumb {
+  background: rgba(65, 177, 255, 0.3);
+  border-radius: 2px;
+}
+
+/* 新建对话按钮（绿色） */
+.addConversationBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid rgba(76, 175, 80, 0.5);
+  background: rgba(76, 175, 80, 0.2);
+  color: #4CAF50;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  padding: 0;
+  font-weight: bold;
+}
+
+.addConversationBtn:hover {
+  background: rgba(76, 175, 80, 0.3);
+  border-color: rgba(76, 175, 80, 0.8);
+  transform: scale(1.1);
+  color: #66BB6A;
+}
+
+/* 删除对话按钮 */
+.deleteConversationBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 77, 77, 0.5);
+  background: rgba(255, 77, 77, 0.1);
+  color: #FF4D4D;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  padding: 0;
+  font-weight: bold;
+}
+
+.deleteConversationBtn:hover {
+  background: rgba(255, 77, 77, 0.2);
+  border-color: rgba(255, 77, 77, 0.8);
+  transform: scale(1.1);
+}
+
+.clearContextBtn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(255, 193, 7, 0.55);
+  border-radius: 4px;
+  background: rgba(255, 193, 7, 0.12);
+  color: #FFD166;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.clearContextBtn:hover:not(:disabled) {
+  background: rgba(255, 193, 7, 0.22);
+  border-color: rgba(255, 209, 102, 0.9);
+}
+
+.controlSpinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #FFD166;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.conversationControls button:disabled,
+.inputToolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+}
+
+.conversationItem {
+  position: relative;
+  padding: 8px 12px;
+  background: rgba(65, 177, 255, 0.1);
+  border: 1px solid rgba(65, 177, 255, 0.3);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.conversationItem:hover {
+  background: rgba(65, 177, 255, 0.2);
+  border-color: rgba(65, 177, 255, 0.5);
+}
+
+.conversationItem.active {
+  background: rgba(65, 177, 255, 0.3);
+  border-color: rgba(65, 177, 255, 0.8);
+  box-shadow: 0 0 8px rgba(65, 177, 255, 0.4);
+}
+
+.conversationTitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: PingFangSC-Regular;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deleteConvBtn {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 77, 77, 0.6);
+  color: white;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.deleteConvBtn:hover {
+  background: rgba(255, 77, 77, 0.9);
+  transform: scale(1.2);
+}
+
+.cornerDeco {
+  position: absolute;
+  left: 0;
+  top: 18px;
+  width: 100%;
+  height: 64px;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.contentContainer {
+  background-color: rgba(62, 135, 206, 0.08);
+  flex: 1;
+  min-height: 0;
+  border: 1px solid rgba(65, 177, 255, 0.3);
+  margin-top: -2px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* 消息列表区域 */
+.messagesArea {
+  flex: 1;
+  min-height: 140px;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 自定义滚动条 */
+.messagesArea::-webkit-scrollbar {
+  width: 6px;
+}
+
+.messagesArea::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.messagesArea::-webkit-scrollbar-thumb {
+  background: rgba(65, 177, 255, 0.3);
+  border-radius: 3px;
+}
+
+.messagesArea::-webkit-scrollbar-thumb:hover {
+  background: rgba(65, 177, 255, 0.5);
+}
+
+/* 消息行 */
+.messageRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.aiRow {
+  justify-content: flex-start;
+}
+
+.userRow {
+  justify-content: flex-end;
+}
+
+/* 头像 */
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* 消息内容容器 */
+.messageContent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 70%;
+}
+
+.userRow .messageContent {
+  align-items: flex-end;
+}
+
+.aiRow .messageContent {
+  align-items: flex-start;
+}
+
+/* 报告容器 */
+.reportWrapper {
+  width: 100%;
+}
+
+/* 消息图片 */
+.messageImages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.messageImage {
+  max-width: 150px;
+  max-height: 150px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+/* 超分结果图片及下载操作 */
+.superResolutionResult {
+  width: min(100%, 360px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.superResolutionImage {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  max-height: 360px;
+  object-fit: contain;
+  border: 1px solid rgba(65, 177, 255, 0.35);
+  border-radius: 6px;
+}
+
+.superResolutionMeta {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.downloadResultButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid rgba(65, 177, 255, 0.55);
+  border-radius: 4px;
+  background: rgba(65, 177, 255, 0.16);
+  color: #dff3ff;
+  font-size: 13px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.downloadResultButton:hover {
+  background: rgba(65, 177, 255, 0.28);
+}
+
+/* 消息气泡 */
+.messageBubble {
+  padding: 8px 16px;
+  border-radius: 20px;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.aiBubble {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.userBubble {
+  background-color: rgba(65, 177, 255, 0.2);
+}
+
+/* 消息文字 */
+.messageText {
+  font-family: PingFangSC, PingFang SC;
+  font-weight: 500;
+  font-size: 18px;
+  color: #FFFFFF;
+  line-height: 30px;
+  text-align: left;
+  font-style: normal;
+  text-transform: none;
+}
+
+.aiText {
+  color: rgba(81, 184, 255, 1);
+}
+
+.userText {
+  color: rgba(255, 255, 255, 1);
+}
+
+/* 大模型回复 Markdown */
+.markdownContent {
+  width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.markdownContent > :first-child {
+  margin-top: 0;
+}
+
+.markdownContent > :last-child {
+  margin-bottom: 0;
+}
+
+.markdownContent p {
+  margin: 0 0 8px;
+}
+
+.markdownContent h1,
+.markdownContent h2,
+.markdownContent h3,
+.markdownContent h4,
+.markdownContent h5,
+.markdownContent h6 {
+  margin: 12px 0 6px;
+  color: #e8f5ff;
+  font-size: 1em;
+  line-height: inherit;
+}
+
+.markdownContent ul,
+.markdownContent ol {
+  margin: 6px 0 8px;
+  padding-left: 24px;
+}
+
+.markdownContent li + li {
+  margin-top: 4px;
+}
+
+.markdownContent blockquote {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 3px solid rgba(81, 184, 255, 0.65);
+  color: rgba(232, 245, 255, 0.8);
+}
+
+.markdownContent a {
+  color: #9cddff;
+  text-decoration: underline;
+}
+
+.markdownContent code {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.28);
+  color: #e8f5ff;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 0.88em;
+}
+
+.markdownContent pre {
+  max-width: 100%;
+  margin: 8px 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.markdownContent pre code {
+  padding: 0;
+  background: transparent;
+  white-space: pre;
+}
+
+.markdownContent table {
+  display: block;
+  max-width: 100%;
+  margin: 8px 0;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.markdownContent th,
+.markdownContent td {
+  padding: 4px 8px;
+  border: 1px solid rgba(81, 184, 255, 0.35);
+  white-space: nowrap;
+}
+
+.markdownContent hr {
+  margin: 10px 0;
+  border: 0;
+  border-top: 1px solid rgba(81, 184, 255, 0.3);
+}
+
+/* ==================== 通用报告面板模板 ==================== */
+/* 所有报告模块复用此容器，确保大小完全一致 */
+.reportPanel {  
+  position: relative;
+  width: 100%;
+  height: 570px;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 3px 3px 16px 0px #448FD2;
+  border-radius: 12px;
+  border: 1.5px solid rgba(65, 177, 255, 0.8);
+  box-sizing: border-box;
+  padding: 16px 20px;
+  overflow: visible; /* 改为 visible，确保进度条不被裁剪 */
+  flex-shrink: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  transition: height 0.2s ease, padding 0.2s ease;
+}
+
+.reportPanelCollapsed {
+  height: 60px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  overflow: hidden;
+}
+
+/* 报告内容区域 - 自动填充剩余空间 */
+.reportBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.reportHeader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+  padding-bottom: 12px;
+  position: relative;
+  /* border-bottom: 1px solid rgba(65, 177, 255, 0.2); */
+}
+
+.reportPanelCollapsed .reportHeader {
+  height: 34px;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.reportCollapseButton {
+  position: absolute;
+  right: 54px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: #9cddff;
+  background: rgba(65, 177, 255, 0.12);
+  border: 1px solid rgba(65, 177, 255, 0.45);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.reportCollapseButton:hover {
+  color: #ffffff;
+  background: rgba(65, 177, 255, 0.25);
+  border-color: rgba(156, 221, 255, 0.8);
+}
+
+.reportCollapseButton:focus-visible {
+  outline: 2px solid #9cddff;
+  outline-offset: 2px;
+}
+
+.reportCollapseButton svg {
+  width: 18px;
+  height: 18px;
+}
+
+
+.centerDeco {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 35px;
+  width: 495px;
+  height: 55px;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.reportTitle {
+  font-size: 24px;
+  line-height: 33px;
+  font-family: AlibabaPuHuiTi_3_95_ExtraBold;
+  font-weight: 700;
+  letter-spacing: 1px;
+  background: linear-gradient(0deg, #7EC2FF 0%, #FFFFFF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  
+}
+
+/* 报告内容 - 左右布局 */
+.reportContent {
+  display: flex;
+  gap: 70px;
+  margin-bottom: 16px;
+}
+
+/* 小节标题 */
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.sectionIcon {
+  width: 24px;
+  height: 24px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+
+.sectionTitle {
+  font-size: 22px;
+  font-family: PingFangSC, PingFang SC;
+  font-weight: 500;
+  line-height: 30px;
+  text-align: left;
+  font-style: normal;
+  background: linear-gradient(0deg, rgba(65, 177, 255, 0.6) 0%, #E8F5FF 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;  
+}
+
+/* 出现频率区域 */
+.frequencySection {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 文本总结区域 */
+.summarySection {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 200px; /* 与柱状图高度一致 */
+  overflow: hidden;
+}
+
+/* 柱状图 */
+.barChart {
+  display: flex;
+  gap: 12px;
+  position: relative;
+}
+
+.chartArea {
+  flex: 1;
+  position: relative;
+  height: 180px;
+  min-width: 180px;
+}
+
+.gridLines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 150px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.gridLine {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.barsContainer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 150px;
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+}
+
+.barWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.bar {
+  width: 24px;
+  background: linear-gradient(180deg, #7DD8FF 0%, #41B1FF 50%, #2A7AB8 100%);
+  border-radius: 2px 2px 0 0;
+  min-height: 4px;
+}
+
+.summaryText {
+  font-family: PingFangSC, PingFang SC;
+  font-weight: 400;
+  font-size: 18px;
+  color: #FFFFFF;
+  line-height: 30px;
+  text-align: left;
+  font-style: normal;
+  text-transform: none;
+  white-space: pre-line;
+  margin: 0;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 8px; /* 为滚动条留出空间 */
+}
+
+/* 文本总结滚动条样式 */
+.summaryText::-webkit-scrollbar {
+  width: 4px;
+}
+
+.summaryText::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+}
+
+.summaryText::-webkit-scrollbar-thumb {
+  background: rgba(65, 177, 255, 0.3);
+  border-radius: 2px;
+}
+
+.summaryText::-webkit-scrollbar-thumb:hover {
+  background: rgba(65, 177, 255, 0.5);
+}
+
+/* 关键帧缩略图区域 */
+.thumbnailsSection {
+  margin-top: 8px;
+  position: relative;
+  z-index: 1;
+  overflow: visible; /* 确保进度条不被裁剪 */
+}
+
+.thumbnailsGrid {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  /* 隐藏滚动条，使用自定义进度条 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.thumbnailsGrid::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* 缩略图数量提示 */
+.thumbnailCount {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-left: 12px;
+  font-family: PingFangSC-Regular;
+}
+
+
+.thumbnailItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.thumbnailImageWrapper {
+  position: relative;
+  width: 173px;
+  height: 130px;
+  cursor: default;
+}
+
+.thumbnailImageWrapper.clickable {
+  cursor: pointer;
+}
+
+.thumbnailImageWrapper.clickable:hover .playIcon {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.thumbnailImageWrapper.clickable:hover .thumbnailImage {
+  opacity: 0.8;
+}
+
+.thumbnailImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid rgba(65, 177, 255, 0.3);
+  transition: opacity 0.2s;
+}
+
+.thumbnailLabel {
+  font-family: PingFangSC, PingFang SC;
+  font-weight: 400;
+  font-size: 18px;
+  color: #FFFFFF;
+  line-height: 30px;
+  text-align: center;
+  font-style: normal;
+  text-transform: none;
+}
+
+/* ==================== 固定报告区域 ==================== */
+.fixedReportSection {
+  flex: 0 1 auto;
+  min-height: 0;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: center;
+}
+
+/* 固定报告区域滚动条 */
+.fixedReportSection::-webkit-scrollbar {
+  width: 4px;
+}
+
+.fixedReportSection::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+}
+
+.fixedReportSection::-webkit-scrollbar-thumb {
+  background: rgba(65, 177, 255, 0.3);
+  border-radius: 2px;
+}
+
+/* ==================== 输入区域 ==================== */
+.inputSection {
+  flex-shrink: 0;
+  padding: 16px 24px 20px;
+  background: rgba(0, 0, 0, 0.2);
+  border-top: 1px solid rgba(65, 177, 255, 0.2);
+}
+
+/* 已上传图片预览行 */
+.uploadedImagesRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.uploadedImageWrapper {
+  position: relative;
+  width: 60px;
+  height: 60px;
+}
+
+.uploadedImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(65, 177, 255, 0.3);
+}
+
+.removeImageBtn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 77, 77, 0.9);
+  border: none;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.removeImageBtn:hover {
+  background: rgba(255, 77, 77, 1);
+}
+
+/* 输入容器 */
+.inputContainer {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(65, 177, 255, 0.2);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 8px;
+}
+
+/* 文本输入框 */
+.textInput {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
+  font-family: PingFangSC-Regular;
+  line-height: 30px;
+}
+
+.textInput::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* 录音状态的输入框 */
+.textInput.recording {
+  color: rgba(255, 77, 77, 0.9);
+}
+
+.textInput.recording::placeholder {
+  color: rgba(255, 77, 77, 0.6);
+}
+
+/* 工具栏 */
+.inputToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 隐藏的文件输入 */
+.hiddenFileInput {
+  display: none;
+}
+
+/* 工具按钮 */
+.toolButton {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.toolButton:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.toolIcon {
+  width: 24px;
+  height: 24px;
+}
+
+/* 录音状态 */
+.toolButton.recording {
+  background: rgba(255, 77, 77, 0.2);
+  position: relative;
+}
+
+.toolButton.recording:hover {
+  background: rgba(255, 77, 77, 0.3);
+}
+
+.recordingIndicator {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  background: #ff4d4d;
+  border-radius: 50%;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 发送按钮 */
+.sendButton {
+  width: 40px;
+  height: 40px;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+  flex-shrink: 0;
+}
+
+.sendButton:hover:not(:disabled) {
+  transform: scale(1.05);
+  opacity: 0.9;
+}
+
+.sendButton:active {
+  transform: scale(0.95);
+}
+
+/* 发送中状态 */
+.sendButton.sending {
+  background-color: rgba(65, 177, 255, 0.3);
+  cursor: not-allowed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sendButton.sending:hover {
+  transform: none;
+}
+
+.sendingSpinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #41B1FF;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 右下角装饰点 */
+.dotDecor {
+  position: absolute;
+  bottom: 8px;
+  right: 0;
+  width: 6px;
+  height: 6px;
+}
+
+.dot {
+  background-color: rgba(62, 161, 250, 1);
+  width: 6px;
+  height: 6px;
+}
+
+/* ==================== 时间线日志报告样式 ==================== */
+
+/* 时间线容器 */
+.timelineContainer {
+  flex: 1;
+  display: flex;
+  gap: 0;
+  overflow: hidden;
+  margin-top: 16px;
+}
+
+/* 时间线轴区域 */
+.timelineAxis {
+  position: relative;
+  width: 24px;
+  flex-shrink: 0;
+}
+
+/* 垂直时间线 */
+.timelineLine {
+  position: absolute;
+  left: 11px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(
+    180deg,
+    rgba(65, 177, 255, 0.9) 0%,
+    rgba(65, 177, 255, 0.5) 100%
+  );
+}
+
+/* 时间线刻度 */
+.timelineTick {
+  position: absolute;
+  left: 4px;
+  width: 16px;
+  height: 1px;
+  background: rgba(65, 177, 255, 0.4);
+}
+
+/* 事件列表区域 */
+.timelineEvents {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.timelineEvents::-webkit-scrollbar {
+  width: 3px;
+}
+
+.timelineEvents::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.timelineEvents::-webkit-scrollbar-thumb {
+  background: rgba(65, 177, 255, 0.25);
+  border-radius: 2px;
+}
+
+/* 时间线单项 */
+.timelineItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  position: relative;
+}
+
+/* 连接圆点 */
+.timelineDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 14px;
+  margin-left: -16px;
+}
+
+/* 事件卡片 */
+.timelineCard {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  gap: 10px;
+}
+
+/* 缩略图区域 */
+.timelineThumbnail {
+  width: 64px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.timelineThumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 文字内容区域 */
+.timelineContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* 卡片头部 */
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 时间显示 */
+.cardTime {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* 类型标签 */
+.cardTag {
+  font-family: PingFangSC, PingFang SC;
+  font-weight: 500;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+/* 事件标题 */
+.cardTitle {
+  font-family: PingFangSC, PingFang SC;
+  font-weight: 500;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.95);
+  line-height: 18px;
+}
+
+/* 事件描述 */
+.cardDesc {
+  font-family: PingFangSC, PingFang SC;
+  font-weight: 400;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 摄像头信息 */
+.cardCamera {
+  color: rgba(65, 177, 255, 0.7);
+  margin-left: 4px;
+}
+
+/* ========== 新版日志列表样式 ========== */
+
+/* 报告状态指示器 */
+.reportStatus {
+  position: absolute;
+  right: 0;
+  font-size: 12px;
+  color: #0BB837;
+}
+
+/* 日志列表容器 */
+.logListContainer {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 0;
+  overflow-y: auto;
+}
+
+/* 日志列表滚动条 */
+.logListContainer::-webkit-scrollbar {
+  width: 4px;
+}
+
+.logListContainer::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+}
+
+.logListContainer::-webkit-scrollbar-thumb {
+  background: rgba(65, 177, 255, 0.3);
+  border-radius: 2px;
+}
+
+/* 单个日志卡片 - 横向布局 */
+.logCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(135deg, rgba(65, 177, 255, 0.08) 0%, rgba(65, 177, 255, 0.02) 100%);
+  border: 1px solid rgba(65, 177, 255, 0.2);
+  border-radius: 8px;
+  padding: 0 12px 6px 12px;
+  transition: all 0.2s ease;
+}
+
+.logCard:hover {
+  border-color: rgba(65, 177, 255, 0.4);
+  background: linear-gradient(135deg, rgba(65, 177, 255, 0.12) 0%, rgba(65, 177, 255, 0.04) 100%);
+}
+
+/* 左侧缩略图 */
+.logThumbnail {
+  position: relative;
+  width: 100px;
+  height: 75px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logThumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.logThumbnail.clickable {
+  cursor: pointer;
+}
+
+.logThumbnail.clickable:hover .playIcon {
+  opacity: 1;
+}
+
+.logThumbnail.clickable:hover img {
+  filter: brightness(0.7);
+}
+
+.logThumbnailPlaceholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(65, 177, 255, 0.15) 0%, rgba(65, 177, 255, 0.05) 100%);
+  font-size: 28px;
+}
+
+.playIcon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 24px;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.2s;
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
+}
+
+/* 右侧内容 */
+.logCardContent {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 日志卡片头部 */
+.logCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.logTime {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.logTags {
+  display: flex;
+  gap: 6px;
+}
+
+.unavailableVideo {
+  color: rgba(255, 196, 104, 0.9);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.logTag {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-family: PingFangSC-Medium;
+  font-weight: 500;
+}
+
+/* 事件类型标签 */
+.logEventTag {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-family: PingFangSC-Regular;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* 危险事件高亮 - 黄色 */
+.logEventTag.highlight {
+  background: rgba(245, 166, 35, 0.25);
+  color: #F5A623;
+  font-weight: 500;
+}
+
+/* 日志卡片内容 */
+.logCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.logText {
+  font-family: PingFangSC-Regular;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.5;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 置信度显示 - 统一绿色 */
+.logConfidence {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.confidenceLabel {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+}
+
+.confidenceBar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.confidenceFill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #0BB837 0%, #4CD964 100%);
+  transition: width 0.3s ease;
+}
+
+.confidenceValue {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 12px;
+  color: #0BB837;
+  min-width: 32px;
+  text-align: right;
+}
+
+/* 空状态 */
+.logEmpty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 16px;
+  font-family: PingFangSC-Regular;
+  min-height: 200px;
+}
+
+/* ========== 日志视频弹窗（统一使用实时告警样式） ========== */
+.logVideoOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.logVideoModal {
+  background: linear-gradient(180deg, #0c1e3c 0%, #0a1628 100%);
+  border: 1px solid rgba(65, 177, 255, 0.4);
+  border-radius: 8px;
+  width: 1280px;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 40px rgba(65, 177, 255, 0.3);
+  animation: scaleIn 0.2s ease;
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.logVideoHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(65, 177, 255, 0.2);
+}
+
+.logVideoTitle {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.logVideoTitleText {
+  font-family: PingFangSC-Medium;
+  font-size: 18px;
+  color: #FFFFFF;
+  font-weight: 500;
+}
+
+.logVideoTime {
+  font-family: PingFangSC-Regular;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.logVideoClose {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.logVideoClose:hover {
+  background: rgba(249, 71, 71, 0.8);
+  color: #fff;
+}
+
+.logVideoBody {
+  padding: 20px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.logVideoPlayer {
+  width: 100%;
+  height: auto;
+  max-height: 720px;
+  background: #000;
+  border-radius: 4px;
+  display: block;
+  object-fit: contain;
+}
+
+/* ========== 异常报告样式 ========== */
+
+/* 异常列表容器 */
+.anomalyListContainer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 0;
+  overflow-y: auto;
+}
+
+/* 异常列表滚动条 */
+.anomalyListContainer::-webkit-scrollbar {
+  width: 4px;
+}
+
+.anomalyListContainer::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+}
+
+.anomalyListContainer::-webkit-scrollbar-thumb {
+  background: rgba(255, 169, 64, 0.3);
+  border-radius: 2px;
+}
+
+.anomalyListContainer::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 169, 64, 0.5);
+}
+
+/* 异常卡片 - 横向布局 */
+.anomalyCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: linear-gradient(135deg, rgba(255, 169, 64, 0.1) 0%, rgba(255, 169, 64, 0.02) 100%);
+  border: 1px solid rgba(255, 169, 64, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.2s ease;
+}
+
+.anomalyCard:hover {
+  border-color: rgba(255, 169, 64, 0.5);
+  background: linear-gradient(135deg, rgba(255, 169, 64, 0.15) 0%, rgba(255, 169, 64, 0.04) 100%);
+  box-shadow: 0 2px 8px rgba(255, 169, 64, 0.2);
+}
+
+/* 左侧缩略图 */
+.anomalyThumbnail {
+  position: relative;
+  width: 100px;
+  height: 75px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.anomalyThumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.anomalyThumbnail.clickable {
+  cursor: pointer;
+}
+
+.anomalyThumbnail.clickable:hover .playIcon {
+  opacity: 1;
+}
+
+.anomalyThumbnail.clickable:hover img {
+  filter: brightness(0.7);
+}
+
+.anomalyThumbnailPlaceholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(255, 169, 64, 0.15) 0%, rgba(255, 169, 64, 0.05) 100%);
+  font-size: 28px;
+}
+
+/* 右侧内容 */
+.anomalyCardContent {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 异常卡片头部 */
+.anomalyCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.anomalyTime {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.anomalyTags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* 事件类型标签 */
+.anomalyEventTag {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-family: PingFangSC-Medium;
+  font-weight: 500;
+}
+
+/* 风险等级标签 */
+.anomalyRiskTag {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-family: PingFangSC-Medium;
+  font-weight: 500;
+}
+
+/* 异常卡片内容 */
+.anomalyCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 摘要文本 */
+.anomalySummary {
+  font-family: PingFangSC-Regular;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* 关键观察点 */
+.anomalyObservations {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.observationsLabel {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: PingFangSC-Medium;
+  font-weight: 500;
+}
+
+.observationsList {
+  margin: 0;
+  padding-left: 20px;
+  list-style-type: disc;
+}
+
+.observationsList li {
+  font-family: PingFangSC-Regular;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.6;
+  margin-bottom: 4px;
+}
+
+/* 异常置信度显示 */
+.anomalyConfidence {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* 空状态 */
+.anomalyEmpty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 16px;
+  font-family: PingFangSC-Regular;
+  min-height: 200px;
+}

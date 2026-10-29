@@ -1,0 +1,10 @@
+# Official CUDA 11.8 wheels for the existing R535 driver.
+--extra-index-url https://download.pytorch.org/whl/cu118
+--find-links https://github.com/vllm-project/vllm/releases/expanded_assets/v0.9.2
+vllm==0.9.2+cu118
+torch==2.7.0+cu118
+torchvision==0.22.0+cu118
+torchaudio==2.7.0+cu118
+xformers @ https://download.pytorch.org/whl/cu118/xformers-0.0.30-cp311-cp311-manylinux_2_28_x86_64.whl#sha256=6416c7d6463f201e1ec1c57ab2b94797c357e16894bfca61204157dc923ed24e
+transformers==4.53.3
+huggingface-hub<1.0

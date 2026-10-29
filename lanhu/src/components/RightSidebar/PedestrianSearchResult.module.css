@@ -1,0 +1,105 @@
+.result {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(65, 177, 255, 0.35);
+  border-radius: 8px;
+  background: rgba(10, 40, 68, 0.65);
+  color: #e4f3ff;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.title {
+  margin: 0 0 6px;
+  color: #7ed4ff;
+  font-size: 14px;
+}
+
+.note,
+.warning {
+  margin: 6px 0;
+  font-size: 12px;
+}
+
+.note {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.warning {
+  color: #ffd58a;
+}
+
+.candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.candidate {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(65, 177, 255, 0.2);
+}
+
+.photo,
+.photoPlaceholder {
+  flex: 0 0 64px;
+  width: 64px;
+  height: 128px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.photo {
+  object-fit: contain;
+}
+
+.photoPlaceholder {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+}
+
+.details {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.selectionButton {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border: 1px solid rgba(65, 177, 255, 0.6);
+  border-radius: 4px;
+  background: rgba(20, 95, 150, 0.5);
+  color: #e4f3ff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.selectionButton:hover:not(:disabled),
+.selectionButton:focus-visible {
+  background: rgba(30, 125, 185, 0.7);
+}
+
+.selectionButton:focus-visible {
+  outline: 2px solid #7ed4ff;
+  outline-offset: 2px;
+}
+
+.selectionButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

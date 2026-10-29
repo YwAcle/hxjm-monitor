@@ -1,0 +1,4 @@
+# Qwen3_5ForConditionalGeneration; install in an independent Python 3.11 environment.
+# Keep the existing vLLM 0.9.2+cu118 environment for InternVL rollback.
+vllm==0.17.1
+transformers==4.57.6

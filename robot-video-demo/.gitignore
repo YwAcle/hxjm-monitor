@@ -1,0 +1,8 @@
+.venv/
+.runtime/
+artifacts/
+__pycache__/
+.pytest_cache/
+node_modules/
+.env
+cameras.local.json

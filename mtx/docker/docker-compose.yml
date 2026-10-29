@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  # Reid AI 服务 (独立进程)
+  # ai-reid:
+  #   build:
+  #     context: ..
+  #     dockerfile: python/reid/Dockerfile
+  #   container_name: ai-reid
+  #   environment:
+  #     - REID_ZMQ_ADDR=tcp://0.0.0.0:5556
+  #   ipc: host
+  #   ports:
+  #     - "5556:5556"
+  #   restart: unless-stopped
+  #   networks:
+  #     - ai-net
+  #   command: ["python3", "/app/python/reid/server.py"]
+
+  # # Garden AI 服务 (独立进程)
+  # ai-garden:
+  #   build:
+  #     context: ..
+  #     dockerfile: python/garden/Dockerfile
+  #   container_name: ai-garden
+  #   environment:
+  #     - GARDEN_ZMQ_ADDR=tcp://0.0.0.0:5557
+  #   ipc: host
+  #   ports:
+  #     - "5557:5557"
+  #   volumes:
+  #     - ../python/garden/data:/app/python/garden/data
+  #   restart: unless-stopped
+  #   networks:
+  #     - ai-net
+  #   command: ["python3", "/app/python/garden/server.py"]
+
+  # SAM3 AI 服务 (独立进程)
+  ai-sam3:
+    build:
+      context: ..
+      dockerfile: python/sam3/Dockerfile
+    container_name: ai-sam3
+    environment:
+      - SAM3_ZMQ_ADDR=tcp://0.0.0.0:5558
+    ipc: host
+    ports:
+      - "5558:5558"
+    volumes:
+      - ../python/sam3/model:/app/model
+    restart: unless-stopped
+    networks:
+      - ai-net
+    command: ["python3", "/app/server.py"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # MediaMTX 流媒体服务器
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: mediamtx
+    volumes:
+      - ../mediamtx/mediamtx.yml:/mediamtx.yml:ro
+    environment:
+      - MTX_PROTOCOLS=tcp
+      # WebRTC 配置 - 设置客户端可访问的地址 (改成你的实际IP)
+      - MTX_WEBRTCADDITIONALHOSTS=192.168.109.191,127.0.0.1
+    ports:
+      - "8554:8554"    # RTSP
+      - "1935:1935"    # RTMP
+      - "8888:8888"    # HLS
+      - "8889:8889"    # WebRTC HTTP
+      - "8189:8189/udp" # WebRTC ICE UDP
+    restart: unless-stopped
+    networks:
+      - ai-net
+
+  # C++ AI Stream Processor
+  ai-stream:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: ai-stream
+    environment:
+      # 每个 AI 任务的独立 IPC 地址
+      - REID_ZMQ_ADDR=tcp://ai-reid:5556
+      - GARDEN_ZMQ_ADDR=tcp://ai-garden:5557
+      - SAM3_ZMQ_ADDR=tcp://ai-sam3:5558
+      # 推流地址 (使用 mediamtx 容器名)
+      - PUSH_URL_PREFIX=rtsp://mediamtx:8554/live/
+    ipc: host
+    # === GPU 支持 (根据需要启用) ===
+    # NVIDIA GPU:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, video]
+    # Intel/AMD VAAPI:
+    # devices:
+    #   - /dev/dri:/dev/dri
+    volumes:
+      - ./docker-config.yaml:/app/config.yaml:ro
+    depends_on:
+      # - ai-reid
+      # - ai-garden
+      - ai-sam3
+      - mediamtx
+    restart: unless-stopped
+    networks:
+      - ai-net
+
+networks:
+  ai-net:
+    driver: bridge

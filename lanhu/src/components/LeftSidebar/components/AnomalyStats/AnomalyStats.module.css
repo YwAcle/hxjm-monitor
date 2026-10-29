@@ -1,0 +1,179 @@
+.container {
+  position: relative;
+  width: 320px;
+  height: 298px;
+}
+
+.headerSection {
+  position: relative;
+  width: 100%;
+  height: 48px;
+  background-position: 0px 6px;
+  background-repeat: no-repeat;
+  background-size: 100% 42px;
+}
+
+.decorLine {
+  width: 193px;
+  height: 2px;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+
+.titleRow {
+  width: 180px;
+  height: 33px;
+  margin: 6px 0 7px 9px;
+}
+
+.titleIcon {
+  width: 22px;
+  height: 21px;
+  background-position: -1px 0px;
+  background-repeat: no-repeat;
+  background-size: 23px 22px;
+  margin-top: 5px;
+}
+
+.titleText {
+  width: 150px;
+  height: 33px;
+  font-family: AlibabaPuHuiTi_3_85_Bold;
+  font-size: 24px;
+  color: #ECF6FF;
+  line-height: 33px;
+  letter-spacing: 1px;
+  text-align: left;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+  background: linear-gradient(0deg, rgba(1,127,194,0.49) 0%, rgba(1,127,194,0.18) 32.4%, rgba(1,127,194,0) 100%), #FFFFFF;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.cornerDeco {
+  position: absolute;
+  left: 0;
+  top: 24px;
+  width: 320px;
+  height: 64px;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.contentContainer {
+  background-color: rgba(62, 135, 206, 0.08);
+  height: 250px;
+  border: 1px solid rgba(62, 135, 206, 0.3);
+  width: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 5px;
+  gap: 10px;
+  overflow: visible;
+}
+
+/* 甜甜圈图容器 - 173px x 173px */
+.chartContainer {
+  position: relative;
+  width: 173px;
+  height: 173px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.donutChart {
+  width: 173px;
+  height: 173px;
+  transform: rotate(-90deg);
+  position: relative;
+  z-index: 1;
+}
+
+/* 图表中心文字 */
+.chartCenter {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.chartValue {
+  color: rgba(242, 243, 245, 1);
+  font-size: 32px;
+  font-family: PingFangSC-Medium;
+  font-weight: 500;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.chartLabel {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-family: PingFangSC-Regular;
+  font-weight: normal;
+  line-height: 1;
+}
+
+/* 图例容器 */
+.legendContainer {
+  display: flex;
+  flex-direction: column;
+  margin-right: 10px;
+  width: 130px;
+}
+
+.statItem {
+  width: 100%;
+  height: 30px;
+  margin-bottom: 6px;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.statDot {
+  border-radius: 50%;
+  width: 10px;
+  height: 10px;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.statLabel {
+  font-family: PingFangSC, PingFang SC;
+  font-weight: 400;
+  font-size: 16px;
+  color: #FFFFFF;
+  line-height: 24px;
+  text-align: left;
+  font-style: normal;
+}
+
+.statValue {
+  color: rgba(255, 255, 255, 1);
+  font-size: 18px;
+  font-family: PingFangSC-Medium;
+  font-weight: 500;
+}
+
+.bottomDot {
+  background-color: rgba(62, 161, 250, 1);
+  position: absolute;
+  left: 315px;
+  top: 244px;
+  width: 6px;
+  height: 6px;
+}

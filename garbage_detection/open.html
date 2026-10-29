@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>垃圾检测 · 自动访问入口</title>
+  <style>
+    body { margin: 0; background: #f4f7f6; color: #183d34; font: 16px/1.7 system-ui, sans-serif; }
+    main { max-width: 580px; margin: 12vh auto; padding: 32px; background: white; border-radius: 16px; }
+    h1 { font-size: 26px; margin-top: 0; }
+    a { color: #14725a; overflow-wrap: anywhere; }
+    button { padding: 10px 22px; border: 0; border-radius: 6px; background: #176b55; color: white; cursor: pointer; }
+    button:disabled { opacity: .5; cursor: wait; }
+    small { color: #667b74; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>垃圾检测 · 自动访问入口</h1>
+    <p id="status" role="status" aria-live="polite">正在检测可用地址…</p>
+    <ul id="addresses"></ul>
+    <button id="retry" type="button">重新检测</button>
+    <p><small>请将这个文件保存在自己的电脑上，以后双击打开。局域网与 Tailscale 均可用时优先使用局域网。</small></p>
+    <p><small>如浏览器询问本地网络访问权限，请允许。自动检测失败时，也可以点击上面的地址手动访问。</small></p>
+  </main>
+  <script>
+    // The server fills the configured port when downloading; a local copy defaults to 23071.
+    const port = Number('__GARBAGE_PORT__') || 23071;
+    const addresses = [
+      { name: '局域网', url: `http://192.168.109.191:${port}/` },
+      { name: 'Tailscale', url: `http://100.127.237.7:${port}/` }
+    ];
+    for (const address of addresses) {
+      const item = document.createElement('li');
+      const link = document.createElement('a');
+      link.href = address.url;
+      link.textContent = `${address.name}：${address.url}`;
+      item.append(link);
+      document.getElementById('addresses').append(item);
+    }
+    function reachable(url) {
+      return new Promise(resolve => {
+        // Image loading also works from a saved file, without requiring cross-origin API access.
+        const probe = new Image();
+        const finish = online => {
+          clearTimeout(timer);
+          probe.onload = probe.onerror = null;
+          probe.src = '';
+          resolve(online);
+        };
+        const timer = setTimeout(() => finish(false), 5000);
+        probe.onload = () => finish(probe.naturalWidth === 1 && probe.naturalHeight === 1);
+        probe.onerror = () => finish(false);
+        probe.src = `${url}api/ping.svg?t=${Date.now()}`;
+      });
+    }
+    async function connect() {
+      const button = document.getElementById('retry');
+      const status = document.getElementById('status');
+      button.disabled = true;
+      status.textContent = '正在检测局域网和 Tailscale 地址，最多等待 5 秒…';
+      const online = await Promise.all(addresses.map(address => reachable(address.url)));
+      const selected = addresses.find((address, index) => online[index]);
+      if (selected) {
+        status.textContent = `${selected.name}可用，正在打开网站…`;
+        window.location.replace(selected.url);
+      } else {
+        status.textContent = '两个地址都未检测成功。请确认服务器已执行 start.sh，电脑已连接局域网或 Tailscale；也可以点击上方地址手动尝试。';
+        button.disabled = false;
+      }
+    }
+    document.getElementById('retry').onclick = connect;
+    connect();
+  </script>
+</body>
+</html>

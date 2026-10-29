@@ -1,0 +1,4 @@
+# Install into botsort39 for BoT-SORT; deepsort remains an optional fallback.
+fastapi==0.115.12
+uvicorn==0.34.3
+websockets==15.0.1

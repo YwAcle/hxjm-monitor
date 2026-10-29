@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="edu.cqupt.hxjm.basedata.mapper.BaAlgtypeMapper">
+    
+    <resultMap type="BaAlgtype" id="BaAlgtypeResult">
+        <result property="algtypeId"    column="algtype_id"    />
+        <result property="algtypeCode"    column="algtype_code"    />
+        <result property="algtypeName"    column="algtype_name"    />
+        <result property="isvalid"    column="isvalid"    />
+        <result property="remark"    column="remark"    />
+    </resultMap>
+
+    <sql id="selectBaAlgtypeVo">
+        select algtype_id, algtype_code, algtype_name, isvalid, remark from ba_algtype
+    </sql>
+
+    <select id="selectBaAlgtypeList" parameterType="BaAlgtype" resultMap="BaAlgtypeResult">
+        <include refid="selectBaAlgtypeVo"/>
+        <where>  
+            <if test="algtypeName != null  and algtypeName != ''"> and algtype_name like concat('%', #{algtypeName}, '%')</if>
+            <if test="isvalid != null "> and isvalid = #{isvalid}</if>
+        </where>
+    </select>
+    
+    <select id="selectBaAlgtypeByAlgtypeId" parameterType="Long" resultMap="BaAlgtypeResult">
+        <include refid="selectBaAlgtypeVo"/>
+        where algtype_id = #{algtypeId}
+    </select>
+
+    <insert id="insertBaAlgtype" parameterType="BaAlgtype">
+        insert into ba_algtype
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="algtypeId != null">algtype_id,</if>
+            <if test="algtypeCode != null">algtype_code,</if>
+            <if test="algtypeName != null and algtypeName != ''">algtype_name,</if>
+            <if test="isvalid != null">isvalid,</if>
+            <if test="remark != null">remark,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="algtypeId != null">#{algtypeId},</if>
+            <if test="algtypeCode != null">#{algtypeCode},</if>
+            <if test="algtypeName != null and algtypeName != ''">#{algtypeName},</if>
+            <if test="isvalid != null">#{isvalid},</if>
+            <if test="remark != null">#{remark},</if>
+         </trim>
+    </insert>
+
+    <update id="updateBaAlgtype" parameterType="BaAlgtype">
+        update ba_algtype
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="algtypeCode != null">algtype_code = #{algtypeCode},</if>
+            <if test="algtypeName != null and algtypeName != ''">algtype_name = #{algtypeName},</if>
+            <if test="isvalid != null">isvalid = #{isvalid},</if>
+            <if test="remark != null">remark = #{remark},</if>
+        </trim>
+        where algtype_id = #{algtypeId}
+    </update>
+
+    <delete id="deleteBaAlgtypeByAlgtypeId" parameterType="Long">
+        delete from ba_algtype where algtype_id = #{algtypeId}
+    </delete>
+
+    <delete id="deleteBaAlgtypeByAlgtypeIds" parameterType="String">
+        delete from ba_algtype where algtype_id in 
+        <foreach item="algtypeId" collection="array" open="(" separator="," close=")">
+            #{algtypeId}
+        </foreach>
+    </delete>
+
+    <select id="getDisplayModelList" resultType="com.alibaba.fastjson2.JSONObject">
+
+       SELECT
+            a.algmodel_id AS algmodelId,
+            a.algmodel_code AS algmodelCode,
+            a.algmodel_name AS algmodelName,
+            a.algmodel_engines AS algmodelEngines,
+            a.algmodel_input AS algmodelInput,
+            a.algmodel_output AS algmodelOutput,
+            a.path AS path,
+            a.algtype_id AS algtypeId,
+            b.algtype_name AS algtypeName,
+            b.algtype_code AS algtypeCode,
+            b.isvalid as isDisplay,
+            a.isvalid ,
+            a.remark ,
+            a.preview ,
+            a.icon
+        FROM
+            ba_algmodel a
+        LEFT JOIN
+            ba_algtype b ON a.algtype_id = b.algtype_id
+        WHERE
+            a.isvalid = 1 and b.isvalid = 1;
+    </select>
+</mapper>

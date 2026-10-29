@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  algorithm-service:
+    build: .
+    ports:
+      - "8888:8888"
+    environment:
+      - MODEL_PATH=/app/models
+    volumes:
+      - ./models:/app/models
+    restart: unless-stopped 

@@ -1,0 +1,38 @@
+# ============================================================
+# AI 流媒体处理配置 - Docker ReID + VAD
+# ============================================================
+
+mediamtx_url: rtsp://mediamtx:18554/live
+
+control:
+  enabled: true
+  listen_host: 0.0.0.0
+  listen_port: 19090
+  token: change-me-before-production
+
+ai_tasks_ipc:
+  boxmot: tcp://ai-reid:5556
+  vad: tcp://ai-vad:5559
+
+task_templates:
+  boxmot:
+    transport: shm
+    ai_thread_num: 1
+    queue_size: 1
+    max_frame_age_ms: 700
+    zmq_timeout: 120000
+  vad:
+    transport: base64
+    frame_skip: 50
+    ai_thread_num: 1
+    queue_size: 10
+    zmq_timeout: 120000
+
+ai_config:
+  frame_skip: 1
+  ai_thread_num: 4
+  queue_size: 25
+  zmq_timeout: 5000
+
+# Dynamic mode resolves all camera sources from ba_machine.video_url.
+streams: []

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>垃圾识别 · 视觉检测工作台</title><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/" aria-label="垃圾识别首页"><span class="brand-icon">◈</span> FIELD VISION <span class="brand-sub">视觉检测工作台</span></a><div class="header-right"><a class="tag entry-link" href="/open.html" download="垃圾检测入口.html">保存自动访问入口</a><span class="tag">垃圾巡检</span><span id="clock"></span></div></header>
+  <main>
+    <div class="page-heading"><div><div class="eyebrow">ENVIRONMENT PERCEPTION / 01</div><h1>垃圾识别<span>检测工作台</span></h1><p id="page-description">观察现场画面，截取一帧，识别散落垃圾及所在区域。</p></div><div class="camera-badge"><span id="online-dot" class="dot"></span><span id="camera-status">正在连接摄像头</span></div></div>
+    <div class="mode-switch" role="group" aria-label="检测方式"><button id="camera-mode" class="mode-button active" aria-pressed="true">▣ 摄像头检测</button><button id="upload-mode" class="mode-button" aria-pressed="false">↥ 图片检测</button><span id="mode-hint">从摄像头 3 截取画面进行识别</span></div>
+    <div class="workspace">
+      <section class="panel camera-panel" aria-label="摄像头画面">
+        <div class="panel-heading"><div><span class="small-square"></span><strong id="source-title">摄像头 3</strong><span id="source-subtitle" class="muted source-label">固定巡检视角</span></div><span id="view-label" class="tag">现场画面</span></div>
+        <div id="camera-picker" class="camera-picker" role="group" aria-label="选择摄像头">
+          <span>选择画面</span>
+          <button class="camera-option" data-camera="camera_1" aria-pressed="false">摄像头 1 <small>连接中</small></button>
+          <button class="camera-option" data-camera="camera_2" aria-pressed="false">摄像头 2 <small>连接中</small></button>
+          <button class="camera-option active" data-camera="camera_3" aria-pressed="true">摄像头 3 <small>连接中</small></button>
+          <button class="camera-option" data-camera="camera_4" aria-pressed="false">摄像头 4 <small>连接中</small></button>
+        </div>
+        <div id="upload-toolbar" class="upload-toolbar" hidden><div class="upload-file-row"><button id="choose-image" class="upload-button">选择图片</button><span id="file-name">尚未选择图片</span><input id="image-file" type="file" accept="image/jpeg,image/png,image/webp" hidden></div><div class="detection-options"><label><input id="detailed-detection" type="checkbox">局部放大复检 <span class="muted">适合远处纸屑、小瓶子，耗时更长</span></label><label>检测阈值 <input id="detection-threshold" type="range" min="0.15" max="0.60" step="0.05" value="0.25"><output id="threshold-value">0.25</output></label><span class="muted">降低阈值可减少漏检，也会增加误检</span></div></div>
+        <div class="view-tabs"><button id="live-tab" class="tab active" aria-pressed="true">现场画面</button><button id="result-tab" class="tab" disabled aria-pressed="false">检测截图 <span id="snapshot-count"></span></button><label class="grid-control"><input type="checkbox" id="show-grid" checked>显示区域网格</label></div>
+        <div class="viewport" id="viewport">
+          <img id="camera-image" alt="摄像头 3 的现场画面" hidden><img id="result-image" alt="本次垃圾检测的原始截图" hidden>
+          <img id="upload-image" alt="待检测的上传图片" hidden>
+          <div id="empty-upload" class="empty-camera" hidden><span class="camera-symbol">↥</span><strong>上传图片，测试垃圾识别</strong><span>支持 JPG、PNG、WebP，最大 10 MB / 2000 万像素</span><button id="choose-empty" class="upload-button">选择测试图片</button></div>
+          <div class="frame-overlay" id="frame-overlay" hidden><div id="region-grid" class="region-grid"></div><div id="boxes"></div></div>
+          <div id="empty-camera" class="empty-camera"><span class="camera-symbol">▣</span><strong>正在获取现场画面</strong><span id="camera-error">等待摄像头 3 连接…</span></div>
+          <div class="viewport-top"><span class="video-chip" id="frame-kind">CAM 03 · 现场画面</span></div>
+        </div>
+        <div class="video-footer"><span id="frame-time">等待第一帧</span><span>九宫格区域 · 画面坐标</span></div>
+        <div class="action-bar"><div><strong id="action-title">单帧分析</strong><p id="action-description">定位纸屑、瓶子、塑料袋等疑似垃圾，检测期间可继续查看现场。</p></div><button id="detect-button" class="primary" disabled><span>⌕</span> 截帧并检测</button></div>
+        <div id="job-message" class="job-message" role="status" aria-live="polite">准备连接摄像头 3</div>
+      </section>
+      <aside class="results-column">
+        <section class="panel result-panel"><div class="panel-heading"><strong>检测结果</strong><span id="result-state" class="tag">尚未检测</span></div><div class="result-content">
+          <div class="stats"><div><span>识别目标</span><strong id="target-count">—<small>个</small></strong></div><div><span>所在区域</span><strong id="region-count">—<small>处</small></strong></div><div><span>本次耗时</span><strong id="latency">—<small>秒</small></strong></div></div>
+          <div id="initial-result" class="empty-result"><span>⌕</span><strong>等待首次检测</strong><p>点击「截帧并检测」后，垃圾类型与位置将在这里显示。</p></div>
+          <div id="result-detail" hidden><div class="section-label">场景判断</div><p id="scene"></p><p id="reason" class="muted"></p><div id="category-summary" class="category-chips" aria-label="本次类别统计"></div><div id="unlocalized" class="notice" hidden>检测到疑似垃圾，但模型未给出有效位置，请复核截图。</div><div class="list-heading"><span class="section-label">目标列表</span><span class="muted">模型评分</span></div><div id="target-list"></div></div>
+        </div></section>
+        <section class="panel category-panel"><details><summary>检测范围 · <span id="category-total">14</span> 类</summary><div id="supported-categories" class="category-chips"></div><p class="muted">按物体外观分类；是否已被丢弃需结合现场复核。</p></details></section>
+        <section class="panel region-panel"><div class="panel-heading"><strong>区域分布</strong><span class="tag">3 × 3</span></div><div class="region-content"><div id="region-map" class="region-map"></div><p class="muted">根据垃圾框中心所在位置划分区域。高亮格表示本次识别到垃圾的位置。</p></div></section>
+        <section class="handoff"><span class="handoff-icon">↗</span><div><strong>机器狗协作</strong><p>当前提供画面区域。完成现场地图标定后，可将区域对应到机器狗巡检点。</p><button id="export-button" class="text-button" disabled>导出检测结果 JSON ↗</button></div></section>
+      </aside>
+    </div>
+    <footer>GROUNDING DINO · 垃圾目标定位 <span>结果供人工复核 · 尚未下发机器狗任务</span></footer>
+  </main><script src="/app.js" defer></script>
+</body>
+</html>
