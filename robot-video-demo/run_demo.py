@@ -17,6 +17,7 @@ from source_diagnostics import SourceStatus, read_source_status
 ROOT = Path(__file__).resolve().parent
 
 
+#测试GitHub
 def resolve_tool(name, override=None):
     local = ROOT / ".runtime" / (name + (".exe" if os.name == "nt" else ""))
     found = override or (str(local) if local.exists() else shutil.which(name))
