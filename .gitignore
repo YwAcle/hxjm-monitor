@@ -171,3 +171,7 @@ mtx/mediamtx/mediamtx
 **/target.backup*/
 **/build.backup*/
 **/dist.backup*/
+
+# Private tracking persistence credentials and source IDs
+/local-results.env
+/local-results-sources.json

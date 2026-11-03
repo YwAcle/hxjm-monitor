@@ -9,6 +9,9 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 
 from .analyzer import Analyzer
 from .config import WS_SEND_TIMEOUT_SECONDS
+from .config import CAMERAS, ALGORITHM
+from .persistence_config import PersistenceConfig
+from .result_publisher import ResultPublisher
 
 
 logger = logging.getLogger(__name__)
@@ -18,13 +21,23 @@ logger = logging.getLogger(__name__)
 async def lifespan(app):
     if not math.isfinite(WS_SEND_TIMEOUT_SECONDS) or WS_SEND_TIMEOUT_SECONDS <= 0:
         raise ValueError("VIDEO_ANALYSIS_WS_SEND_TIMEOUT_SECONDS must be finite and positive")
-    analyzer = Analyzer()
+    persistence = PersistenceConfig(cameras=CAMERAS)
+    if persistence.enabled and ALGORITHM != 'botsort':
+        raise ValueError('Reliable tracking persistence currently requires BoT-SORT')
+    publisher = ResultPublisher(persistence) if persistence.enabled else None
+    analyzer = Analyzer(result_publisher=publisher)
     app.state.analyzer = analyzer
-    await analyzer.start()
     try:
+        if publisher:
+            await publisher.start()
+        await analyzer.start()
         yield
     finally:
-        await analyzer.stop()
+        try:
+            await analyzer.stop()
+        finally:
+            if publisher:
+                await publisher.stop()
 
 
 app = FastAPI(title="Video analysis", lifespan=lifespan)

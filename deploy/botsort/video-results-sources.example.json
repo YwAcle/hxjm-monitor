@@ -1,0 +1,8 @@
+{
+  "camera_1": {
+    "source_id": "REPLACE_WITH_CAMERA_UUID",
+    "camera_stream_id": "REPLACE_WITH_CAMERA_STREAM_UUID",
+    "instance_id": "REPLACE_WITH_CAPABILITY_INSTANCE_UUID",
+    "timezone": "Asia/Shanghai"
+  }
+}
