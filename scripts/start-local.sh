@@ -5,12 +5,14 @@ set -euo pipefail
 source "$(dirname -- "${BASH_SOURCE[0]}")/local-common.sh"
 load_port_config
 load_video_config
+check_worktree_ports
 MTX_DIR="$ROOT_DIR/mtx"
-# Persistent volumes/bind mounts always come from the primary worktree.
-INFRA_COMPOSE_FILE="${INFRA_COMPOSE_FILE:-$PRIMARY_ROOT/scripts/local-infra.compose.yml}"
+# Shared infrastructure belongs to the configured main project.
+INFRA_COMPOSE_FILE="${INFRA_COMPOSE_FILE:-$ANALYSIS_ROOT/scripts/local-infra.compose.yml}"
 INFRA_PROJECT="${INFRA_PROJECT:-hxjm}"
 MEDIAMTX_BIN="${MEDIAMTX_BIN:-$MTX_DIR/mediamtx/mediamtx}"
 if [[ ! -x "$MEDIAMTX_BIN" ]]; then MEDIAMTX_BIN="$PRIMARY_ROOT/mtx/mediamtx/mediamtx"; fi
+if [[ ! -x "$MEDIAMTX_BIN" ]]; then MEDIAMTX_BIN="$ANALYSIS_ROOT/mtx/mediamtx/mediamtx"; fi
 CONDA_BIN="${CONDA_BIN:-/home/guest/anaconda3/bin/conda}"
 JAVA_BIN="${JAVA_BIN:-/usr/lib/jvm/java-8-openjdk-amd64/bin/java}"
 VAD_PYTHON="${VAD_PYTHON:-/home/guest/anaconda3/envs/vad/bin/python}"
@@ -294,25 +296,6 @@ wait_for_camera_outputs() {
     return 0
 }
 
-start_infrastructure() {
-    (
-        exec 8>"$PRIMARY_ROOT/.run/local-infrastructure.lock"
-        flock -w 180 8 || fail "Timed out waiting for shared infrastructure."
-        local healthy=true container status
-        for container in smartmonitor-mysql smartmonitor-postgres smartmonitor-redis; do
-            status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container" 2>/dev/null || true)"
-            [[ "$status" == healthy ]] || healthy=false
-        done
-        if "$healthy"; then
-            info "reusing healthy MySQL, PostgreSQL, and Redis."
-        else
-            info "starting shared MySQL, PostgreSQL, and Redis."
-            docker compose -p "$INFRA_PROJECT" -f "$INFRA_COMPOSE_FILE" up -d \
-                --wait --wait-timeout 180 mysql postgres redis
-        fi
-    )
-}
-
 ensure_postgres_schema() {
     local schema_file="$ROOT_DIR/SmartMonitor-wangzj/sql/ai_task_run.sql"
     [[ -f "$schema_file" ]] || fail "PostgreSQL schema file is missing: $schema_file"
@@ -362,6 +345,7 @@ command -v cmake >/dev/null || fail "CMake is required."
 node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 18 ? 0 : 1)' \
     || fail "Node.js 18+ is required."
 if "$CHECK_ONLY"; then
+    ensure_local_ports_available
     info "worktree: $ROOT_DIR ($(git -C "$ROOT_DIR" branch --show-current))"
     info "port configuration: $PORT_CONFIG"
     info "worktree state: $RUN_DIR"

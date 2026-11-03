@@ -6,6 +6,7 @@ import grp
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import time
@@ -122,6 +123,47 @@ def worktrees(root):
     return result
 
 
+def check_ports(root, settings):
+    ports = {}
+    for key, value in settings.items():
+        if key.endswith('_PORT'):
+            port = int(value)
+            if port in ports:
+                raise ValueError(f'Duplicate local port: {key} and {ports[port]} use {port}')
+            ports[port] = key
+    # Independent clones and the old worktree registry coexist on this host.
+    repositories = {root, Path(os.environ.get('HXJM_ANALYSIS_ROOT', str(root)))}
+    repositories.update(root.parent.glob('hxjm*'))
+    repositories.update(root.parent.parent.glob('hxjm*/hxjm-monitor'))
+    repositories.update(Path.home().glob('hxjm*'))
+    peers = set()
+    for repository in repositories:
+        try:
+            if not (repository / '.git').exists():
+                continue
+        except PermissionError:
+            continue  # Unrelated private directories are not accessible repositories.
+        peers.update(worktrees(repository))
+    for peer in sorted(peers):
+        if peer == root:
+            continue
+        config = peer / 'local-ports.env'
+        try:
+            content = config.read_text()
+        except FileNotFoundError:
+            continue
+        for line in content.splitlines():
+            match = re.fullmatch(r'\s*([A-Z_]+)=(0|[1-9][0-9]*)\s*(?:#.*)?', line)
+            if not match:
+                continue
+            key, value = match.groups()
+            port = int(value)
+            if key.endswith('_PORT') and port in ports:
+                raise ValueError(f'{ports[port]}={port} conflicts with {config}: {key}')
+            if key == 'REDIS_DATABASE' and port == int(settings[key]):
+                raise ValueError(f'REDIS_DATABASE={port} conflicts with {config}; choose an unused Redis database')
+
+
 def legacy_service(item, roots):
     """Migrate old launchers by exact cwd + executable, not global name matching."""
     if b'HXJM_SHARED_SERVICE=1' in item.get('env', []):
@@ -202,10 +244,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--state', required=True, type=Path)
     parser.add_argument('--root', required=True, type=Path)
-    parser.add_argument('action', choices=('start', 'status', 'stop-all', 'mark-active', 'prepare-assets', 'service-group'))
+    parser.add_argument('action', choices=('start', 'status', 'stop-all', 'mark-active', 'prepare-assets', 'service-group', 'check-ports'))
     parser.add_argument('args', nargs=argparse.REMAINDER)
     ns = parser.parse_args()
     state, root = ns.state, ns.root.resolve()
+    if ns.action == 'check-ports':
+        check_ports(root, dict(arg.split('=', 1) for arg in ns.args))
+        return 0
     if ns.action == 'service-group':
         print(service_group(state, root))
         return 0
