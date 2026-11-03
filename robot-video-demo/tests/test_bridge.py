@@ -6,8 +6,8 @@ from websockets.exceptions import ConnectionClosed
 import bridge_m20 as m20
 
 
-def packet(camera=0, magic=m20.MAGIC, version=1, payload=b"\x00\x00\x00\x01\x67fake-h264"):
-    return m20.HEADER.pack(magic, version, camera, 0, 42, 9999) + payload
+def packet(camera=0, magic=m20.MAGIC, version=1, payload=b"\x00\x00\x00\x01\x65fake-h264", flags=0):
+    return m20.HEADER.pack(magic, version, camera, flags, 42, 9999) + payload
 
 
 def test_protocol_header_and_camera_filter():
@@ -23,7 +23,7 @@ def test_protocol_header_and_camera_filter():
 def test_ffmpeg_mapping_and_codec(monkeypatch):
     monkeypatch.delenv("M20_RTSP_URL", raising=False)
     args = m20.parse_args([])
-    assert args.ws_url == "ws://192.168.126.176:8765/front"
+    assert args.ws_url == "ws://192.168.126.176:8765/all"
     assert args.rtsp_url.endswith("/live/camera_1")
     cmd = m20.ffmpeg_command(args)
     assert cmd[cmd.index("-c:v") + 1] == "copy"
@@ -89,7 +89,7 @@ def test_local_websocket_to_ffmpeg_pipe_and_cleanup(monkeypatch):
         good = packet()
 
         async def sender(ws):
-            assert ws.request.path == "/front"
+            assert ws.request.path == "/all"
             await ws.send("ignored-text")
             await ws.send(packet(camera=1))
             await ws.send(good)
@@ -97,12 +97,70 @@ def test_local_websocket_to_ffmpeg_pipe_and_cleanup(monkeypatch):
 
         async with serve(sender, "127.0.0.1", 0) as server:
             port = server.sockets[0].getsockname()[1]
-            args = m20.parse_args(["--ws-url", f"ws://127.0.0.1:{port}/front"])
+            args = m20.parse_args(["--ws-url", f"ws://127.0.0.1:{port}/all"])
             with pytest.raises(ConnectionClosed):
                 await m20.relay_session(args)
         assert fake.stdin.chunks == [good[24:]]
         assert fake.stdin.closed and fake.returncode is not None
         assert commands[0][-1].endswith("/live/camera_1")
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("camera,camera_id", [("front", 0), ("back", 1)])
+def test_all_demultiplexes_and_waits_for_keyframe(monkeypatch, tmp_path, camera, camera_id):
+    async def scenario():
+        fake = FakeFFmpeg()
+
+        async def spawn(*cmd, **kwargs):
+            return fake
+
+        monkeypatch.setattr(m20.asyncio, "create_subprocess_exec", spawn)
+        delta = packet(camera=camera_id, payload=b"\x00\x00\x01\x41delta")
+        key = packet(camera=camera_id, flags=1)
+
+        async def sender(ws):
+            await ws.send(packet(camera=1-camera_id))
+            await ws.send(delta)
+            await ws.send(key)
+            await ws.send(delta)
+            await asyncio.sleep(.05)
+
+        status_file = tmp_path / f"{camera}.json"
+        async with serve(sender, "127.0.0.1", 0) as server:
+            port = server.sockets[0].getsockname()[1]
+            args = m20.parse_args(["--ws-url", f"ws://127.0.0.1:{port}/all",
+                                   "--camera", camera, "--status-file", str(status_file)])
+            with pytest.raises(ConnectionClosed):
+                await m20.relay_session(args)
+        assert fake.stdin.chunks == [key[24:], delta[24:]]
+        import json
+        status = json.loads(status_file.read_text())
+        assert status["stage"] == "forwarding" and status["invalid_packets"] == 0
+        assert fake.stdin.closed
+
+    asyncio.run(scenario())
+
+
+def test_connected_but_no_video_is_reported(monkeypatch, tmp_path):
+    async def scenario():
+        async def spawn(*cmd, **kwargs):
+            raise AssertionError("No frames: FFmpeg must not start")
+
+        monkeypatch.setattr(m20.asyncio, "create_subprocess_exec", spawn)
+
+        async def sender(ws):
+            await ws.wait_closed()
+
+        status_file = tmp_path / "source.json"
+        async with serve(sender, "127.0.0.1", 0) as server:
+            port = server.sockets[0].getsockname()[1]
+            args = m20.parse_args(["--ws-url", f"ws://127.0.0.1:{port}/all", "--once",
+                                   "--timeout", "0.1", "--status-file", str(status_file)])
+            assert await m20.run(args) == 1
+        import json
+        status = json.loads(status_file.read_text())
+        assert status["stage"] == "no_video" and status["packets"] == 0
+
     asyncio.run(scenario())
 
 

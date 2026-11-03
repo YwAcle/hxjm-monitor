@@ -27,7 +27,7 @@ cd /home/guest/hxjm-wxl/robot-video-demo
   --robot-host 192.168.126.176 \
   --robot-port 8765 \
   --ffmpeg /usr/bin/ffmpeg \
-  --mediamtx /data/nfs_storage/hxjm/mtx/mediamtx/mediamtx \
+  --mediamtx /home/guest/hxjm/mtx/mediamtx/mediamtx \
   --bind 0.0.0.0 \
   --public-host 100.127.237.7
 ```
@@ -58,8 +58,8 @@ curl --no-buffer --max-time 5 http://127.0.0.1:8890/api/telemetry/events
 | 服务 | 默认地址 | 调用方 |
 |---|---|---|
 | 网页与业务 API | `http://127.0.0.1:8890` | 浏览器、状态适配程序 |
-| M20 上游前摄 | `ws://192.168.126.176:8765/front` | Python 桥接 / 诊断工具 |
-| M20 上游后摄 | `ws://192.168.126.176:8765/back` | Python 桥接 / 诊断工具 |
+| M20 上游前摄 | `ws://192.168.126.176:8765/all` | Python 桥接 / 诊断工具，筛选 camera_id=0 |
+| M20 上游后摄 | `ws://192.168.126.176:8765/all` | Python 桥接 / 诊断工具，筛选 camera_id=1 |
 | RTSP 发布入口 | `rtsp://127.0.0.1:28554/live/camera_N` | FFmpeg / 外部采集端 |
 | WHEP 播放入口 | `http://127.0.0.1:28889/live/camera_N/whep` | 浏览器播放器 |
 | WebRTC 媒体端口 | UDP 28189 | 浏览器与 MediaMTX |
@@ -123,7 +123,7 @@ N 为 1～4。上游地址是设备示例，须向设备负责人确认。业务
 | fps | integer / 否 | 1～60，省略继承全局 --fps |
 | codec | string / 否 | copy / h264，省略继承全局 --codec |
 
-- m20：url 为空时按 robot-host、robot-port 和 camera 拼接；显式 url 优先。路径和认证方式需匹配设备实际服务。
+- m20：url 为空时拼接 `ws://robot-host:robot-port/all`；显式 url 优先。前后摄通过消息内 camera_id 分流，`/front`、`/back` 不属于所附文档支持的接口。
 - rtsp：必须有包含视频路径的源地址，MediaMTX 按需拉流；本项目不为该源自动转码。
 - publisher：等待外部程序发布到 live/camera_N，url 不用填写；fps/codec 不会配置外部编码器。
 - disabled：不创建流路径；条目仍保留在 API 和页面中。
@@ -145,12 +145,12 @@ N 为 1～4。上游地址是设备示例，须向设备负责人确认。业务
 | 0 | magic | 8 字节 | ASCII M20H264 后接 0x00 |
 | 8 | version | 1 字节 | 1 |
 | 9 | camera_id | 1 字节 | front=0，back=1；须匹配所接通道 |
-| 10 | flags | 2 字节 | 保留；不推测厂家语义 |
+| 10 | flags | 2 字节 | 按 README_frontend_zh.md，最低位 0x0001 表示关键帧 |
 | 12 | sequence | 4 字节 | 保留；不凭未知序号语义丢弃数据 |
-| 16 | timestamp | 8 字节 | 厂家单位未知，不用于计算真实端到端延迟 |
+| 16 | timestamp | 8 字节 | 按 README_frontend_zh.md，为 Unix 毫秒时间戳；当前不用于计算端到端延迟 |
 | 24 | payload | 剩余字节 | 非空 H.264 Annex-B 数据，不是 JPEG |
 
-桥接忽略文本、短消息、错误 magic/version/camera_id 和空载荷。通过验证的 payload 按接收顺序交给 FFmpeg，不要求每条消息都对应一张完整图像。模拟源使用微秒时间戳，仅是测试实现，不代表厂家也是该单位；后两路模拟包使用 camera_id=0，不代表真实 M20 有四个原生接口。
+文档中的每条消息携带一帧完整 H.264 Annex-B access unit。桥接忽略文本、短消息、错误 magic/version 和空载荷；另一摄像头的有效消息正常过滤，不计为协议错误。连接或重连后等待关键帧再启动 FFmpeg，兼容包头关键帧标记以及载荷中的 IDR NAL。模拟源使用微秒时间戳且 flags 为 0，仅是测试实现；后两路模拟包使用 camera_id=0，不代表真实 M20 有四个原生接口。
 
 默认连接、有效数据等待或写管道背压超时为 15 秒；失败清理当前 FFmpeg 后重连，等待时间由 2 秒递增至最多 30 秒。WebSocket 直连，不使用系统 HTTP 代理；操作系统的 Tailscale 路由仍生效。
 
@@ -196,7 +196,7 @@ MediaMTX 负责协议接入和分发，不是通用转码器。RTSP 直拉及外
 ```bash
 .venv/bin/python run_demo.py --mode hardware --config cameras.json \
   --ffmpeg /usr/bin/ffmpeg \
-  --mediamtx /data/nfs_storage/hxjm/mtx/mediamtx/mediamtx
+  --mediamtx /home/guest/hxjm/mtx/mediamtx/mediamtx
 ```
 
 默认第三路为 publisher。在同目录终端 B 发布测试图：
