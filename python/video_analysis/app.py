@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import math
 import time
 from contextlib import asynccontextmanager
@@ -120,6 +121,8 @@ app = FastAPI(title="Video analysis", lifespan=lifespan)
 @app.get("/health")
 async def health(request: Request):
     snapshot = request.app.state.analyzer.health()
+    snapshot['deployment'] = {'revision': os.getenv('HXJM_REVISION', 'unknown'),
+                              'model': 'YOLOX-X+FastReID-S50', 'protocol_version': '1'}
     delivery = getattr(request.app.state, 'result_delivery', None)
     if delivery is not None:
         snapshot['result_delivery'] = delivery.status()

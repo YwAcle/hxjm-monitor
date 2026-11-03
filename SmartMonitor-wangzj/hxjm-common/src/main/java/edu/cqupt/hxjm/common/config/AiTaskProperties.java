@@ -9,6 +9,10 @@ import java.util.Map;
 @ConfigurationProperties(prefix = "smartmonitor.ai")
 public class AiTaskProperties {
     private String mtxBaseUrl;
+    // Deployments call managed services; legacy launching is opt-in.
+    private String launchMode = "external";
+    public String getLaunchMode() { return launchMode; }
+    public void setLaunchMode(String mode) { this.launchMode = mode; }
     private String mtxHome;
     private String composeFile;
     private String publicHost;

@@ -36,7 +36,9 @@ class BusinessAppTests(unittest.IsolatedAsyncioTestCase):
                 patch('video_analysis.business_runtime.create_delivery') as factory:
             async with self.module.lifespan(self.application):
                 health = await self.module.health(SimpleNamespace(app=self.application))
-                self.assertEqual(health, {'status': 'ok'})
+                self.assertEqual(health['status'], 'ok')
+                self.assertEqual(health['deployment']['protocol_version'], '1')
+                self.assertIn('revision', health['deployment'])
                 self.assertIsNone(self.application.state.result_delivery)
             analyzer_type.assert_called_once_with()
             factory.assert_not_called()

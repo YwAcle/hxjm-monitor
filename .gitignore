@@ -169,13 +169,12 @@ mtx/mediamtx/mediamtx
 
 /python/tracker/BoT-SORT/videos/
 
-# Version the shared deployment launcher; keep other private scripts local.
+# Only the two public deployment entrypoints are versioned.
 !/scripts/
 /scripts/*
-!/scripts/start-local.sh
-!/scripts/stop-local.sh
-!/scripts/local-common.sh
-!/scripts/local-config.py
-!/scripts/local-runtime.py
-!/scripts/local-infra.compose.yml
-!/scripts/test_local_runtime.py
+!/scripts/start.sh
+!/scripts/stop.sh
+/deploy/config/*.local.env
+/deploy/config/generated/
+
+/deploy/config/cameras.local.json

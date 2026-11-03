@@ -1,0 +1,441 @@
+services:
+  frontend:
+    init: true
+    restart: unless-stopped
+    user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
+    logging: &id001
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+    labels: &id002
+      hxjm.revision: ${REVISION:-unknown}
+    image: hxjm/frontend:${IMAGE_TAG:-v0.2-compose1}
+    profiles:
+    - frontend
+    build:
+      context: ..
+      dockerfile: deploy/containers/frontend.Dockerfile
+      args:
+        REVISION: ${REVISION:-unknown}
+      network: ${BUILD_NETWORK:-default}
+    environment:
+      VITE_BACKEND_ORIGIN: ${BACKEND_URL:-http://backend:8080}
+      VIDEO_ANALYSIS_SHARED_ORIGIN: ${ANALYSIS_URL:-http://analysis:8010}
+      VITE_VIDEO_ANALYSIS_MODE: shared
+      VITE_VIDEO_ANALYSIS_ENABLED: ${ANALYSIS_ENABLED:-true}
+      VITE_VIDEO_ANALYSIS_CAMERAS: ${CAMERA_CODES:-camera_1,camera_2,camera_3,camera_4}
+      SHARED_MEDIA_ORIGIN: ${MEDIA_HTTP_URL:-http://mediamtx:8889}
+      AGENT_ORIGIN: ${AGENT_URL:-}
+      VITE_AGENT_ENABLED: ${AGENT_ENABLED:-false}
+      BROWSER: none
+      HOME: /tmp
+      APP_HTTP_PORT: '3000'
+    command:
+    - node
+    - /app/frontend-server.mjs
+    healthcheck:
+      test:
+      - CMD
+      - node
+      - -e
+      - require("http").get("http://127.0.0.1:"+(process.env.APP_HTTP_PORT||3000),r=>process.exit(r.statusCode===200?0:1)).on("error",()=>process.exit(1))
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    mem_limit: 1g
+    cpus: 2
+    pids_limit: 256
+    ports:
+    - ${FRONTEND_PORT:-3106}:3000
+    extra_hosts:
+    - host.docker.internal:host-gateway
+  backend:
+    init: true
+    restart: unless-stopped
+    user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
+    logging: *id001
+    labels: *id002
+    image: hxjm/backend:${IMAGE_TAG:-v0.2-compose1}
+    profiles:
+    - backend
+    build:
+      context: ..
+      dockerfile: deploy/containers/backend.Dockerfile
+      args:
+        REVISION: ${REVISION:-unknown}
+      network: ${BUILD_NETWORK:-default}
+    volumes:
+    - ${RUNTIME_ROOT}/config:/config:ro
+    - ${DATA_ROOT}:/data
+    environment:
+      SERVER_PORT: '8080'
+      SPRING_CONFIG_ADDITIONAL_LOCATION: file:/config/backend.yml
+      SPRING_DATASOURCE_DRUID_MASTER_URL: jdbc:mysql://${MYSQL_HOST:-mysql}:${MYSQL_PORT:-3306}/${MYSQL_DATABASE:-hxjm_sm}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_DRUID_MASTER_USERNAME: ${MYSQL_USER:-root}
+      SPRING_DATASOURCE_DRUID_MASTER_PASSWORD: ${MYSQL_PASSWORD:-}
+      SPRING_DATASOURCE_DRUID_SLAVE_URL: jdbc:postgresql://${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DATABASE:-hxjm}?currentSchema=public
+      SPRING_DATASOURCE_DRUID_SLAVE_USERNAME: ${POSTGRES_USER:-root}
+      SPRING_DATASOURCE_DRUID_SLAVE_PASSWORD: ${POSTGRES_PASSWORD:-}
+      SPRING_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_REDIS_PORT: ${REDIS_PORT:-6379}
+      SPRING_REDIS_DATABASE: ${REDIS_DATABASE:-0}
+      SMARTMONITOR_AI_LAUNCH_MODE: external
+      RUOYI_PROFILE: /data/uploads
+      SMARTMONITOR_LOG_DIR: /tmp/log
+      SPRING_DATASOURCE_DRUID_FILTER_STAT_MERGE_SQL: 'false'
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx${JAVA_HEAP:-768m}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -fsS http://127.0.0.1:$$SERVER_PORT/captchaImage >/dev/null
+      interval: 5s
+      timeout: 4s
+      retries: 30
+      start_period: 45s
+    mem_limit: 1536m
+    cpus: 2
+    pids_limit: 256
+    ports:
+    - ${BACKEND_PORT:-18580}:8080
+  analysis:
+    init: true
+    restart: unless-stopped
+    user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
+    logging: *id001
+    labels: *id002
+    image: ${ANALYSIS_IMAGE:-hxjm/analysis:v0.2-compose1}
+    profiles:
+    - analysis
+    build:
+      context: ..
+      dockerfile: deploy/containers/python.Dockerfile
+      args:
+        REVISION: ${REVISION:-unknown}
+        RUNTIME: analysis
+        PIP_INDEX_URL: ${PYTHON_PACKAGE_INDEX:-https://pypi.org/simple}
+      network: ${BUILD_NETWORK:-default}
+    shm_size: 512m
+    volumes:
+    - ${MODEL_ROOT}:/models:ro
+    - ${RUNTIME_ROOT}/analysis:/runtime
+    - ${RUNTIME_ROOT}/config:/config:ro
+    - ${DATA_ROOT}:/data
+    - ${SOURCE_ROOT}/python:/app/python:ro
+    environment:
+      VIDEO_ANALYSIS_ALGORITHM: botsort
+      VIDEO_ANALYSIS_WORKERS: '1'
+      VIDEO_ANALYSIS_GPU: '0'
+      VIDEO_ANALYSIS_CAMERAS: ${ANALYSIS_CAMERAS:-}
+      VIDEO_ANALYSIS_SOURCE_IDS: ${SOURCE_IDS:-}
+      VIDEO_ANALYSIS_RECORDING_ENABLED: ${RECORDING_ENABLED:-no}
+      VIDEO_ANALYSIS_RECORDING_ROOT: /data
+      VIDEO_ANALYSIS_RECORDING_SEGMENT_SECONDS: ${RECORDING_SEGMENT_SECONDS:-3600}
+      VIDEO_ANALYSIS_BUSINESS_CONFIG: /config/business.json
+      HXJM_PIPELINE_TOKEN: ${PIPELINE_TOKEN:-}
+      BOTSORT_ROOT: /models/botsort
+      VIDEO_ANALYSIS_SYNC_FPS: ${ANALYSIS_SYNC_FPS:-4}
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      PYTHONPATH: /app/python:/app/python/tracker/BoT-SORT
+      HOME: /runtime
+      TORCH_HOME: /runtime/torch
+    command:
+    - python
+    - -m
+    - uvicorn
+    - video_analysis.app:app
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8010'
+    - --workers
+    - '1'
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen("http://127.0.0.1:8010/health",timeout=3)
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 90s
+    mem_limit: 5g
+    cpus: 2
+    pids_limit: 256
+    ports:
+    - ${ANALYSIS_PORT:-28114}:8010
+    extra_hosts:
+    - host.docker.internal:host-gateway
+  reid:
+    init: true
+    restart: unless-stopped
+    user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
+    logging: *id001
+    labels: *id002
+    image: ${REID_IMAGE:-hxjm/reid:v0.2-compose1}
+    profiles:
+    - reid
+    build:
+      context: ..
+      dockerfile: deploy/containers/python.Dockerfile
+      args:
+        REVISION: ${REVISION:-unknown}
+        RUNTIME: reid
+        PIP_INDEX_URL: ${PYTHON_PACKAGE_INDEX:-https://pypi.org/simple}
+      network: ${BUILD_NETWORK:-default}
+    volumes:
+    - ${MODEL_ROOT}:/models:ro
+    - ${RUNTIME_ROOT}/reid:/runtime
+    - ${SOURCE_ROOT}/python:/app/python:ro
+    environment:
+      REID_FEATURE_WEIGHTS: /models/reid/MSMT17_clipreid_RN50_120.pth
+      REID_FEATURE_YOLO_WEIGHTS: /models/reid/yolov8n.pt
+      REID_FEATURE_DEVICE: cuda:0
+      REID_FEATURE_MAX_REQUESTS: ${REID_MAX_REQUESTS:-8}
+      REID_FEATURE_MAX_FRAMES: ${REID_MAX_FRAMES:-16}
+      REID_FEATURE_SAMPLE_FRAMES: ${REID_SAMPLE_FRAMES:-8}
+      REID_FEATURE_MAX_PIXELS: ${REID_MAX_PIXELS:-4194304}
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      PYTHONPATH: /app/python:/app/python/tracker/BoT-SORT
+      BOTSORT_ROOT: /models/botsort
+      HOME: /runtime
+      TORCH_HOME: /runtime/torch
+    command:
+    - python
+    - -m
+    - uvicorn
+    - reid_feature_service.server:app
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8020'
+    - --workers
+    - '1'
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen("http://127.0.0.1:8020/health",timeout=3)
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 90s
+    mem_limit: 4g
+    cpus: 2
+    pids_limit: 256
+    ports:
+    - ${REID_PORT:-28124}:8020
+  mediamtx:
+    init: true
+    restart: unless-stopped
+    user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
+    logging: *id001
+    labels: *id002
+    image: bluenviron/mediamtx:1.11.3
+    profiles:
+    - media
+    volumes:
+    - ${RUNTIME_ROOT}/config/mediamtx.yml:/mediamtx.yml:ro
+    environment:
+      MTX_WEBRTCLOCALUDPADDRESS: :${MEDIA_ICE_PORT:-19390}
+      MTX_WEBRTCADDITIONALHOSTS: ${PUBLIC_HOST:-127.0.0.1}
+      MTX_APIADDRESS: :9997
+      MTX_RTSPADDRESS: :8554
+      MTX_WEBRTCADDRESS: :8889
+    mem_limit: 256m
+    cpus: 2
+    pids_limit: 256
+    ports:
+    - ${RTSP_PORT:-19554}:8554
+    - ${MEDIA_HTTP_PORT:-19389}:8889
+    - ${MEDIA_ICE_PORT:-19390}:${MEDIA_ICE_PORT:-19390}/udp
+    - 127.0.0.1:${MEDIA_API_PORT:-10497}:9997
+  stream:
+    init: true
+    restart: unless-stopped
+    user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
+    logging: *id001
+    labels: *id002
+    image: hxjm/stream:${IMAGE_TAG:-v0.2-compose1}
+    profiles:
+    - stream
+    build:
+      context: ..
+      dockerfile: deploy/containers/stream.Dockerfile
+      args:
+        REVISION: ${REVISION:-unknown}
+      network: ${BUILD_NETWORK:-default}
+    volumes:
+    - ${RUNTIME_ROOT}/config/ai-stream.yml:/config/ai-stream.yml:ro
+    environment:
+      AI_STREAM_CONTROL_PORT: '8090'
+      AI_STREAM_CONTROL_TOKEN: ${STREAM_TOKEN:-}
+      AI_STREAM_LOG_PATH: /tmp/ai-stream.log
+      AI_STREAM_SHM_NAMESPACE: ${COMPOSE_PROJECT_NAME:-hxjm}
+      PUSH_URL_PREFIX: rtsp://mediamtx:8554/live/
+    mem_limit: 768m
+    cpus: 2
+    pids_limit: 256
+    ports:
+    - ${STREAM_PORT:-19590}:8090
+  mysql:
+    image: mysql:8.0.45
+    profiles:
+    - infra
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-hxjm_sm}
+    volumes:
+    - ${DATA_ROOT}/mysql:/var/lib/mysql
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql -h 127.0.0.1 -uroot -e "SELECT 1"
+      interval: 3s
+      timeout: 3s
+      retries: 40
+    mem_limit: 1g
+    cpus: 2
+    pids_limit: 256
+    command:
+    - mysqld
+    - --innodb-buffer-pool-size=256M
+    - --mysqlx=0
+    ports:
+    - 127.0.0.1:${MYSQL_PUBLISH_PORT:-13307}:3306
+    user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
+  postgres:
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:pg16@sha256:0a07c4114ba6d1d04effcce3385e9f5ce305eb02e56a3d35948a415a52f193ec}
+    profiles:
+    - infra
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-root}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DATABASE:-hxjm}
+    volumes:
+    - ${DATA_ROOT}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    mem_limit: 1g
+    cpus: 2
+    pids_limit: 256
+    command:
+    - postgres
+    - -c
+    - shared_buffers=128MB
+    ports:
+    - 127.0.0.1:${POSTGRES_PUBLISH_PORT:-15434}:5432
+    user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
+  redis:
+    image: redis:6.2.17
+    profiles:
+    - infra
+    restart: unless-stopped
+    environment: {}
+    volumes:
+    - ${DATA_ROOT}/redis:/data
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    mem_limit: 128m
+    cpus: 2
+    pids_limit: 256
+    command:
+    - redis-server
+    - --maxmemory
+    - 96mb
+    - --maxmemory-policy
+    - noeviction
+    ports:
+    - 127.0.0.1:${REDIS_PUBLISH_PORT:-16381}:6379
+    user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
+  init:
+    image: hxjm/init:${IMAGE_TAG:-v0.2-compose1}
+    build:
+      context: ..
+      dockerfile: deploy/containers/init.Dockerfile
+      args:
+        PIP_INDEX_URL: ${PYTHON_PACKAGE_INDEX:-https://pypi.org/simple}
+        REVISION: ${REVISION:-unknown}
+      network: ${BUILD_NETWORK:-default}
+    profiles:
+    - init
+    user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
+    volumes:
+    - ${RUNTIME_ROOT}/config:/config
+    - ${CAMERAS_FILE:-./config/cameras.example.json}:/input/cameras.json:ro
+    environment:
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-hxjm_sm}
+      MYSQL_USER: ${MYSQL_USER:-root}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DATABASE: ${POSTGRES_DATABASE:-hxjm}
+      POSTGRES_USER: ${POSTGRES_USER:-root}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      INIT_ADMIN_PASSWORD: ${INIT_ADMIN_PASSWORD:-}
+      PIPELINE_TOKEN: ${PIPELINE_TOKEN:-}
+      STREAM_TOKEN: ${STREAM_TOKEN:-}
+      PIPELINE_BACKEND_URL: ${PIPELINE_BACKEND_URL:-http://backend:8080}
+      PIPELINE_REID_URL: ${PIPELINE_REID_URL:-http://reid:8020}
+      MEDIA_RTSP_URL: ${MEDIA_RTSP_URL:-rtsp://mediamtx:8554/live}
+      INSTANCE_NAMESPACE: ${INSTANCE_NAMESPACE:-hxjm}
+      PUBLIC_HOST: ${PUBLIC_HOST:-127.0.0.1}
+      MEDIA_HTTP_PORT: ${MEDIA_HTTP_PORT:-19389}
+      MEDIA_ICE_PORT: ${MEDIA_ICE_PORT:-19390}
+      MEDIA_API_PORT: '9997'
+      RTSP_PORT: '8554'
+      STREAM_PORT: '8090'
+    command:
+    - python
+    - /opt/init/bootstrap.py
+    - check
+    mem_limit: 512m
+    cpus: 2
+    pids_limit: 256
+    extra_hosts:
+    - host.docker.internal:host-gateway
+  test-input:
+    image: hxjm/analysis:${IMAGE_TAG:-v0.2-compose1}
+    profiles:
+    - test-input
+    user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
+    entrypoint:
+    - ffmpeg
+    command:
+    - -hide_banner
+    - -loglevel
+    - warning
+    - -re
+    - -f
+    - lavfi
+    - -i
+    - testsrc2=size=640x360:rate=10
+    - -c:v
+    - libx264
+    - -preset
+    - ultrafast
+    - -tune
+    - zerolatency
+    - -f
+    - rtsp
+    - -rtsp_transport
+    - tcp
+    - ${TEST_PUBLISH_URL:-rtsp://mediamtx:8554/test-input}
+    restart: unless-stopped

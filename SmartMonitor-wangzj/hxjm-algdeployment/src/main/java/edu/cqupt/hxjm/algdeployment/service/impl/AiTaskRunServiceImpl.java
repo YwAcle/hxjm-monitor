@@ -53,6 +53,9 @@ public class AiTaskRunServiceImpl implements IAiTaskRunService {
         }
         AiTaskProperties.TaskConfig cfg = taskMap.get(task);
 
+        if (!"legacy".equals(properties.getLaunchMode())) {
+            throw new ServiceException("算法由独立模型服务管理，此接口不会启动模型进程", 503);
+        }
         boolean composeOk = runDockerCompose(task, cfg);
         if (!composeOk) {
             ensurePythonServer(cfg);

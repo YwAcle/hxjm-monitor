@@ -1,0 +1,21 @@
+services:
+  analysis:
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            device_ids:
+            - ${ANALYSIS_GPU_UUID:-unassigned}
+            capabilities:
+            - gpu
+  reid:
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            device_ids:
+            - ${REID_GPU_UUID:-unassigned}
+            capabilities:
+            - gpu

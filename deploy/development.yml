@@ -1,0 +1,108 @@
+services:
+  frontend:
+    environment:
+      APP_HTTP_PORT: ${FRONTEND_PORT:-3104}
+      HXJM_REVISION: ${REVISION:-unknown}
+    image: hxjm/frontend-dev:${IMAGE_TAG:-v0.2-compose1}
+    network_mode: host
+    ports: !reset []
+    build:
+      context: ..
+      dockerfile: deploy/containers/frontend.Dockerfile
+      args:
+        REVISION: ${REVISION:-unknown}
+      target: development
+    volumes:
+    - ${SOURCE_ROOT}/lanhu:/app/lanhu
+    - ${RUNTIME_ROOT}/frontend/node_modules:/app/lanhu/node_modules
+    command:
+    - npm
+    - run
+    - dev
+    - --
+    - --host
+    - 0.0.0.0
+    - --port
+    - ${FRONTEND_PORT:-3104}
+    - --strictPort
+  backend:
+    image: hxjm/backend-dev:${IMAGE_TAG:-v0.2-compose1}
+    network_mode: host
+    ports: !reset []
+    build:
+      context: ..
+      dockerfile: deploy/containers/backend.Dockerfile
+      args:
+        REVISION: ${REVISION:-unknown}
+      target: development
+    volumes:
+    - ${SOURCE_ROOT}/SmartMonitor-wangzj:/source:ro
+    - ${RUNTIME_ROOT}/backend:/runtime
+    working_dir: /runtime
+    environment:
+      SERVER_PORT: ${BACKEND_PORT:-18580}
+      HXJM_REVISION: ${REVISION:-unknown}
+      HOME: /tmp
+    command:
+    - sh
+    - -ec
+    - mkdir -p /runtime/work && cp -a /source/. /runtime/work/ && cd /runtime/work && mvn -Dmaven.repo.local=/runtime/maven -pl hxjm-admin -am package -DskipTests
+      -q && exec java -jar hxjm-admin/target/hxjm-admin.jar
+  analysis:
+    network_mode: host
+    ports: !reset []
+    volumes:
+    - ${SOURCE_ROOT}/python:/app/python:ro
+    environment:
+      HXJM_REVISION: ${REVISION:-unknown}
+    command:
+    - python
+    - -m
+    - uvicorn
+    - video_analysis.app:app
+    - --host
+    - 0.0.0.0
+    - --port
+    - ${ANALYSIS_PORT:-28114}
+    - --workers
+    - '1'
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen("http://127.0.0.1:${ANALYSIS_PORT:-28114}/health",timeout=3)
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 90s
+  reid:
+    network_mode: host
+    ports: !reset []
+    volumes:
+    - ${SOURCE_ROOT}/python:/app/python:ro
+    environment:
+      HXJM_REVISION: ${REVISION:-unknown}
+    command:
+    - python
+    - -m
+    - uvicorn
+    - reid_feature_service.server:app
+    - --host
+    - 0.0.0.0
+    - --port
+    - ${REID_PORT:-28124}
+    - --workers
+    - '1'
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen("http://127.0.0.1:${REID_PORT:-28124}/health",timeout=3)
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 90s
+  init:
+    network_mode: host

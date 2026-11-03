@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { videoProxies } from './video-proxy.js';
 
-const backendOrigin = process.env.VITE_BACKEND_ORIGIN || 'http://192.168.109.191:18080';
+const backendOrigin = process.env.VITE_BACKEND_ORIGIN || 'http://127.0.0.1:18080';
 const backendWebSocketOrigin = backendOrigin.replace(/^http/, 'ws');
 
 export default defineConfig({
@@ -18,16 +18,16 @@ export default defineConfig({
     strictPort: true,
     // Shared development hosts can exhaust the per-user inotify watch quota.
     watch: { usePolling: true, interval: 1000 },
-    open: 'http://192.168.109.191:3000/',
+    open: false,
     proxy: {
       ...videoProxies(),
       '/api/chat': {
-        target: 'http://192.168.96.201:8002',
+        target: process.env.AGENT_ORIGIN || 'http://127.0.0.1:9',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/api/sessions': {
-        target: 'http://192.168.96.201:8002',
+        target: process.env.AGENT_ORIGIN || 'http://127.0.0.1:9',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },

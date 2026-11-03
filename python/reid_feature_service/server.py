@@ -453,6 +453,7 @@ def create_app(settings=None, extractor_factory=Extractor, detector_factory=Pers
     async def health():
         extractor = getattr(app.state, "extractor", None)
         return JSONResponse({"ready": app.state.ready,
+                             "deployment": {"revision": os.getenv("HXJM_REVISION", "unknown"), "protocol_version": "1"},
                              "model": "CLIP-ReID-RN50",
                              "feature_space_id": getattr(extractor, "feature_space_id", None),
                              "embedding_dim": getattr(extractor, "embedding_dim", None),

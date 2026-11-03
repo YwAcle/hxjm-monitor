@@ -1,0 +1,9 @@
+{
+  "version": "hxjm-v0.2-compose1",
+  "origin": "Read-only schema export from the stable MySQL and PostgreSQL v0.2 databases on this server; no production rows, ownership or credentials.",
+  "files": {
+    "mysql-schema.sql": "a339974a0dad1d5e79d15f3d5741baf2b2373efd8016af1f1974f786f20f40d0",
+    "postgres-schema.sql": "c822e0299b1c448faa4b58f7579078aead63f50249bb06deaad1d960778ca77f",
+    "schema-manifest.json": "ec26afeb801cdae5f3e9b876a879e4f55a37f985b78a356cc010215765e882a6"
+  }
+}

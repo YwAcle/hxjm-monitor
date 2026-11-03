@@ -1,0 +1,54 @@
+{
+  "recorded_on": "2026-10-30",
+  "source_commit": "52533e94476f666b2afabc9a54bf4b8a37b2fead",
+  "working_tree_dirty": true,
+  "note": "Local development builds, not an accepted release. ReID transitive pins were completed from successful resolver output after this build. Final source should be rebuilt with a new release tag. No GPU acceptance performed.",
+  "lock_sha256": {
+    "init.lock": "4bb30249e54e1e221b2c3337964d1deed7ab1a5eae0daacf29a0e72113b74bce",
+    "analysis.lock": "c6ea4052966f66fc6d1b627bf4a42cba943802ba3e7f5fa7aa621ea83407e93e",
+    "reid.lock": "466b011a59a8da96ccc28d0857dc89ffe6fa8368974d71fdb8bae7e3c2e33b59"
+  },
+  "images": [
+    {
+      "service": "frontend",
+      "tag": "hxjm/frontend:v0.2-compose1",
+      "id": "sha256:35b05699607a3ba50d8872278acb5c1d240d6dc74aa2b220ca1f98210fd17dbf",
+      "revision_label": "unknown",
+      "state": "development-build-only"
+    },
+    {
+      "service": "backend",
+      "tag": "hxjm/backend:v0.2-compose1",
+      "id": "sha256:c719e786035ec61dc819a100b46c084cb1c400bb4d6da727b0203db11819d091",
+      "revision_label": "unknown",
+      "state": "development-build-only"
+    },
+    {
+      "service": "stream",
+      "tag": "hxjm/stream:v0.2-compose1",
+      "id": "sha256:312b875ee6095d0124beee8872731e637940b09ecb46d62aebb5d962fc10795e",
+      "revision_label": "unknown",
+      "state": "development-build-only"
+    },
+    {
+      "service": "init",
+      "tag": "hxjm/init:v0.2-compose1",
+      "id": "sha256:671427e3affdfabf063cf60c64cf10ce8c7eaaaacda38c73a53b32abc2270c01",
+      "revision_label": "unknown",
+      "state": "development-build-only"
+    },
+    {
+      "service": "reid",
+      "tag": "hxjm/reid:v0.2-compose1",
+      "id": "sha256:7878a1a5e35d9d4165eff378ba48a13739cada00e35b65886cbcf782e7b1925b",
+      "revision_label": "unknown",
+      "state": "development-build-only"
+    },
+    {
+      "service": "analysis",
+      "tag": "hxjm/analysis:v0.2-compose1",
+      "id": null,
+      "state": "build-not-completed"
+    }
+  ]
+}

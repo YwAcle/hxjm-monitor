@@ -1,0 +1,9 @@
+bcrypt==4.3.0
+cffi==1.17.1
+cryptography==44.0.2
+psycopg==3.2.6
+psycopg-binary==3.2.6
+pycparser==2.22
+PyMySQL==1.1.1
+PyYAML==6.0.2
+typing_extensions==4.16.0

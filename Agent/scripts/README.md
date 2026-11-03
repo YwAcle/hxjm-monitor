@@ -1,6 +1,15 @@
-# 服务启动入口
+# Agent 服务启动入口
 
-在仓库根目录执行。各脚本读取根目录 `.env`，同名环境变量可临时覆盖。模型与 GPU 资源统一使用 `LLM_*` 字段，配置模板见 [../.env.example](../.env.example)，完整说明见 [../MODEL_SWITCHING.md](../MODEL_SWITCHING.md)。
+本目录只管理 Agent、报告 Worker 和模型连接；前后端、推流和视频算法使用项目根目录的 `scripts/start.sh`、`scripts/stop.sh`。
+
+本服务器使用另一台服务器上的 HTTP 模型接口，不启动本地大模型。从项目根目录执行：
+
+```bash
+bash Agent/scripts/start_all.sh api
+# 在启动终端按 Ctrl+C，停止该脚本启动的 Agent 和报告 Worker；不停止远端模型。
+```
+
+以下 `./scripts/...` 命令以 `Agent/` 为工作目录。各脚本读取根目录 `.env`，同名环境变量可临时覆盖。模型与 GPU 资源统一使用 `LLM_*` 字段，配置模板见 [../.env.example](../.env.example)，完整说明见 [../MODEL_SWITCHING.md](../MODEL_SWITCHING.md)。
 
 | 命令 | 启动内容 |
 | --- | --- |

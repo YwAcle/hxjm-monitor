@@ -1,3 +1,5 @@
+> 启停入口已迁移到 Compose。当前部署方式以仓库 `deploy/README.md` 为准；以下旧环境操作仅供算法历史参考。
+
 # Video analysis and BoT-SORT tracking
 
 The default backend is now the validated local YOLOX/FastReID/BoT-SORT pipeline.
