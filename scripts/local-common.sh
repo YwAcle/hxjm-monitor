@@ -85,6 +85,35 @@ load_video_config() {
     esac
 }
 runtime() { python3 "$SERVICE_TOOL" --state "$RUN_DIR" --root "$ROOT_DIR" "$@"; }
+check_worktree_ports() {
+    local key settings=()
+    for key in "${PORT_KEYS[@]}" "${OPTIONAL_PORT_KEYS[@]}"; do
+        [[ ! -v "$key" ]] || settings+=("$key=${!key}")
+    done
+    HXJM_ANALYSIS_ROOT="$ANALYSIS_ROOT" runtime check-ports "${settings[@]}"
+}
+start_infrastructure() {
+    local healthy=true container status
+    for container in smartmonitor-mysql smartmonitor-postgres smartmonitor-redis; do
+        status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container" 2>/dev/null || true)"
+        [[ "$status" == healthy ]] || healthy=false
+    done
+    if "$healthy"; then
+        echo '[start-local] reusing healthy MySQL, PostgreSQL, and Redis.'
+        return 0
+    fi
+    if ! is_analysis_owner; then
+        echo '[start-local] error: Shared databases are not healthy; ask the primary project owner to start them. No shared containers were changed.' >&2
+        return 1
+    fi
+    mkdir -p "$ANALYSIS_ROOT/.run"
+    (
+        exec 8>"$ANALYSIS_ROOT/.run/local-infrastructure.lock"
+        flock -w 180 8 || { echo 'Timed out waiting for shared infrastructure.' >&2; exit 1; }
+        docker compose -p "$INFRA_PROJECT" -f "$INFRA_COMPOSE_FILE" up -d \
+            --no-recreate --wait --wait-timeout 180 mysql postgres redis
+    )
+}
 ensure_service_group() {
     local group relaunch
     group="$(runtime service-group)" || return 1

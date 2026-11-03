@@ -228,6 +228,55 @@ class PortConfigurationTest(unittest.TestCase):
                     if line.startswith('FRONTEND_PORT='))
         self.assertEqual(f'{port}:{self.root}/.run/local-runtime', result.stdout)
 
+    def test_reserved_peer_ports_and_redis_are_rejected(self):
+        peer = self.root / 'peer'
+        peer.mkdir()
+        config = peer / 'local-ports.env'
+        settings = dict(FRONTEND_PORT='3006', BACKEND_PORT='18680', REDIS_DATABASE='6')
+        with patch.object(runtime, 'worktrees', return_value=[self.root, peer]):
+            for content in ('AI_STREAM_PORT=18680 # different service, same port\n', 'REDIS_DATABASE=6\n'):
+                config.write_text(content)
+                with self.assertRaisesRegex(ValueError, 'conflicts with'):
+                    runtime.check_ports(self.root, settings)
+            config.write_text('AI_STREAM_PORT=19490\nREDIS_DATABASE=4\n')
+            runtime.check_ports(self.root, settings)
+
+    def test_duplicate_local_ports_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'Duplicate local port'):
+            runtime.check_ports(self.root, dict(FRONTEND_PORT='3006', BACKEND_PORT='3006', REDIS_DATABASE='6'))
+
+    def test_independent_sibling_clone_reservations_are_checked(self):
+        root = self.root / 'hxjm-self/hxjm-monitor'
+        peer = self.root / 'hxjm-peer/hxjm-monitor'
+        for directory in (root, peer):
+            directory.mkdir(parents=True)
+            subprocess.run(['git', 'init', '-q', str(directory)], check=True)
+        (peer / 'local-ports.env').write_text('FRONTEND_PORT=3011\nREDIS_DATABASE=11\n')
+        with self.assertRaisesRegex(ValueError, 'conflicts with'):
+            runtime.check_ports(root, dict(FRONTEND_PORT='3011', REDIS_DATABASE='10'))
+
+    def test_subscriber_only_reuses_shared_databases(self):
+        fake_bin = self.root / 'bin'
+        fake_bin.mkdir()
+        docker = fake_bin / 'docker'
+        docker.write_text('#!/bin/bash\nprintf "%s\\n" "$*" >> "$DOCKER_LOG"\n'
+                          'if [[ "$1" == inspect ]]; then echo "$DOCKER_HEALTH"; else exit 99; fi\n')
+        docker.chmod(0o755)
+        log = self.root / 'docker.log'
+        script = 'set -euo pipefail; source "$1" --worktree "$2"; start_infrastructure'
+        env = dict(os.environ, PATH=f'{fake_bin}:{os.environ["PATH"]}', DOCKER_LOG=str(log),
+                   HXJM_ANALYSIS_ROOT=str(self.root / 'owner'))
+        for health, expected in [('healthy', 0), ('unhealthy', 1)]:
+            with self.subTest(health=health):
+                log.write_text('')
+                result = subprocess.run(['bash', '-c', script, 'bash',
+                                         str(TOOL.with_name('local-common.sh')), str(self.root)],
+                                        env=dict(env, DOCKER_HEALTH=health), capture_output=True, text=True)
+                self.assertEqual(expected, result.returncode, result.stdout + result.stderr)
+                self.assertEqual(3, len(log.read_text().splitlines()))
+                self.assertNotIn('compose', log.read_text())
+                self.assertFalse((self.root / 'owner/.run').exists())
+
     def test_primary_worktree_ownership(self):
         peer = self.root / 'peer'
         peer.mkdir()
