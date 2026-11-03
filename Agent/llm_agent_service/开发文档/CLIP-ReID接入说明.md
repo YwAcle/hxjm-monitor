@@ -36,7 +36,7 @@ curl --noproxy '*' --connect-timeout 5 --max-time 10 http://100.127.237.7:28024/
 无需聊天模型的真实登记库检索验证（默认取首张登记图作自身检索，输出去除图片）：
 
 ```bash
-/data1/userhome/va/miniconda3/envs/monitor/bin/python scripts/verify_local_reid.py
+/data1/userhome/va/miniconda3/envs/monitor/bin/python scripts/tools/verify_local_reid.py
 ```
 
 聊天窗口同时上传单人图并输入：“用这张图片在登记库找相似行人，返回前3个候选。”继续使用现有 search_pedestrians_by_image 工具。普通 /chat 返回 data.candidates；SSE /chat/stream 通过 result 事件返回候选卡片数据。

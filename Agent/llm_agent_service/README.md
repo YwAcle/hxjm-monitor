@@ -57,7 +57,7 @@ MODEL_LOG_WRITE_MODE=append
 临时让全部日志覆盖：
 
 ```bash
-LOG_WRITE_MODE=overwrite LLM_BACKEND=vllm ./scripts/start_all.sh
+LOG_WRITE_MODE=overwrite LLM_BACKEND=vllm ./scripts/start.sh
 ```
 
 如果单独启动服务时自己使用 shell 的 `>` / `>>` 重定向标准输出，该重定向的覆盖或追加行为由你的命令决定。
@@ -65,7 +65,7 @@ LOG_WRITE_MODE=overwrite LLM_BACKEND=vllm ./scripts/start_all.sh
 导出旧的混合日志（目标文件必须尚不存在）：
 
 ```bash
-python scripts/export_agent_jsonl.py \
+python scripts/tools/export_agent_jsonl.py \
   .runtime-cache/service-stack/vllm/agent.log \
   .runtime-cache/service-stack/vllm/agent-history.jsonl
 ```
@@ -89,7 +89,7 @@ rg '"trace_id":"<TRACE_ID>"' .runtime-cache/service-stack/vllm/agent.log
 DB_USER=root \
 DB_PASSWORD=123456 \
 DB_NAME=postgres \
-./scripts/start_agent.sh
+./scripts/start.sh
 ```
 
 ### API 接口

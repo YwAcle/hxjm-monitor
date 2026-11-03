@@ -4,12 +4,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 # 报告 Worker 代码仍位于 llm_report_service，启动入口统一位于 scripts。
-source "${ROOT_DIR}/scripts/load_env.sh"
+source "${ROOT_DIR}/scripts/internal/load_env.sh"
 load_env_defaults "${ROOT_DIR}/.env"
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-    printf '用法：./scripts/start_report.sh [报告 Worker 参数]\n'
+    printf '用法：./scripts/internal/start_report.sh [报告 Worker 参数]\n'
     printf '等待 LLM_BASE_URL 上的模型接口就绪，然后启动报告 Worker。\n'
     exit 0
 fi
@@ -21,7 +21,7 @@ case "${LLM_BACKEND}" in
 esac
 
 # 报告 Worker 固定使用仓库内的服务环境（依赖见 llm_report_service/requirements.txt）。
-PYTHON_BIN="${ROOT_DIR}/.venv/bin/python"
+PYTHON_BIN="${REPORT_PYTHON_BIN:-${ROOT_DIR}/.venv/bin/python}"
 
 LLM_BASE_URL="${LLM_BASE_URL:-http://127.0.0.1:8000/v1}"
 LLM_MODEL_ID="${LLM_MODEL_ID:-internvl3.5-8b}"

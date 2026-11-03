@@ -4,12 +4,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-source "${ROOT_DIR}/scripts/load_env.sh"
+ROOT_DIR="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
+source "${ROOT_DIR}/scripts/internal/load_env.sh"
 load_env_defaults "${ROOT_DIR}/.env"
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-    printf '用法：./scripts/start_agent.sh [Agent 参数]\n'
+    printf '用法：./scripts/internal/start_agent.sh [Agent 参数]\n'
     printf '等待 LLM_BASE_URL 上的模型接口就绪，然后启动 Agent HTTP 服务。\n'
     exit 0
 fi
@@ -19,7 +19,7 @@ LOG_PROFILE="${LLM_BACKEND}"
 if [[ "${LLM_MODE}" == api ]]; then LOG_PROFILE=api; fi
 export AGENT_JSONL_LOG="${AGENT_JSONL_LOG:-${SERVICE_STACK_RUNTIME_DIR:-${ROOT_DIR}/.runtime-cache/service-stack/${LOG_PROFILE}}/agent.jsonl}"
 # Agent 服务固定使用仓库内的服务环境（依赖见 llm_agent_service/requirements.txt）。
-PYTHON_BIN="${ROOT_DIR}/.venv/bin/python"
+PYTHON_BIN="${AGENT_PYTHON_BIN:-${ROOT_DIR}/.venv/bin/python}"
 AGENT_HOST="${AGENT_HOST:-0.0.0.0}"
 AGENT_PORT="${AGENT_PORT:-8002}"
 

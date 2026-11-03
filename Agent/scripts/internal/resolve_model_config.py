@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from llm_report_service.llm.settings import resolve_model_settings
 
 parser = argparse.ArgumentParser(description=__doc__)

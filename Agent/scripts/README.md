@@ -1,33 +1,41 @@
-# Agent 服务启动入口
+# Agent 启动与停止
 
-本目录只管理 Agent、报告 Worker 和模型连接；前后端、推流和视频算法使用项目根目录的 `scripts/start.sh`、`scripts/stop.sh`。
-
-本服务器使用另一台服务器上的 HTTP 模型接口，不启动本地大模型。从项目根目录执行：
+在项目根目录执行：
 
 ```bash
-bash Agent/scripts/start_all.sh api
-# 在启动终端按 Ctrl+C，停止该脚本启动的 Agent 和报告 Worker；不停止远端模型。
+bash Agent/scripts/start.sh
+bash Agent/scripts/stop.sh
 ```
 
-以下 `./scripts/...` 命令以 `Agent/` 为工作目录。各脚本读取根目录 `.env`，同名环境变量可临时覆盖。模型与 GPU 资源统一使用 `LLM_*` 字段，配置模板见 [../.env.example](../.env.example)，完整说明见 [../MODEL_SWITCHING.md](../MODEL_SWITCHING.md)。
+`start.sh` 读取 `Agent/.env`，后台启动 Agent 和报告 Worker；本地模式下模型接口可用时直接复用，端口已占用但尚未就绪时等待已有服务，不重复加载权重。只有端口空闲且使用本地模型模式时，才启动配置的 vLLM / SGLang。复用接口仍须通过鉴权及模型名称检查；端口上的服务不是兼容模型接口时明确报错，不杀占用者。API 模式不启动本地模型。
 
-| 命令 | 启动内容 |
-| --- | --- |
-| `./scripts/start_all.sh vllm` | 复用或启动 vLLM 接口，再启动报告 Worker 和 Agent |
-| `./scripts/start_all.sh sglang` | 复用或启动 SGLang 接口，再启动报告 Worker 和 Agent |
-| `./scripts/start_all.sh` | 按 `.env` 的 `LLM_BACKEND` 启动完整服务 |
-| `./scripts/start_all.sh sglang --show-config` | 只查看最终模型配置，不启动服务、不打印密钥 |
-| `./scripts/start_sglang.sh` | 只启动 SGLang 模型接口 |
-| `./scripts/start_vllm.sh` | 只启动 vLLM 模型接口 |
-| `./scripts/start_agent.sh` | 等待已有模型接口及模型名称匹配，只启动 Agent |
-| `./scripts/start_report.sh` | 等待已有模型接口及模型名称匹配，只启动报告 Worker |
+启动成功会等待 Agent `/ready` 返回数据库和模型均就绪。重复启动不会创建第二套进程。服务在独立的、按当前目录标识的 tmux 会话中运行，关闭终端不影响运行。启动和停止串行执行。
 
-切换实际推理引擎前先停止旧模型服务。完整入口会复用已有兼容接口，退出时只停止自己启动的进程。两个后端都使用 `LLM_MODEL_PATH`、`LLM_MODEL_ID`、`LLM_SERVER_PORT`、`LLM_TP_SIZE` 等公共配置，无需维护两套路径和端口。
+`stop.sh` 不要求模型配置仍然有效，只停止本入口创建的 Agent、报告 Worker 和模型进程组，保留复用的模型。其他入口创建的服务不属于本入口管理；首次迁移需先从原入口停止业务服务。不要使用按端口杀进程的命令。
 
-临时覆盖 GPU 和并行数：
+配置预览、临时选择模型模式：
 
 ```bash
-CUDA_VISIBLE_DEVICES=4,6 LLM_TP_SIZE=2 ./scripts/start_all.sh sglang
+bash Agent/scripts/start.sh --show-config
+bash Agent/scripts/start.sh api
+bash Agent/scripts/start.sh vllm
+CUDA_VISIBLE_DEVICES=6 LLM_TP_SIZE=1 bash Agent/scripts/start.sh local
 ```
 
-旧的根目录和服务目录启动路径保留为兼容入口，实际启动逻辑集中在 `scripts/`。
+需要 Bash、Python 3.8+、tmux、setsid 和 curl；Agent 与推理引擎使用 `.env` 指定的独立 Python 环境。查看 [模型配置说明](../MODEL_SWITCHING.md)。修改配置后执行停止、启动；更换复用模型时，应由该模型原来的启动入口重启模型。
+
+日志默认位置（均相对于 `Agent/`）：
+
+- `.runtime-cache/launcher/stack.log`：启动、等待、退出原因。
+- `.runtime-cache/service-stack/<vllm|sglang|api>/agent.log`、`report.log`、`agent.jsonl`：业务日志。
+- `.runtime-cache/llm-report-service/<vllm|sglang>.log`：本入口启动的模型日志。
+
+`scripts/` 顶层只有启动、停止两个可执行入口。`internal/` 保存配置解析、各服务启动实现及进程管理，`tools/` 保存独立检索验证和日志导出工具，`chat_templates/` 保存模型模板。旧的转发启动入口已移除。
+
+## 文字检索的部署依赖
+
+`REID_FEATURE_BASE_URL` 必须指向实际运行的 ReID HTTP 服务；该地址与 LLM `/v1` 及 Agent `8002` 地址不同。
+
+本次检查发现旧地址 `http://100.127.237.7:28024` 拒绝连接。部署配置中的 `http://192.168.109.191:28124` 可访问，但其 `/health` 没有 `text_reid` 字段，OpenAPI 仅有 `/health`、`/v1/reid/person-crops`、`/v1/reid/image-features`、`/v1/reid/tracklet-features`。当前 `python/reid_feature_service/server.py` 同样未实现 Chinese-CLIP 文本能力，因此不能仅通过改地址实现文字找人。这是服务地址及能力缺失，不是已确认的 GPU 资源故障。
+
+文字检索还需要部署匹配的 Chinese-CLIP 编码服务，提供 `/v1/reid/text-features`、`/v1/reid/text-reid-image-features` 和包含 `text_reid` 的健康检查（特征空间、文本契约及对齐验证）。不可把普通 CLIP-ReID 3072 维图片向量用于 Chinese-CLIP 文本检索。完整契约见 [登记库主动行人检索](../llm_agent_service/开发文档/登记库主动行人检索最小接入.md)。
