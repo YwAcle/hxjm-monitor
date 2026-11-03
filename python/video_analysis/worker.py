@@ -3,10 +3,24 @@ import asyncio
 import multiprocessing as mp
 import uuid
 from multiprocessing import shared_memory
+from pathlib import Path
 
 import numpy as np
 
-from .config import MAX_FRAME_BYTES, MODEL_TIMEOUT_SECONDS, INFERENCE_TIMEOUT_SECONDS
+from .config import (MAX_FRAME_BYTES, MODEL_TIMEOUT_SECONDS, INFERENCE_TIMEOUT_SECONDS,
+                     MEMORY_RESERVE_BYTES, MODEL_HEADROOM_BYTES)
+
+
+def check_memory(loading=False):
+    for line in Path('/proc/meminfo').read_text().splitlines():
+        if line.startswith('MemAvailable:'):
+            available = int(line.split()[1]) * 1024
+            required = MEMORY_RESERVE_BYTES + (MODEL_HEADROOM_BYTES if loading else 0)
+            if available < required:
+                raise MemoryError(f'Model paused: available RAM {available / 1024 ** 3:.1f} GiB '
+                                  f'below required {required / 1024 ** 3:.1f} GiB')
+            return
+    raise RuntimeError('Cannot read MemAvailable; refusing to load or run model')
 
 
 class RecoverableInferenceError(RuntimeError):
@@ -36,8 +50,7 @@ def model_process(connection):
                     detections, duration = detect_people(frame)
                 del frame
                 connection.send({"type": "result", "job_id": job["job_id"],
-                                 "detections": detections if job.get('full_results') is True else detections[:500],
-                                 "inference_ms": duration})
+                                 "detections": detections[:500], "inference_ms": duration})
             except Exception as exc:
                 connection.send({"type": "error", "job_id": job["job_id"],
                                  "recoverable": ALGORITHM == 'botsort' and isinstance(exc, np.linalg.LinAlgError),
@@ -92,6 +105,7 @@ class ModelWorker:
             await asyncio.sleep(0.01)
 
     async def start(self):
+        check_memory(loading=True)
         context = mp.get_context("spawn")
         parent, child = context.Pipe(duplex=True)
         self.connection = parent
@@ -111,7 +125,7 @@ class ModelWorker:
             await self.stop()
             raise
 
-    async def infer(self, frame, metadata=None, full_results=False):
+    async def infer(self, frame, metadata=None):
         if not self.ready or self.busy:
             raise RuntimeError("Worker is unavailable")
         if frame.dtype != np.uint8 or frame.ndim != 3 or frame.shape[2] != 3 or frame.nbytes > MAX_FRAME_BYTES:
@@ -120,13 +134,11 @@ class ModelWorker:
         memory = None
         job_id = uuid.uuid4().hex
         try:
+            check_memory()
             memory = shared_memory.SharedMemory(create=True, size=frame.nbytes)
             np.ndarray(frame.shape, dtype=np.uint8, buffer=memory.buf)[:] = frame
-            job = {"job_id": job_id, "memory": memory.name, "shape": frame.shape,
-                   "metadata": metadata}
-            if full_results is True:
-                job['full_results'] = True
-            self.connection.send(job)
+            self.connection.send({"job_id": job_id, "memory": memory.name, "shape": frame.shape,
+                                  "metadata": metadata})
             result = await self._receive(self.inference_timeout)
             if (result.get('job_id') == job_id and result.get('type') == 'error'
                     and result.get('recoverable') is True):

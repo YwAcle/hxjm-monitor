@@ -6,11 +6,7 @@ import remarkGfm from 'remark-gfm';
 import styles from './RightSidebar.module.css';
 import { useLLMReportWebSocket } from '../../contexts/LLMReportWebSocketContext';
 import VideoModal from '../VideoModal/VideoModal';
-import { businessApi } from '../../services/businessApi';
-import { resolveReportPlayback } from '../../services/reportPlayback';
 import PedestrianSearchResult from './PedestrianSearchResult';
-import AgentBusinessResults from './AgentBusinessResults';
-import { collectAgentResults } from '../../services/agentResults';
 import { getPedestrianSearchResult, getPendingPedestrianSelection } from '../../services/pedestrianSearch';
 import {
   clearAgentMemory,
@@ -78,7 +74,6 @@ const isPersonSearchCommand = (text) => {
 function LogReport() {
   const { reports, isConnected } = useLLMReportWebSocket();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [playbackNotice, setPlaybackNotice] = useState(null);
   
   // 视频播放弹窗状态
   const [videoModal, setVideoModal] = useState({
@@ -159,19 +154,18 @@ function LogReport() {
   };
 
   // 点击缩略图播放视频
-  const handleThumbnailClick = async (report) => {
-    setPlaybackNotice({ id: report.id, text: '正在查找录像…' });
-    try {
-      const media = await resolveReportPlayback(report, businessApi);
+  const handleThumbnailClick = (report) => {
+    if (report.record_url) {
+      console.log('[LLM_CHAT] 🎬 打开视频弹窗:', {
+        url: report.record_url,
+        title: getEventTypeConfig(report.report_json?.event_type).name
+      });
       setVideoModal({
         visible: true,
-        ...media,
+        url: report.record_url,
         title: getEventTypeConfig(report.report_json?.event_type).name,
         time: formatTime(report.created_at)
       });
-      setPlaybackNotice(null);
-    } catch (error) {
-      setPlaybackNotice({ id: report.id, text: error.message });
     }
   };
 
@@ -217,7 +211,7 @@ function LogReport() {
                   const eventConfig = getEventTypeConfig(report.report_json?.event_type);
                   const confidence = report.report_json?.confidence;
                   const thumbnailUrl = getThumbnailUrl(report);
-                  const hasVideo = !!(report.episode_id || report.report_json?.route?.length || report.record_url);
+                  const hasVideo = !!report.record_url;
 
                   return (
                     <div key={report.id} className={styles.logCard}>
@@ -268,7 +262,6 @@ function LogReport() {
                           <p className={styles.logText}>
                             {report.report_json?.summary || report.report_text?.substring(0, 80) || '暂无描述'}
                           </p>
-                          {playbackNotice?.id === report.id && <p role="status">{playbackNotice.text}</p>}
 
                           {/* 置信度显示 - 统一绿色 */}
                           {confidence !== undefined && (
@@ -303,7 +296,6 @@ function LogReport() {
       <VideoModal
         visible={videoModal.visible}
         url={videoModal.url}
-        playback={videoModal.playback}
         title={videoModal.title}
         time={videoModal.time}
         onClose={closeVideoModal}
@@ -1401,7 +1393,6 @@ function RightSidebar() {
 
     let streamedText = '';
     let pedestrianSearch = null;
-    let businessResults = [];
     // 只有需要返回超分图片的请求使用普通接口，图片分析与文字共用流式接口。
     const isSuperResolutionRequest = /超分|super[\s_-]*resolution/i.test(requestPrompt);
     const isStreamingRequest = !isSuperResolutionRequest;
@@ -1449,9 +1440,6 @@ function RightSidebar() {
                       : message
                   )));
                 } else if (event === 'result') {
-                  businessResults = collectAgentResults(eventData, businessResults);
-                  setMessages(prev => prev.map(message => message.id === loadingMessageId
-                    ? { ...message, businessResults, queryImage: currentImage?.base64 } : message));
                   const result = getPedestrianSearchResult(eventData);
                   if (result) {
                     pedestrianSearch = result;
@@ -1469,7 +1457,6 @@ function RightSidebar() {
             text: streamedText,
           };
       
-      businessResults = collectAgentResults(data, businessResults);
       pedestrianSearch = getPedestrianSearchResult(data) || pedestrianSearch;
       console.log('[LLM_CHAT] ✅ 请求完成:', {
         type: pedestrianSearch?.type || data.type,
@@ -1496,6 +1483,13 @@ function RightSidebar() {
       const superResolutionData = isSuperResolution && data.data && typeof data.data === 'object'
         ? data.data
         : null;
+      const resultImage = isSuperResolution
+        && superResolutionData?.status === 'success'
+        && typeof superResolutionData.image_base64 === 'string'
+        && superResolutionData.image_base64
+        ? superResolutionData.image_base64
+        : null;
+
       // 将临时消息替换为最终消息；流式请求沿用同一个消息 ID，避免界面跳动。
       setMessages(prev => {
         const filtered = prev.filter(msg => msg.id !== loadingMessageId);
@@ -1506,9 +1500,7 @@ function RightSidebar() {
           content: isSuperResolution
             ? getSuperResolutionStatusMessage({ ...data, ...superResolutionData })
             : data.text || data.summary || '请求已处理完成。',
-          resultImage: null,
-          businessResults,
-          queryImage: currentImage?.base64,
+          resultImage,
           pedestrianSearch,
           resultSize: superResolutionData?.result_size,
           originalSize: superResolutionData?.original_size,
@@ -2196,8 +2188,6 @@ function RightSidebar() {
                     onCancel={() => handleSend('取消选择')}
                   />
                 )}
-
-                {msg.businessResults?.length > 0 && <AgentBusinessResults results={msg.businessResults} queryImage={msg.queryImage} />}
 
                 {msg.resultImage && (
                   <div className={styles.superResolutionResult}>

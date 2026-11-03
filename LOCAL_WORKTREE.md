@@ -1,49 +1,59 @@
 # 开发工作区启动
 
-> 协作方式更新（2026-10-29，v0.2）：本文件保留旧工作区／worktree方式的历史操作说明。后续开发采用独立账号、独立clone仓库和按需求创建的功能分支，以[协同开发流程](COLLABORATION_WORKFLOW.md)为准；旧目录迁移前仍需保留未交付改动。本文中的旧工作区启动说明不代表新账号下启动配置已验证。
-
-在各自工作区根目录运行：
+在各自项目根目录运行：
 
 ```bash
 bash scripts/start-local.sh --check
 bash scripts/start-local.sh
+bash scripts/stop-local.sh
 ```
 
-启动器及其必要依赖已纳入 Git；其它私有 `scripts/` 文件、`local-ports.env`
-和 `.run/` 继续忽略。拉取代码不会同步模型权重、运行状态或私人端口配置。
-启动器读取各工作区自己的 `local-ports.env`，保留原前端、后端和媒体端口。
+启动器会先检查 Docker，再编译。如果账号已加入 `docker` 组，但当前终端还没
+刷新组权限，会自动通过 `sg docker` 以同一用户重新启动，无需每次手动添加前缀。
+若账号尚未加入组，仍需管理员配置；Docker 不可用时会立即报错并保留原始原因。
+停止脚本会按现有进程的运行组自动切换已有授权，兼容 `sg docker` 启动的服务。
+即使进程记录丢失，也会按本项目目录识别并清理遗留的 Vite 进程。
+有端口配置时，停止后会检查本项目应用的 TCP 监听端口；仍有监听则报错，
+不会显示停止成功。MySQL、PostgreSQL、Redis 的共享端口不在该检查范围内。
 
-默认 `VIDEO_ANALYSIS_MODE=shared`。公共 BoT-SORT 和 MediaMTX 在主目录运行，
-工作区页面通过自己的 Vite 代理订阅同一份视频和检测结果。普通启动不会额外
-加载一套跟踪模型；停止某个工作区应用也不会停止公共视频和算法服务。
-
-启动器通过 `git rev-parse --git-common-dir` 发现主目录 `PRIMARY_ROOT`，通常为
-`/data/nfs_storage/hxjm`。主目录必须先拉取并部署包含
-`deploy/botsort/shared_service.py` 的版本；开发分支启动器只调用主目录的公共
-管理器，不把开发分支算法代码替换到公共服务。主目录尚未更新时启动会明确报错。
-
-公共媒体端口从主目录 `local-ports.env` 读取，分析 API 默认使用 `28010`。
-摄像头的真实地址仍由公共服务读取 `ba_machine.video_url`，不修改数据库 IP。
-主目录应用复用公共 MediaMTX；其它工作区的本地 MediaMTX 只中继公共 RTSP，
-不再次直连摄像头，也不重复录像。录像由公共媒体服务保留一份。
-
-公共服务的维护命令在主目录运行：
+每个项目读取自己的 `local-ports.env`，运行自己的前端、后端、ai_stream。
+`local-video.env` 指定唯一算法目录：
 
 ```bash
-python3 deploy/botsort/shared_service.py status --root /data/nfs_storage/hxjm
-python3 deploy/botsort/shared_service.py start --root /data/nfs_storage/hxjm
+HXJM_ANALYSIS_ROOT="${HXJM_ANALYSIS_ROOT:-/data/nfs_storage/hxjm}"
 ```
 
-`bash scripts/stop-local.sh` 只停止本工作区应用，公共服务保持运行。
-更改公共模型、摄像头源或公共服务时，应由维护者在主目录操作；开发者无需
-为打开自己的页面启动独立算法。现有专用启动器中其它业务服务的配置仍需在
-迁移时核对，避免把私人扩展逻辑当作共享启动器的一部分。
+只有 `/data/nfs_storage/hxjm` 会启动 BoT-SORT 模型和推理进程，分析接口默认是
+`http://127.0.0.1:28010`。算法所属目录独立于 Git 主仓库；复制或独立克隆项目
+不会获得算法启动权。只有算法目录允许显式选择 `VIDEO_ANALYSIS_MODE=local`。
 
-需要在自己的工作区单独试验算法时，显式选择本地模式：
+`/data/nfs_storage/hxjm-wsc/hxjm-monitor` 只通过 WebSocket 订阅检测框、跟踪 ID
+和分析状态，不启动或准备模型，不启动 ReID/VAD/DeepSORT 推理进程。
+即使主算法未运行，也可正常启动个人项目；页面会提示 AI 服务离线并重连，
+不会启动本地算法作为替代。个人页面不提供订阅 JPEG 画面的同帧验收模式。
+
+视频独立于算法订阅。个人 MediaMTX 使用自己的端口（当前 RTSP 18754、WebRTC
+19089），从 MySQL `ba_machine.video_url` 直接拉摄像头；不从主目录中继视频。
+页面的 `/shared-media` 是保留的代理路径名，上游始终是本项目的 MediaMTX，
+不表示共享主目录媒体。个人流不重复录像；录像仍由主目录负责。
+
+主目录停止时，会完整停止所属的共享服务管理器、BoT-SORT、模型子进程和
+MediaMTX；MySQL、PostgreSQL、Redis 保持运行。个人项目的视频不受影响，
+检测框在断线或结果过期时清除。个人项目停止时，不会调用主目录的停止命令。
+启动或停止个人项目会清理旧启动器在个人目录下遗留的共享算法/媒体进程。
+启停命令应使用启动这些进程的同一账号，不能依靠另一个账号停止其进程。
+
+独立视频连接没有共同的精确采集时间，实时检测框采用带有效期的近似叠加，
+不承诺与个人视频严格同帧。
+
+首次应用此修复，请以当前服务所属账号（本机是 `wangshc`）依次执行：
 
 ```bash
-VIDEO_ANALYSIS_MODE=local bash scripts/start-local.sh
+bash /data/nfs_storage/hxjm-wsc/hxjm-monitor/scripts/stop-local.sh
+bash /data/nfs_storage/hxjm/scripts/stop-local.sh
+bash /data/nfs_storage/hxjm/scripts/start-local.sh
+bash /data/nfs_storage/hxjm-wsc/hxjm-monitor/scripts/start-local.sh
 ```
 
-本地模式会读取自己的 `.run/video-analysis.env`，使用本工作区媒体和分析端口，
-额外占用模型资源及摄像头连接。结束试验后用普通命令重启即可回到共享模式。
+之后两套项目各自使用普通启停命令即可。停止主目录时，无需再额外手动停止
+共享媒体。已有模型文件不需要删除，也不会被个人项目加载。

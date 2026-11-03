@@ -27,7 +27,7 @@ cd /home/guest/hxjm-wxl/robot-video-demo
   --robot-host 192.168.126.176 \
   --robot-port 8765 \
   --ffmpeg /usr/bin/ffmpeg \
-  --mediamtx /data/nfs_storage/hxjm/mtx/mediamtx/mediamtx \
+  --mediamtx /home/guest/hxjm/mtx/mediamtx/mediamtx \
   --bind 0.0.0.0 \
   --public-host 100.127.237.7
 ```
@@ -196,7 +196,7 @@ MediaMTX 负责协议接入和分发，不是通用转码器。RTSP 直拉及外
 ```bash
 .venv/bin/python run_demo.py --mode hardware --config cameras.json \
   --ffmpeg /usr/bin/ffmpeg \
-  --mediamtx /data/nfs_storage/hxjm/mtx/mediamtx/mediamtx
+  --mediamtx /home/guest/hxjm/mtx/mediamtx/mediamtx
 ```
 
 默认第三路为 publisher。在同目录终端 B 发布测试图：

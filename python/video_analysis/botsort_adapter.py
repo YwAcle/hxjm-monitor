@@ -107,7 +107,7 @@ class BoTSortPipeline:
 
     def infer(self, frame, metadata):
         import torch
-        identity = (metadata['camera_id'], metadata.get('tracking_context_id') or metadata['stream_session_id'],
+        identity = (metadata['camera_id'], metadata['stream_session_id'],
                     metadata['stream_epoch'], frame.shape[:2])
         state = self.cameras.get(identity[0])
         if state is None or identity != state.identity:

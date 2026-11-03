@@ -14,7 +14,7 @@ const packet = (changes = {}) => ({
 test('BoT-SORT predictions retain identity without inventing confidence', () => {
   const detection = { label: 'person', track_id: 7, is_prediction: true, missed_frames: 3,
     confidence: null, bbox: [0.1, 0.2, 0.3, 0.9] };
-  const message = (changes = {}) => JSON.stringify(packet({ task: 'botsort', algorithm: 'botsort',
+  const message = (changes = {}) => JSON.stringify(packet({ algorithm: 'botsort',
     detections: [{ ...detection, ...changes }] }));
   assert.equal(parseDetectionMessage(message()).detections[0].track_id, 7);
   assert.equal(parseDetectionMessage(message({ is_prediction: false, missed_frames: 0, confidence: 0.9 }))

@@ -1,6 +1,6 @@
 export function videoProxies(env = process.env) {
   const local = env.VITE_VIDEO_ANALYSIS_MODE === 'local';
-  const mediaOrigin = env.SHARED_MEDIA_ORIGIN || 'http://127.0.0.1:18889';
+  const mediaOrigin = env.LOCAL_MEDIA_ORIGIN || `http://127.0.0.1:${env.VITE_MEDIA_PORT || '18889'}`;
   return {
     '/ws/detections': {
       target: local ? env.VITE_VIDEO_ANALYSIS_ORIGIN || 'http://127.0.0.1:28010'

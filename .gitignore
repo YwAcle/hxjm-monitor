@@ -26,7 +26,6 @@ hs_err_pid*.log
 **/.eggs/
 **/*.egg-info/
 **/.venv/
-**/.venv-*/
 **/venv/
 **/env/
 **/dist/
@@ -59,13 +58,6 @@ Thumbs.db
 *.p12
 *.pfx
 .git-credentials
-**/*-secrets.env
-**/*.secrets.env
-# Host-specific rendered deployment config containing service tokens.
-/deploy/hosts/*/yh-business.yml
-/deploy/hosts/*/local-ports.env
-# Generated database migration/backup reports.
-/deploy/database-reports/
 *.tar
 *.zip
 *.7z
@@ -91,12 +83,6 @@ Thumbs.db
 *.whl
 **/weights/
 **/pretrained_models/
-
-# Downloaded model repositories (weights + tokenizer) are kept on disk only.
-/Agent/models/
-
-# Local caches produced by the runtime
-/Agent/.runtime-cache/
 
 # Runtime media and recordings
 # Ignore directory symlinks as well as directories used by the private launcher.
@@ -179,3 +165,9 @@ mtx/mediamtx/mediamtx
 !/scripts/local-runtime.py
 !/scripts/local-infra.compose.yml
 !/scripts/test_local_runtime.py
+
+# Local backups of dependencies and build output
+**/node_modules.backup*/
+**/target.backup*/
+**/build.backup*/
+**/dist.backup*/

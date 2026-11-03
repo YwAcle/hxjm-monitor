@@ -1,7 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import styles from './VideoModal.module.css';
-import AssetVideoPlayback from './AssetVideoPlayback';
 import {
   MAX_PLAYBACK_RETRIES,
   canRetryPlayback,
@@ -377,47 +376,26 @@ function VideoPlayback({ url }) {
 }
 
 // 统一的视频弹窗组件
-function VideoModal({ visible, url, playback, title, time, onClose }) {
-  const modalRef = React.useRef(null);
-  React.useEffect(() => {
-    if (!visible) return undefined;
-    const previousFocus = document.activeElement;
-    modalRef.current?.focus();
-    return () => previousFocus?.focus();
-  }, [visible]);
+function VideoModal({ visible, url, title, time, onClose }) {
   if (!visible) return null;
-
-  const handleKeys = event => {
-    event.stopPropagation();
-    if (event.key === 'Escape') { onClose(); return; }
-    if (event.key !== 'Tab') return;
-    const controls = [...modalRef.current.querySelectorAll('button:not(:disabled), input:not(:disabled), video[controls]')];
-    const first = controls[0], last = controls[controls.length - 1];
-    if (event.shiftKey && (document.activeElement === first || document.activeElement === modalRef.current)) {
-      event.preventDefault(); last?.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault(); first?.focus();
-    }
-  };
 
   // 使用 Portal 渲染到 body，避免受父容器样式影响
   return ReactDOM.createPortal(
     <div className={styles.videoModalOverlay} onClick={onClose}>
-      <div ref={modalRef} className={styles.videoModalContent} role="dialog" aria-modal="true" aria-label={title || '录像回放'}
-        tabIndex={-1} onKeyDown={handleKeys} onClick={(e) => e.stopPropagation()}>
+      <div className={styles.videoModalContent} onClick={(e) => e.stopPropagation()}>
         {/* 弹窗标题栏 */}
         <div className={styles.videoModalHeader}>
           <div className={styles.videoModalTitle}>
             <span className={styles.videoModalTitleText}>{title}</span>
             <span className={styles.videoModalTime}>{time}</span>
           </div>
-          <button className={styles.videoModalClose} aria-label="关闭录像" onClick={onClose}>
+          <button className={styles.videoModalClose} onClick={onClose}>
             ✕
           </button>
         </div>
         {/* 视频播放器 */}
         <div className={styles.videoModalBody}>
-          {playback ? <AssetVideoPlayback key={playback.asset_id} asset={playback} /> : <VideoPlayback url={url} />}
+          <VideoPlayback url={url} />
         </div>
       </div>
     </div>,

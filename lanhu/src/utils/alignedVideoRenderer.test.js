@@ -10,11 +10,10 @@ function rendererHarness(t) {
   let paint;
   let onFrame;
   let snapshots = 0;
-  const strokes = [];
   const listeners = {};
   const context = { setTransform() {}, clearRect() {}, save() {}, restore() {}, beginPath() {}, rect() {},
     clip() {}, fillRect() {}, fillText() {}, drawImage() {}, measureText: () => ({ width: 10 }),
-    setLineDash(value) { assert.deepEqual(value, []); }, strokeRect: (...box) => strokes.push(box) };
+    setLineDash(value) { assert.deepEqual(value, []); }, strokeRect() {} };
   const canvas = () => ({ width: 640, height: 360, dataset: {}, style: {},
     getContext: () => context,
     getBoundingClientRect: () => ({ width: 640, height: 360, left: 0, top: 0 }) });
@@ -34,9 +33,7 @@ function rendererHarness(t) {
   const playback = canvas();
   const state = { current: { mode: 'realtime', status: '原始画面', enabled: true, identity: 'session-a' } };
   const packet = id => ({ frameAt: now - 400, expiresAt: now + 3000, receivedAt: now,
-    message: { frame_id: id, service_session_id: 'service-a', stream_session_id: 'stream-a',
-      session_generation: 1, stream_epoch: 1,
-      detections: [{ track_id: 1, confidence: 0.9, bbox: [.1, .1, .2, .8] }] } });
+    message: { frame_id: id, detections: [{ track_id: 1, confidence: 0.9, bbox: [.1, .1, .2, .8] }] } });
   const latestRef = { current: packet(1) };
   const stop = startAlignedRenderer({ video, overlay, playback, state, latestRef, historyRef: { current: [] } });
   t.after(() => {
@@ -45,7 +42,7 @@ function rendererHarness(t) {
       if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
     }
   });
-  return { video, overlay, playback, state, latestRef, packet, strokes,
+  return { video, overlay, playback, state, latestRef, packet,
     tick(ms = 0) { now += ms; paint(); },
     frame() { onFrame(now, { mediaTime: now / 1000 }); },
     snapshots: () => snapshots };
@@ -83,23 +80,6 @@ test('AI disconnect, restart and result expiry only clear live annotations', t =
   assert.equal(h.overlay.dataset.drawnBoxes, '0');
 });
 
-test('boxes ease toward the next position for the same track without delaying video', t => {
-  const h = rendererHarness(t);
-  h.frame(); h.tick();
-  assert.equal(h.strokes.at(-1)[0], 64);
-  h.latestRef.current = h.packet(2);
-  h.latestRef.current.message.detections[0].bbox = [.5, .1, .6, .8];
-  h.tick();
-  const firstStep = h.strokes.at(-1)[0];
-  assert.ok(firstStep > 64 && firstStep < 320);
-  h.tick(16);
-  assert.ok(h.strokes.at(-1)[0] > firstStep && h.strokes.at(-1)[0] <= 320);
-  assert.equal(h.video.paused, false);
-  assert.equal(h.playback.style.display, 'none');
-  h.latestRef.current = null; h.tick();
-  assert.equal(h.overlay.dataset.drawnBoxes, '0', 'a missing result clears its smoothed box immediately');
-});
-
 test('stalled or disconnected raw video cannot retain a live overlay', t => {
   const h = rendererHarness(t);
   h.frame(); h.tick();
@@ -110,20 +90,5 @@ test('stalled or disconnected raw video cannot retain a live overlay', t => {
   assert.equal(h.overlay.dataset.drawnBoxes, '1');
   h.state.current.status = '未连接'; h.tick();
   assert.equal(h.overlay.dataset.drawnBoxes, '0');
-  assert.equal(h.playback.style.display, 'none');
-});
-
-test('a late AI packet never delays live presentation or restores expired boxes', t => {
-  const h = rendererHarness(t);
-  h.latestRef.current.frameAt = performance.now() - REALTIME_MAX_RESULT_AGE_MS;
-  h.frame(); h.tick();
-  assert.equal(h.overlay.dataset.drawnBoxes, '0');
-  assert.equal(h.overlay.dataset.playbackMode, 'realtime');
-  assert.equal(h.playback.style.display, 'none');
-  h.frame(); h.tick(20);
-  assert.equal(h.video.paused, false);
-  assert.equal(h.snapshots(), 0);
-  h.latestRef.current = h.packet(2); h.frame(); h.tick();
-  assert.equal(h.overlay.dataset.frameId, '2', 'a fresh result can resume annotations without replacing the video');
   assert.equal(h.playback.style.display, 'none');
 });

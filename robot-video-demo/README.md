@@ -34,7 +34,7 @@
 | 本项目 `.venv` | 核查时未创建 | 按下一节创建 |
 | FastAPI、Uvicorn、WebSockets | 默认 Python 中未安装 | 从 `requirements.txt` 安装 |
 | `/usr/bin/ffmpeg` | 4.4.2，支持 RTSP 输出和 libx264 | 直接使用 |
-| `/data/nfs_storage/hxjm/mtx/mediamtx/mediamtx` | v1.15.5，可执行 | 显式指定路径复用二进制 |
+| `/home/guest/hxjm/mtx/mediamtx/mediamtx` | v1.15.5，可执行 | 显式指定路径复用二进制 |
 
 不需要重新安装 Python、Node.js、数据库或 CUDA。观看狗端已有视频也不需要在服务器安装 RealSense SDK。项目环境只安装自身依赖，不修改原大屏算法环境。
 
@@ -60,7 +60,7 @@ cd /home/guest/hxjm-wxl/robot-video-demo
 .venv/bin/python -c 'import sys, fastapi, uvicorn, websockets; from websockets.asyncio.client import connect; print(sys.executable); print("Python dependencies OK")'
 /usr/bin/ffmpeg -hide_banner -version
 /usr/bin/ffmpeg -hide_banner -encoders 2>/dev/null | rg libx264
-/data/nfs_storage/hxjm/mtx/mediamtx/mediamtx --version
+/home/guest/hxjm/mtx/mediamtx/mediamtx --version
 ```
 
 应看到项目 `.venv` 解释器、`Python dependencies OK`、FFmpeg 版本、libx264 编码器和 MediaMTX 版本。没有 `rg` 时，编码器检查可改用 `grep libx264`。
@@ -78,7 +78,7 @@ cd /home/guest/hxjm-wxl/robot-video-demo
 .runtime/mediamtx --version
 ```
 
-然后将后文每条启动命令的 `--mediamtx /data/nfs_storage/hxjm/mtx/mediamtx/mediamtx` 替换为 `--mediamtx /home/guest/hxjm-wxl/robot-video-demo/.runtime/mediamtx`。不要覆盖原大屏的二进制或配置。
+然后将后文每条启动命令的 `--mediamtx /home/guest/hxjm/mtx/mediamtx/mediamtx` 替换为 `--mediamtx /home/guest/hxjm-wxl/robot-video-demo/.runtime/mediamtx`。不要覆盖原大屏的二进制或配置。
 
 ## 3. 确认观看网络和端口
 
@@ -111,7 +111,7 @@ cd /home/guest/hxjm-wxl/robot-video-demo
 .venv/bin/python run_demo.py \
   --mode simulated \
   --ffmpeg /usr/bin/ffmpeg \
-  --mediamtx /data/nfs_storage/hxjm/mtx/mediamtx/mediamtx \
+  --mediamtx /home/guest/hxjm/mtx/mediamtx/mediamtx \
   --bind 0.0.0.0 \
   --public-host 100.127.237.7
 ```
@@ -171,7 +171,7 @@ cd /home/guest/hxjm-wxl/robot-video-demo
   --robot-host 192.168.126.176 \
   --robot-port 8765 \
   --ffmpeg /usr/bin/ffmpeg \
-  --mediamtx /data/nfs_storage/hxjm/mtx/mediamtx/mediamtx \
+  --mediamtx /home/guest/hxjm/mtx/mediamtx/mediamtx \
   --bind 0.0.0.0 \
   --public-host 100.127.237.7
 ```
@@ -194,7 +194,7 @@ cd /home/guest/hxjm-wxl/robot-video-demo
   --robot-port 8765 \
   --codec h264 \
   --ffmpeg /usr/bin/ffmpeg \
-  --mediamtx /data/nfs_storage/hxjm/mtx/mediamtx/mediamtx \
+  --mediamtx /home/guest/hxjm/mtx/mediamtx/mediamtx \
   --bind 0.0.0.0 \
   --public-host 100.127.237.7
 ```

@@ -64,6 +64,7 @@ class ConfigurationTests(unittest.TestCase):
             source = root / 'mtx/mediamtx/mediamtx.yml'
             source.parent.mkdir(parents=True)
             source.write_text(yaml.safe_dump({'pathDefaults': {'record': True, 'recordDeleteAfter': '168h',
+                              'recordPath': '/data/nfs_storage/hxjm/recordings/%path/%Y-%m-%d_%H-%M-%S-%f',
                               'runOnRecordSegmentComplete': 'curl http://192.0.2.7:8080/media-assets'},
                               'paths': {'all_others': {}, 'live/camera_1': {'rtspTransport': 'tcp'}}}))
             settings = SimpleNamespace(root=root, ports={key: 19000 + i for i, (key, _) in enumerate(service.LISTENERS.values())}, record=True)
@@ -75,12 +76,48 @@ class ConfigurationTests(unittest.TestCase):
             self.assertEqual('udp', rendered['paths']['live/camera_2']['rtspTransport'])
             self.assertEqual(sources['live/camera_1'], rendered['paths']['live/camera_1']['source'])
             self.assertEqual('168h', rendered['pathDefaults']['recordDeleteAfter'])
+            self.assertEqual('/data/nfs_storage/hxjm/recordings/%path/%Y-%m-%d_%H-%M-%S-%f',
+                             rendered['pathDefaults']['recordPath'])
             self.assertIn('127.0.0.1:18080/media-assets', rendered['pathDefaults']['runOnRecordSegmentComplete'])
             settings.record = False
             rendered = yaml.safe_load(service.render_media(settings, sources))
             self.assertFalse(rendered['pathDefaults']['record'])
             self.assertTrue(all(not rendered['paths'][name]['record'] for name in sources))
             self.assertFalse(rendered['paths']['all_others']['record'])
+
+    def test_recording_path_comes_from_source_not_stale_runtime_or_path_override(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / 'mtx/mediamtx/mediamtx.yml'
+            source.parent.mkdir(parents=True)
+            pattern = '/data/nfs_storage/hxjm/recordings/%path/%Y-%m-%d_%H-%M-%S-%f'
+            source.write_text(yaml.safe_dump({'pathDefaults': {'recordPath': pattern}}))
+            stale = root / '.run/local-runtime/mediamtx.yml'
+            stale.parent.mkdir(parents=True)
+            stale.write_text(yaml.safe_dump({
+                'pathDefaults': {'record': True, 'recordPath': '/old/recordings/%path',
+                                 'recordDeleteAfter': '168h'},
+                'paths': {'saved-publisher': {'source': 'publisher', 'recordPath': '/another/old/%path'},
+                          'live/camera_1': {'recordPath': '/camera/old/%path'}}}))
+            settings = SimpleNamespace(root=root, ports={key: 19000 + i for i, (key, _) in enumerate(service.LISTENERS.values())}, record=True)
+            settings.ports['BACKEND_PORT'] = 18080
+            rendered = yaml.safe_load(service.render_media(settings, {'live/camera_1': 'rtsp://example.invalid/camera'}))
+            self.assertEqual(pattern, rendered['pathDefaults']['recordPath'])
+            self.assertEqual(pattern, rendered['paths']['saved-publisher']['recordPath'])
+            self.assertNotIn('recordPath', rendered['paths']['live/camera_1'])
+            self.assertEqual('168h', rendered['pathDefaults']['recordDeleteAfter'])
+
+    def test_recording_path_requires_an_absolute_source_setting(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / 'mtx/mediamtx/mediamtx.yml'
+            source.parent.mkdir(parents=True)
+            settings = SimpleNamespace(root=root, ports={}, record=True)
+            for path in (None, '', './recordings/%path'):
+                with self.subTest(path=path):
+                    source.write_text(yaml.safe_dump({'pathDefaults': {'recordPath': path}}))
+                    with self.assertRaisesRegex(ValueError, 'absolute path'):
+                        service.render_media(settings, {})
 
     def test_logs_are_bounded_and_private(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -150,7 +187,9 @@ class LifecycleTests(unittest.TestCase):
             path.write_bytes(b'test fixture only')
         media = self.root / 'mtx/mediamtx/mediamtx'
         media.parent.mkdir(parents=True)
-        (media.parent / 'mediamtx.yml').write_text('pathDefaults: {record: true}\npaths: {}\n')
+        (media.parent / 'mediamtx.yml').write_text(yaml.safe_dump({
+            'pathDefaults': {'record': True, 'recordPath': str(self.root / 'recordings/%path/%Y-%m-%d_%H-%M-%S-%f')},
+            'paths': {}}))
         fake_service = '''#!PYTHON
 import os,signal,socket,subprocess,sys,time,yaml
 if os.environ['HXJM_SHARED_ROLE'] == 'analysis':
@@ -235,6 +274,50 @@ while True: time.sleep(.1)
         self.assertIsNotNone(replacement)
         self.assertGreaterEqual(time.monotonic() - before, 2)
         self.assertIsNone(self.peer.poll())
+
+    def test_project_stop_removes_own_media_analysis_and_orphans_for_owner_and_subscriber(self):
+        # Both an owner and an old subscriber copy must stop only their own supervisor.
+        subprocess.run(['git', 'init', '-q', str(self.root)], check=True)
+        local_script = self.root / 'deploy/botsort/shared_service.py'
+        local_script.parent.mkdir(parents=True)
+        local_script.write_bytes(SCRIPT.read_bytes())
+        stop = SCRIPT.parents[2] / 'scripts/stop-local.sh'
+        for owner in (self.root, self.root / 'independent-owner'):
+            started = json.loads(self.call('start').stdout)
+            record = service.read_json(self.root / '.run/shared-botsort/service.json')
+            env = dict(self.env, HXJM_ANALYSIS_ROOT=str(owner))
+            result = subprocess.run(['bash', str(stop), '--worktree', str(self.root)],
+                                    env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertFalse(service.same_process(record, 'manager'))
+            self.assertFalse(service.owned_children(record['token']))
+            self.assertFalse(service.listening(self.ports['MTX_RTSP_PORT']))
+            self.assertFalse(service.listening(self.ports['MTX_API_PORT']))
+            self.assertFalse(service.listening(int(self.env['SHARED_BOTSORT_ANALYSIS_PORT'])))
+            self.assertIsNone(self.peer.poll())
+
+    def test_stop_analysis_keeps_media_and_start_resumes_analysis(self):
+        started = json.loads(self.call('start').stdout)
+        media_pid = started['children']['media']['pid']
+        analysis_pid = started['children']['analysis']['pid']
+        self.call('stop-analysis')
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline:
+            record = service.read_json(self.root / '.run/shared-botsort/service.json')
+            children = record.get('children', {})
+            if children.get('media', {}).get('pid') == media_pid and not children.get('analysis'):
+                break
+            time.sleep(.1)
+        record = service.read_json(self.root / '.run/shared-botsort/service.json')
+        self.assertEqual('media-only', record['phase'])
+        self.assertEqual(media_pid, record['children']['media']['pid'])
+        self.assertIsNone(record['children'].get('analysis'))
+        self.assertTrue(service.listening(self.ports['MTX_RTSP_PORT']))
+        self.assertFalse(service.listening(int(self.env['SHARED_BOTSORT_ANALYSIS_PORT'])))
+        self.assertNotEqual(analysis_pid, (record['children'].get('analysis') or {}).get('pid'))
+        resumed = json.loads(self.call('start').stdout)
+        self.assertEqual('running', resumed['phase'])
+        self.assertIn('analysis', resumed['children'])
 
 
 if __name__ == '__main__':

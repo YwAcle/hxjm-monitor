@@ -18,9 +18,6 @@ DEEPSORT_PYTHON="${DEEPSORT_PYTHON:-/home/guest/anaconda3/envs/deepsort/bin/pyth
 VIDEO_ANALYSIS_PYTHON="${VIDEO_ANALYSIS_PYTHON:-/home/guest/anaconda3/envs/botsort39/bin/python}"
 VIDEO_ANALYSIS_PORT="${VIDEO_ANALYSIS_PORT:-$((25010 + FRONTEND_PORT))}"
 START_VIDEO_ANALYSIS="${START_VIDEO_ANALYSIS:-yes}"
-START_REID_FEATURE="${START_REID_FEATURE:-no}"
-REID_FEATURE_PYTHON="${REID_FEATURE_PYTHON:-/home/guest/anaconda3/envs/reid/bin/python}"
-REID_FEATURE_PORT="${REID_FEATURE_PORT:-28024}"
 [[ "$VIDEO_ANALYSIS_MODE" != shared ]] || START_VIDEO_ANALYSIS=no
 export VIDEO_ANALYSIS_ALGORITHM="${VIDEO_ANALYSIS_ALGORITHM:-botsort}"
 MAVEN_BIN="${MAVEN_BIN:-mvn}"
@@ -137,9 +134,6 @@ ensure_local_ports_available() {
     if [[ "$START_VIDEO_ANALYSIS" == yes ]] && ! runtime status video_analysis; then
         check_port_available "$VIDEO_ANALYSIS_PORT" video_analysis || conflict=true
     fi
-    if [[ "$START_REID_FEATURE" == yes ]] && ! runtime status reid_feature; then
-        check_port_available "$REID_FEATURE_PORT" reid_feature || conflict=true
-    fi
 
     if "$conflict"; then
         fail "stop the conflicting services and run start-local.sh again."
@@ -241,40 +235,28 @@ start_original_camera_sources() {
     command -v python3 >/dev/null 2>&1 || fail "python3 is required to encode camera source configuration."
 
     local camera_id source payload status cameras
-    if [[ "$VIDEO_ANALYSIS_MODE" == shared ]]; then
-        cameras="$(for camera_id in $CAMERA_IDS; do
-            [[ "$camera_id" =~ ^[0-9]+$ ]] || exit 1
-            printf '%s\t%s/camera_%s\n' "$camera_id" "$SHARED_MEDIA_RTSP_BASE" "$camera_id"
-        done)" || fail 'CAMERA_IDS must contain numeric camera IDs.'
-        info 'relaying shared camera sources; cameras are opened only by the public service.'
-    else
-        cameras="$(docker exec smartmonitor-mysql mysql -uroot -p123456 -N -B hxjm_sm \
-            -e "SELECT machine_id, video_url FROM ba_machine WHERE isvalid=1 AND status=1 ORDER BY machine_id;" 2>/dev/null)" \
-            || fail "Could not query camera sources from MySQL."
-        info "starting original camera sources from ba_machine."
-    fi
+    cameras="$(docker exec smartmonitor-mysql mysql -uroot -p123456 -N -B hxjm_sm \
+        -e "SELECT machine_id, video_url FROM ba_machine WHERE isvalid=1 AND status=1 ORDER BY machine_id;" 2>/dev/null)" \
+        || fail "Could not query camera sources from MySQL."
+    info "connecting this worktree's MediaMTX directly to camera sources from ba_machine."
     while IFS=$'\t' read -r camera_id source; do
         [[ "$camera_id" =~ ^[0-9]+$ && -n "$source" ]] || continue
-        payload="$(python3 -c 'import json,sys; shared = sys.argv[2] == "shared"; data = {"source": sys.argv[1], "rtspTransport": "tcp" if shared else "udp", "sourceOnDemand": True, "sourceOnDemandStartTimeout": "10s", "sourceOnDemandCloseAfter": "10s"}; data.update({"record": False} if shared else {}); print(json.dumps(data))' "$source" "$VIDEO_ANALYSIS_MODE")"
+        payload="$(python3 -c 'import json,sys; print(json.dumps({"source": sys.argv[1], "rtspTransport": "udp", "sourceOnDemand": True, "sourceOnDemandStartTimeout": "10s", "sourceOnDemandCloseAfter": "10s", "record": False}))' "$source")"
         status="$(curl --silent --show-error --connect-timeout 5 --max-time 15 \
             -o /dev/null -w '%{http_code}' \
             -X POST "http://127.0.0.1:$MTX_API_PORT/v3/config/paths/add/live/camera_${camera_id}" \
             -H 'Content-Type: application/json' -d "$payload")" \
             || fail "could not create original source for camera $camera_id."
         case "$status" in
-            200|201) info "camera $camera_id original source configured." ;;
-            400|409)
-                # Existing paths must follow the authoritative device configuration.
+            200|201|409) info "camera $camera_id original source configured." ;;
+            400)
+                # MediaMTX versions differ: an existing path may be reported
+                # as 400 instead of 409. Keep startup idempotent when it is
+                # already present and queryable.
                 if curl --fail --silent --show-error --connect-timeout 5 --max-time 10 \
                     "http://127.0.0.1:$MTX_API_PORT/v3/config/paths/get/live/camera_${camera_id}" \
                     >/dev/null; then
-                    status="$(curl --silent --show-error --connect-timeout 5 --max-time 15 \
-                        -o /dev/null -w '%{http_code}' \
-                        -X PATCH "http://127.0.0.1:$MTX_API_PORT/v3/config/paths/patch/live/camera_${camera_id}" \
-                        -H 'Content-Type: application/json' -d "$payload")" \
-                        || fail "could not update original source for camera $camera_id."
-                    [[ "$status" == 200 ]] || fail "MediaMTX rejected original source update for camera $camera_id (HTTP $status)."
-                    info "camera $camera_id original source synchronized."
+                    info "camera $camera_id original source already configured."
                 else
                     fail "MediaMTX rejected original source for camera $camera_id (HTTP $status)."
                 fi
@@ -313,19 +295,6 @@ wait_for_camera_outputs() {
 }
 
 start_infrastructure() {
-    if [[ "${HXJM_EXISTING_INFRA_ONLY:-no}" == yes ]]; then
-        local container status
-        for container in smartmonitor-mysql smartmonitor-postgres smartmonitor-redis; do
-            status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container")" || return 1
-            [[ "$status" == healthy ]] || fail "Existing infrastructure is not healthy: $container"
-        done
-        info "reusing existing infrastructure; container creation is disabled."
-        return 0
-    fi
-    command -v docker >/dev/null 2>&1 || fail "Docker is required to start MySQL, PostgreSQL, and Redis."
-    docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin is required."
-    [[ -f "$INFRA_COMPOSE_FILE" ]] || fail "Infrastructure Compose file not found: $INFRA_COMPOSE_FILE"
-
     (
         exec 8>"$PRIMARY_ROOT/.run/local-infrastructure.lock"
         flock -w 180 8 || fail "Timed out waiting for shared infrastructure."
@@ -345,7 +314,6 @@ start_infrastructure() {
 }
 
 ensure_postgres_schema() {
-    [[ "${HXJM_EXISTING_INFRA_ONLY:-no}" != yes ]] || return 0
     local schema_file="$ROOT_DIR/SmartMonitor-wangzj/sql/ai_task_run.sql"
     [[ -f "$schema_file" ]] || fail "PostgreSQL schema file is missing: $schema_file"
     info "ensuring PostgreSQL task-run schema."
@@ -375,12 +343,18 @@ build_backend() {
     ) || return 1
 }
 
+command -v python3 >/dev/null || fail "Python 3 is required."
+if ! "$CHECK_ONLY"; then
+    ensure_docker_access "$SCRIPT_DIR/start-local.sh" --worktree "$ROOT_DIR"
+    docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin is required."
+    [[ -f "$INFRA_COMPOSE_FILE" ]] || fail "Infrastructure Compose file not found: $INFRA_COMPOSE_FILE"
+fi
+
 [[ -x "$MEDIAMTX_BIN" ]] || fail "MediaMTX executable missing; set MEDIAMTX_BIN to an installed executable."
 [[ -x "$JAVA_BIN" ]] || fail "Java 8 not found: $JAVA_BIN (set JAVA_BIN to a Java 8 executable)."
 [[ -f "$ROOT_DIR/SmartMonitor-wangzj/pom.xml" ]] || fail "Backend source tree is missing."
 command -v npm >/dev/null 2>&1 || fail "npm is not available in PATH."
 
-command -v python3 >/dev/null || fail "Python 3 is required."
 command -v flock >/dev/null || fail "flock is required."
 command -v ss >/dev/null || fail "ss (iproute2) is required."
 command -v "$MAVEN_BIN" >/dev/null || fail "Maven is required."
@@ -388,14 +362,15 @@ command -v cmake >/dev/null || fail "CMake is required."
 node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 18 ? 0 : 1)' \
     || fail "Node.js 18+ is required."
 if "$CHECK_ONLY"; then
-    info "source directory: $ROOT_DIR"
+    info "worktree: $ROOT_DIR ($(git -C "$ROOT_DIR" branch --show-current))"
     info "port configuration: $PORT_CONFIG"
     info "worktree state: $RUN_DIR"
     info "MediaMTX executable: $MEDIAMTX_BIN; source configuration: $MTX_DIR/mediamtx/mediamtx.yml"
     info "frontend/backend: $FRONTEND_PORT/$BACKEND_PORT; RTSP/WebRTC: $MTX_RTSP_PORT/$MTX_WEBRTC_PORT"
     info "video analysis mode: $VIDEO_ANALYSIS_MODE; local MediaMTX: $LOCAL_MEDIA_ENABLED"
+    info "algorithm owner: $ANALYSIS_ROOT; this project starts models: $(is_analysis_owner && echo yes || echo no)"
     if [[ "$VIDEO_ANALYSIS_MODE" == shared ]]; then
-        info "shared analysis/media: $VIDEO_ANALYSIS_SHARED_ORIGIN / $SHARED_MEDIA_ORIGIN"
+        info "shared analysis: $VIDEO_ANALYSIS_SHARED_ORIGIN; worktree media: $SHARED_MEDIA_ORIGIN"
     else
         info "video analysis: $VIDEO_ANALYSIS_ALGORITHM on $VIDEO_ANALYSIS_PORT ($VIDEO_ANALYSIS_PYTHON)"
     fi
@@ -403,22 +378,18 @@ if "$CHECK_ONLY"; then
     info "IPC: $RUN_DIR/ipc/; shared-memory namespace: $AI_STREAM_SHM_NAMESPACE"
     exit 0
 fi
-if [[ "$VIDEO_ANALYSIS_MODE" == shared ]]; then
-    [[ -f "$PRIMARY_ROOT/deploy/botsort/shared_service.py" ]] \
-        || fail 'Update the primary checkout first: deploy/botsort/shared_service.py is missing.'
+if [[ "$VIDEO_ANALYSIS_MODE" == shared ]] && is_analysis_owner; then
+    [[ -f "$ROOT_DIR/deploy/botsort/shared_service.py" ]] \
+        || fail 'The algorithm owner is missing deploy/botsort/shared_service.py.'
+fi
+if ! is_analysis_owner && [[ "${START_ALGORITHMS,,}" != no ]]; then
+    fail 'This project is a subscriber; START_ALGORITHMS must be no.'
 fi
 [[ "${START_ALGORITHMS,,}" == yes || "${START_ALGORITHMS,,}" == no ]] || fail "START_ALGORITHMS must be yes or no."
 [[ "$START_VIDEO_ANALYSIS" == yes || "$START_VIDEO_ANALYSIS" == no ]] || fail "START_VIDEO_ANALYSIS must be yes or no."
-[[ "$START_REID_FEATURE" == yes || "$START_REID_FEATURE" == no ]] || fail "START_REID_FEATURE must be yes or no."
-if [[ "$START_REID_FEATURE" == yes ]]; then
-    [[ "$REID_FEATURE_PORT" =~ ^[0-9]+$ && "$REID_FEATURE_PORT" -ge 1 && "$REID_FEATURE_PORT" -le 65535 ]] || fail 'Invalid REID_FEATURE_PORT'
-    PYTHONPATH="$ROOT_DIR/.run/reid-feature-deps${PYTHONPATH:+:$PYTHONPATH}" \
-        "$REID_FEATURE_PYTHON" -B -c 'import torch, fastapi, uvicorn, multipart, PIL' || fail 'Missing ReID feature dependencies'
-fi
 if [[ "$START_VIDEO_ANALYSIS" == yes ]]; then
     [[ "$VIDEO_ANALYSIS_PORT" =~ ^[0-9]+$ && "$VIDEO_ANALYSIS_PORT" -ge 1 && "$VIDEO_ANALYSIS_PORT" -le 65535 ]] || fail 'Invalid VIDEO_ANALYSIS_PORT'
-    PYTHONPATH="$ROOT_DIR/.run/media-deps${PYTHONPATH:+:$PYTHONPATH}" \
-        "$VIDEO_ANALYSIS_PYTHON" -B -c 'import fastapi, uvicorn, websockets, cv2, numpy, av' || fail 'Missing analysis API dependencies in VIDEO_ANALYSIS_PYTHON'
+    "$VIDEO_ANALYSIS_PYTHON" -B -c 'import fastapi, uvicorn, websockets, cv2, numpy' || fail 'Missing analysis API dependencies in VIDEO_ANALYSIS_PYTHON'
 fi
 for port in "$BACKEND_PORT" "$FRONTEND_PORT" "$MTX_RTSP_PORT" "$AI_STREAM_PORT"; do
     [[ "$port" =~ ^[0-9]+$ && "$port" -ge 1 && "$port" -le 65535 ]] || fail "Invalid port: $port"
@@ -433,7 +404,7 @@ if [[ "${START_ALGORITHMS,,}" == "yes" ]]; then
     prompt_algorithm "VAD" START_VAD && start_vad=true || true
     prompt_algorithm "DeepSORT detection" START_DEEPSORT && start_deepsort=true || true
 else
-    info "algorithm services disabled (raw-camera-only mode)."
+    info "local ReID/VAD/DeepSORT workers disabled; BoT-SORT follows the configured owner."
 fi
 
 if "$start_reid"; then
@@ -451,7 +422,6 @@ python3 "$SCRIPT_DIR/local-config.py" "$ROOT_DIR" "$RUN_DIR"
 runtime prepare-assets "$PRIMARY_ROOT" "$start_reid" "$start_vad" "$start_deepsort"
 
 # Prepare artifacts before switching off the previous application.
-if [[ "${HXJM_SKIP_BUILD:-no}" != yes ]]; then
 info "building current C++ and backend sources; logs: $LOG_DIR/build-*.log"
 build_ai_stream >"$LOG_DIR/build-ai-stream.log" 2>&1 || fail "C++ build failed; see $LOG_DIR/build-ai-stream.log"
 build_backend >"$LOG_DIR/build-backend.log" 2>&1 || fail "Backend build failed; see $LOG_DIR/build-backend.log"
@@ -462,13 +432,11 @@ if [[ ! -x "$ROOT_DIR/lanhu/node_modules/.bin/vite" || ! -f "$ROOT_DIR/lanhu/nod
         || fail "npm ci failed; see $LOG_DIR/install-frontend.log"
     printf '%s\n' "$frontend_hash" > "$ROOT_DIR/lanhu/node_modules/.local-deps.sha256"
 fi
-else
-    [[ -x "$MTX_DIR/build/ai_stream" && -f "$ROOT_DIR/SmartMonitor-wangzj/hxjm-admin/target/hxjm-admin.jar" && -x "$ROOT_DIR/lanhu/node_modules/.bin/vite" ]] || fail "Run service.sh business prepare first."
-fi
 start_infrastructure
 ensure_postgres_schema
-info "restarting services from $ROOT_DIR."
+info "restarting only $ROOT_DIR ($(git -C "$ROOT_DIR" rev-parse --short HEAD)); uncommitted code is included."
 runtime stop-all
+stop_shared_service
 # Roll back every new service if readiness/startup fails.
 startup_complete=false
 cleanup_failed_start() {
@@ -476,6 +444,7 @@ cleanup_failed_start() {
     if ! "$startup_complete"; then
         warn "startup failed; stopping the partial application (logs are retained)."
         runtime stop-all || true
+        stop_shared_service || true
     fi
     return "$result"
 }
@@ -484,13 +453,11 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 ensure_local_ports_available
 if [[ "$VIDEO_ANALYSIS_MODE" == shared ]]; then
-    if ! python3 "$PRIMARY_ROOT/deploy/botsort/shared_service.py" start --root "$PRIMARY_ROOT"; then
-        if curl --fail --silent --show-error --connect-timeout 2 --max-time 5 \
-            "$SHARED_MEDIA_API_ORIGIN/v3/paths/list" >/dev/null; then
-            warn 'Shared analysis is unavailable; the ready shared media service will keep raw video playable.'
-        else
-            fail 'Shared media service did not start; inspect its output above.'
-        fi
+    if is_analysis_owner; then
+        python3 "$ROOT_DIR/deploy/botsort/shared_service.py" start --root "$ROOT_DIR" \
+            || fail 'Shared BoT-SORT service did not start; inspect its logs before starting the main project.'
+    else
+        info "subscribing to $VIDEO_ANALYSIS_SHARED_ORIGIN; no models or inference workers will start."
     fi
 fi
 
@@ -553,15 +520,10 @@ export SMARTMONITOR_AI_STREAM_MTX_CONTROL_URL="http://127.0.0.1:$MTX_API_PORT/v3
 export SMARTMONITOR_AI_LIVE_PORT="$MTX_WEBRTC_PORT"
 export SPRING_REDIS_DATABASE="$REDIS_DATABASE"
 export SMARTMONITOR_LOG_DIR="$ROOT_DIR/log/backend"
-# Druid 1.2.23 cannot normalize PostgreSQL's FOR UPDATE OF syntax.
-export SPRING_DATASOURCE_DRUID_FILTER_STAT_MERGE_SQL=false
-if [[ -f "$ROOT_DIR/.run/yh-business.yml" ]]; then
-    export SPRING_CONFIG_ADDITIONAL_LOCATION="${SPRING_CONFIG_ADDITIONAL_LOCATION:-file:$ROOT_DIR/.run/yh-business.yml}"
-fi
 start_service backend "$ROOT_DIR/SmartMonitor-wangzj" env SERVER_PORT="$BACKEND_PORT" \
     "$JAVA_BIN" -jar hxjm-admin/target/hxjm-admin.jar \
     "--logging.config=$RUN_DIR/logback.xml" "--spring.redis.database=$REDIS_DATABASE" \
-    "--server.port=$BACKEND_PORT" "--ruoyi.profile=${HXJM_UPLOAD_ROOT:-$ROOT_DIR/.run/uploads}" \
+    "--server.port=$BACKEND_PORT" "--ruoyi.profile=$ROOT_DIR/.run/uploads" \
     "--smartmonitor.ai.mtx-home=$MTX_DIR" \
     "--smartmonitor.ai.public-host=$PUBLIC_HOST" \
     "--smartmonitor.ai.live-port=$MTX_WEBRTC_PORT"
@@ -585,26 +547,17 @@ if ! "$start_reid" && ! "$start_vad" && ! "$start_deepsort"; then
 fi
 
 export VITE_VIDEO_ANALYSIS_MODE="$VIDEO_ANALYSIS_MODE"
-export VITE_VIDEO_ANALYSIS_ALGORITHM="$VIDEO_ANALYSIS_ALGORITHM"
-if [[ "$START_REID_FEATURE" == yes ]]; then
-    start_service reid_feature "$ROOT_DIR/python" env \
-        PYTHONPATH="$ROOT_DIR/python:$ROOT_DIR/.run/reid-feature-deps" \
-        REID_FEATURE_WEIGHTS="${REID_FEATURE_WEIGHTS:-$PRIMARY_ROOT/python/reid/weights/MSMT17_clipreid_RN50_120.pth}" \
-        REID_FEATURE_CONFIG="${REID_FEATURE_CONFIG:-$ROOT_DIR/python/reid/config/cnn_base.yml}" \
-        REID_FEATURE_YOLO_WEIGHTS="${REID_FEATURE_YOLO_WEIGHTS:-$PRIMARY_ROOT/python/reid/weights/yolov8n.pt}" \
-        "$REID_FEATURE_PYTHON" -B -m uvicorn reid_feature_service.server:app \
-        --host 127.0.0.1 --port "$REID_FEATURE_PORT" --workers 1
-    wait_for_port "$REID_FEATURE_PORT" reid_feature 90 || fail 'ReID feature API did not start'
-fi
+export VITE_VIDEO_ANALYSIS_SUBSCRIBER=false
+if ! is_analysis_owner; then export VITE_VIDEO_ANALYSIS_SUBSCRIBER=true; fi
 if [[ "$VIDEO_ANALYSIS_MODE" == shared ]]; then
     export VITE_VIDEO_ANALYSIS_ENABLED=true
     export VITE_VIDEO_ANALYSIS_ORIGIN="$VIDEO_ANALYSIS_SHARED_ORIGIN"
     export VITE_VIDEO_ANALYSIS_CAMERAS=camera_1,camera_2,camera_3,camera_4
 elif [[ "$START_VIDEO_ANALYSIS" == yes ]]; then
     start_service video_analysis "$ROOT_DIR/python" env \
-        PYTHONPATH="$ROOT_DIR/python:$ROOT_DIR/.run/media-deps" MPLCONFIGDIR="$ROOT_DIR/.run/matplotlib" \
+        PYTHONPATH="$ROOT_DIR/python" MPLCONFIGDIR="$ROOT_DIR/.run/matplotlib" \
         VIDEO_ANALYSIS_RTSP_BASE="rtsp://127.0.0.1:$MTX_RTSP_PORT/live" \
-        VIDEO_ANALYSIS_RTSP_TRANSPORT="${VIDEO_ANALYSIS_RTSP_TRANSPORT:-tcp}" \
+        VIDEO_ANALYSIS_RTSP_TRANSPORT="${VIDEO_ANALYSIS_RTSP_TRANSPORT:-udp}" \
         "$VIDEO_ANALYSIS_PYTHON" -B -m uvicorn video_analysis.app:app \
         --host 127.0.0.1 --port "$VIDEO_ANALYSIS_PORT" --workers 1
     wait_for_port "$VIDEO_ANALYSIS_PORT" video_analysis 20 || fail 'Video analysis API did not start'

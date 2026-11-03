@@ -38,31 +38,27 @@ def render(root, state):
             task['ipc_addr'] = config['ai_tasks_ipc'][task['type']]
     (state / 'ai-stream.yaml').write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False))
 
-    media = yaml.safe_load((root / 'mtx/mediamtx/mediamtx.yml').read_text())
+    try:
+        media = yaml.safe_load((root / 'mtx/mediamtx/mediamtx.yml').read_text())
+    except yaml.YAMLError:
+        raise ValueError('Invalid media YAML; configuration contents were not printed') from None
+    if not isinstance(media, dict):
+        raise ValueError('Media configuration must be a YAML object')
+    defaults = media.get('pathDefaults')
+    record_path = defaults.get('recordPath') if isinstance(defaults, dict) else None
+    if not isinstance(record_path, str) or not record_path.strip() or not Path(record_path).is_absolute():
+        raise ValueError('pathDefaults.recordPath must be a nonempty absolute path')
     listeners = {'rtmpAddress': 'MTX_RTMP_PORT', 'rtspAddress': 'MTX_RTSP_PORT',
         'rtpAddress': 'MTX_RTP_PORT', 'rtcpAddress': 'MTX_RTCP_PORT', 'hlsAddress': 'MTX_HLS_PORT',
         'webrtcAddress': 'MTX_WEBRTC_PORT', 'webrtcLocalUDPAddress': 'MTX_WEBRTC_ICE_PORT',
         'srtAddress': 'MTX_SRT_PORT', 'playbackAddress': 'MTX_PLAYBACK_PORT', 'apiAddress': 'MTX_API_PORT'}
     media.update({name: ':' + env[key] for name, key in listeners.items()})
     media.update(api=True, logDestinations=['stdout'], rtspTransports=['udp', 'tcp'])
-    defaults = media.setdefault('pathDefaults', {})
-    shared_input_recording = env.get('VIDEO_ANALYSIS_RECORDING_ENABLED', '').lower() in ('1', 'true', 'yes', 'on')
-    if env.get('VIDEO_ANALYSIS_MODE') == 'shared' or shared_input_recording:
+    if env.get('VIDEO_ANALYSIS_MODE') == 'shared':
         defaults['record'] = False
         for path in (media.get('paths') or {}).values():
             if isinstance(path, dict):
                 path['record'] = False
-    if env.get('VIDEO_ANALYSIS_MODE') == 'shared':
-        shared_base = env['SHARED_MEDIA_RTSP_BASE'].rstrip('/')
-        for camera_id in env.get('CAMERA_IDS', '1 2 3 4').split():
-            if not re.fullmatch(r'[1-9][0-9]*', camera_id):
-                raise ValueError('CAMERA_IDS must contain positive numeric IDs')
-            media.setdefault('paths', {})[f'live/camera_{camera_id}'] = {
-                'source': f'{shared_base}/camera_{camera_id}', 'rtspTransport': 'tcp',
-                'sourceOnDemand': True, 'sourceOnDemandStartTimeout': '10s',
-                'sourceOnDemandCloseAfter': '10s', 'record': False,
-            }
-    defaults['recordPath'] = str(root / '.run/recordings/%path/%Y-%m-%d_%H-%M-%S-%f')
     for path in [defaults, *(media.get('paths') or {}).values()]:
         if not isinstance(path, dict):
             continue

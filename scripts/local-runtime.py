@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Linux service ownership, isolated to one worktree (stdlib only)."""
 import argparse
+import ast
+import grp
 import json
 import os
 from pathlib import Path
@@ -10,7 +12,7 @@ import time
 import uuid
 
 
-def process(pid):
+def process(pid, strict=False):
     try:
         base = Path('/proc') / str(pid)
         stat = (base / 'stat').read_text().rsplit(')', 1)[1].split()
@@ -20,6 +22,10 @@ def process(pid):
                     cwd=str((base / 'cwd').resolve(strict=True)),
                     args=(base / 'cmdline').read_bytes().decode(errors='replace').split('\0')[:-1],
                     env=(base / 'environ').read_bytes().split(b'\0'))
+    except PermissionError as error:
+        if strict:
+            raise RuntimeError(f'Cannot inspect PID {pid}; run stop with the same user and group as startup. State was retained.') from error
+        return None
     except (OSError, ValueError):
         return None
 
@@ -58,7 +64,16 @@ def owned(record):
 def terminate(items):
     # Recheck PID/start time immediately before every signal; never trust a PID file.
     def alive():
-        return [p for p in items if matches(process(p['pid']), p)]
+        result = []
+        for item in items:
+            try:
+                base = Path('/proc') / str(item['pid'])
+                fields = (base / 'stat').read_text().rsplit(')', 1)[1].split()
+                if fields[0] != 'Z' and fields[19] == item['start'] and base.stat().st_uid == os.getuid():
+                    result.append(item)
+            except FileNotFoundError:
+                pass
+        return result
     for sig in (signal.SIGTERM, signal.SIGKILL):
         for item in alive():
             try:
@@ -77,6 +92,8 @@ def stop_record(path, root):
     if record and record.get("root") != str(root):
         raise RuntimeError(f"Refusing to stop another worktree via {path}; record belongs to {record.get('root')}")
     if record.get('token'):
+        if record.get('pid'):
+            process(record['pid'], strict=True)
         # The inherited token identifies workers even after their parent exits.
         members = owned(record)
         if members:
@@ -85,6 +102,24 @@ def stop_record(path, root):
         if owned(record):
             terminate(owned(record))
     path.unlink(missing_ok=True)
+
+
+def worktrees(root):
+    raw = subprocess.check_output(['git', '-c', 'core.quotePath=false', '-C', str(root),
+                                   'worktree', 'list', '--porcelain'], text=True)
+    result = []
+    for field in raw.splitlines():
+        if field.startswith('worktree '):
+            value = field[9:]
+            if value.startswith('"'):
+                value = ast.literal_eval(value)
+            path = Path(value)
+            try:
+                if path.is_dir():
+                    result.append(path.resolve())
+            except OSError:
+                continue  # Inaccessible/prunable worktree belonging to another user.
+    return result
 
 
 def legacy_service(item, roots):
@@ -104,7 +139,9 @@ def legacy_service(item, roots):
                 a in ('hxjm-admin/target/hxjm-admin.jar', str(root / 'SmartMonitor-wangzj/hxjm-admin/target/hxjm-admin.jar')) for a in args):
             return True
         if cwd == str(root / 'lanhu') and (exe in ('npm', 'npm run dev', 'vite') or
-                (exe == 'node' and any('node_modules/vite/' in a for a in args)) or
+                (exe == 'node' and any('node_modules/vite/' in a or
+                                      a == str(root / 'lanhu/node_modules/.bin/vite') or
+                                      a == 'node_modules/.bin/vite' for a in args)) or
                 (exe in ('sh', 'bash') and len(args) > 2 and args[1] == '-c' and args[2].startswith('vite'))):
             return True
         if cwd in [str(root / 'python' / name) for name in ('reid', 'vad', 'deepsort')] and exe.startswith('python'):
@@ -112,8 +149,43 @@ def legacy_service(item, roots):
     return False
 
 
+def service_group(state, root):
+    """Find the group needed to inspect this project's existing processes."""
+    records = [read_json(state / f'{name}.json') for name in
+               ('frontend', 'backend', 'ai_stream', 'mediamtx', 'video_analysis', 'reid', 'vad', 'deepsort')]
+    shared = read_json(root / '.run/shared-botsort/service.json')
+    records.append(shared)
+    if shared.get('root') == str(root):
+        records.extend(dict(child, root=str(root)) for child in shared.get('children', {}).values())
+    for record in records:
+        if record.get('root') != str(root) or not record.get('pid'):
+            continue
+        try:
+            base = Path('/proc') / str(int(record['pid']))
+            fields = (base / 'stat').read_text().rsplit(')', 1)[1].split()
+            owner = base.stat()
+            if fields[0] != 'Z' and fields[19] == record.get('start') and owner.st_uid == os.getuid():
+                return grp.getgrgid(owner.st_gid).gr_name if owner.st_gid != os.getegid() else ''
+        except (OSError, ValueError, KeyError):
+            continue
+    # Missing state: absolute arguments locate candidates; stop still verifies cwd and executable.
+    for base in Path('/proc').iterdir():
+        if not base.name.isdigit():
+            continue
+        try:
+            owner = base.stat()
+            if owner.st_uid != os.getuid():
+                continue
+            args = (base / 'cmdline').read_bytes().decode(errors='replace').split('\0')
+            if any(arg.startswith(str(root) + '/') for arg in args):
+                return grp.getgrgid(owner.st_gid).gr_name if owner.st_gid != os.getegid() else ''
+        except (OSError, KeyError):
+            continue
+    return ''
+
+
 def stop_all(state, root):
-    for name in ('frontend', 'video_analysis', 'reid_feature', 'backend', 'ai_stream', 'deepsort', 'vad', 'reid', 'mediamtx'):
+    for name in ('frontend', 'video_analysis', 'backend', 'ai_stream', 'deepsort', 'vad', 'reid', 'mediamtx'):
         stop_record(state / f'{name}.json', root)
     roots = [root]
     old = [p for p in processes() if legacy_service(p, roots)]
@@ -130,10 +202,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--state', required=True, type=Path)
     parser.add_argument('--root', required=True, type=Path)
-    parser.add_argument('action', choices=('start', 'status', 'stop-all', 'mark-active', 'prepare-assets'))
+    parser.add_argument('action', choices=('start', 'status', 'stop-all', 'mark-active', 'prepare-assets', 'service-group'))
     parser.add_argument('args', nargs=argparse.REMAINDER)
     ns = parser.parse_args()
     state, root = ns.state, ns.root.resolve()
+    if ns.action == 'service-group':
+        print(service_group(state, root))
+        return 0
     if ns.action == 'prepare-assets':
         primary = Path(ns.args[0]).resolve()
         if primary == root or ns.args[1:] == ['false', 'false', 'false']:
@@ -155,13 +230,16 @@ def main():
         stop_all(state, root)
         return 0
     if ns.action == 'mark-active':
-        write_json(state / 'active.json', dict(root=str(root), revision=None, branch=None, dirty=None,
+        revision = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
+        branch = subprocess.check_output(['git', '-C', str(root), 'branch', '--show-current'], text=True).strip()
+        dirty = bool(subprocess.check_output(['git', '-C', str(root), 'status', '--porcelain']))
+        write_json(state / 'active.json', dict(root=str(root), revision=revision, branch=branch, dirty=dirty,
                                              started=time.strftime('%Y-%m-%dT%H:%M:%S%z'),
                                              ports={k: int(v) for k, v in os.environ.items()
                                                     if (k.endswith('_PORT') or k == 'REDIS_DATABASE') and v.isdigit()}))
         return 0
     name = ns.args[0]
-    if name not in ('frontend', 'video_analysis', 'reid_feature', 'backend', 'ai_stream', 'deepsort', 'vad', 'reid', 'mediamtx'):
+    if name not in ('frontend', 'video_analysis', 'backend', 'ai_stream', 'deepsort', 'vad', 'reid', 'mediamtx'):
         parser.error('Unknown service')
     path = state / f'{name}.json'
     record = read_json(path)
