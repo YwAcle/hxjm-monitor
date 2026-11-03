@@ -74,7 +74,7 @@ class AgentMorningApiTests(unittest.TestCase):
             root = Path(__file__).resolve().parents[1]
             command = ["bash", "-c",
                        'source "$1"; prepare_log_file "$2" "$3" || exit $?; printf "new\\n" >>"$2"',
-                       "bash", str(root / "scripts/logging.sh"), str(path)]
+                       "bash", str(root / "scripts/internal/logging.sh"), str(path)]
             for mode, expected in (("append", "old\nnew\n"), ("overwrite", "new\n")):
                 path.write_text("old\n")
                 subprocess.run([*command, mode], check=True, capture_output=True)

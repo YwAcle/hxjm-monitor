@@ -175,11 +175,25 @@ class TextReIDClientTests(unittest.TestCase):
 
         client = TextReIDClient("http://reid.test")
         with patch("llm_agent_service.service.text_reid_client.httpx.Client", broken_client):
-            with self.assertRaisesRegex(ValueError, "请求失败"):
+            with self.assertRaisesRegex(ValueError, "无法连接服务"):
                 client.health()
         with patch("llm_agent_service.service.text_reid_client.httpx.Client", self.client):
             self.health_block = dict(self._health(), embedding_dim="4")
             with self.assertRaisesRegex(ValueError, "未就绪"):
+                client.health()
+
+    def test_timeout_is_distinguished_from_missing_text_capability(self):
+        def timed_out(**kwargs):
+            return self.client_class(transport=httpx.MockTransport(
+                lambda request: (_ for _ in ()).throw(httpx.ReadTimeout('private details'))), **kwargs)
+        client = TextReIDClient('http://reid.test')
+        with patch('llm_agent_service.service.text_reid_client.httpx.Client', timed_out):
+            with self.assertRaisesRegex(ValueError, '请求超时') as error:
+                client.health()
+            self.assertNotIn('private details', str(error.exception))
+        self.health_block = None
+        with patch('llm_agent_service.service.text_reid_client.httpx.Client', self.client):
+            with self.assertRaisesRegex(ValueError, '仅有 CLIP-ReID 图片服务'):
                 client.health()
 
 

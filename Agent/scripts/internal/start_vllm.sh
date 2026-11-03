@@ -3,13 +3,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-source "${ROOT_DIR}/scripts/load_env.sh"
+ROOT_DIR="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
+source "${ROOT_DIR}/scripts/internal/load_env.sh"
 export LLM_MODE=local LLM_BACKEND=vllm
 load_env_defaults "${ROOT_DIR}/.env"
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-    printf '用法：./scripts/start_vllm.sh [vLLM 服务参数]\n'
+    printf '用法：./scripts/internal/start_vllm.sh [vLLM 服务参数]\n'
     printf '模型与资源配置统一读取 .env 的 LLM_* 字段，Python 环境由 VLLM_ENV_ROOT 指定。\n'
     exit 0
 fi

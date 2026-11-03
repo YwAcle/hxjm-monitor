@@ -4,7 +4,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 case "${1:-}" in
     api | local)
         export LLM_MODE="$1"
@@ -16,9 +16,9 @@ case "${1:-}" in
         ;;
 esac
 # 所有启动实现集中在 scripts 目录，服务代码保留在各自 Python 包中。
-source "${ROOT_DIR}/scripts/load_env.sh"
+source "${ROOT_DIR}/scripts/internal/load_env.sh"
 load_env_defaults "${ROOT_DIR}/.env"
-source "${ROOT_DIR}/scripts/logging.sh"
+source "${ROOT_DIR}/scripts/internal/logging.sh"
 validate_log_write_mode "${LOG_WRITE_MODE:-append}"
 MODEL_LOG_WRITE_MODE="${MODEL_LOG_WRITE_MODE:-${LOG_WRITE_MODE:-overwrite}}"
 AGENT_LOG_WRITE_MODE="${AGENT_LOG_WRITE_MODE:-${LOG_WRITE_MODE:-overwrite}}"
@@ -70,12 +70,12 @@ AGENT_PID=""
 
 usage() {
     cat <<EOF
-用法：./scripts/start_all.sh [local|api|vllm|sglang] [--show-config]
+用法：./scripts/start.sh [local|api|vllm|sglang] [--show-config]
 
 启动内容：
   1. local 模式复用或启动本地模型；api 模式仅连接已配置的 API
-  2. 通过 scripts/start_report.sh 启动报告 Worker
-  3. 通过 scripts/start_agent.sh 启动 Agent 服务
+  2. 通过内部报告入口 启动报告 Worker
+  3. 通过内部 Agent 入口 启动 Agent 服务
 
 常用覆盖配置：
   CUDA_VISIBLE_DEVICES=0,1
@@ -127,7 +127,7 @@ is_local_endpoint() {
 stop_process() {
     local pid=$1
     if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
-        kill "${pid}" 2>/dev/null || true
+        kill -TERM -- "-${pid}" 2>/dev/null || kill "${pid}" 2>/dev/null || true
         wait "${pid}" 2>/dev/null || true
     fi
 }
@@ -138,12 +138,15 @@ cleanup() {
     stop_process "${AGENT_PID}"
     stop_process "${REPORT_PID}"
     stop_process "${MODEL_PID}"
+    if [[ -n "${AGENT_LAUNCH_READY_FILE:-}" ]]; then
+        rm -f -- "${AGENT_LAUNCH_READY_FILE}"
+    fi
     exit "${exit_code}"
 }
 
 trap cleanup EXIT
 trap 'exit 130' INT
-trap 'exit 143' TERM
+trap 'exit 143' TERM HUP
 
 for executable in "${REPORT_START_SCRIPT}" "${AGENT_START_SCRIPT}"; do
     if [[ ! -x "${executable}" ]]; then
@@ -154,58 +157,77 @@ done
 
 mkdir -p "${RUNTIME_DIR}"
 
+if "${CONFIG_PYTHON_BIN:-python3}" "${SCRIPT_DIR}/check_model_endpoint.py" --agent-port-open; then
+    printf 'Agent 端口 %s 已被其他入口占用，请先从原入口停止 Agent；未终止占用者。\n' "${AGENT_PORT}" >&2
+    exit 1
+fi
+
 if model_healthcheck; then
     printf '模型接口已配置：模式=%s，接口=%s\n' "${MODEL_LABEL}" "${LLM_BASE_URL}"
 else
-    should_start=0
-    case "${START_MODEL}" in
-        1 | true | yes) should_start=1 ;;
-        0 | false | no) ;;
-        auto) if is_local_endpoint; then should_start=1; fi ;;
-        *) printf 'START_MODEL 的值无效：%s\n' "${START_MODEL}" >&2; exit 2 ;;
-    esac
-    if [[ "${should_start}" != "1" ]]; then
-        printf '%s 接口不可用：%s。请检查 API 配置或先启动模型服务。\n' "${MODEL_LABEL}" "${LLM_BASE_URL}" >&2
-        exit 1
-    fi
-    if [[ ! -x "${MODEL_START_SCRIPT}" ]]; then
-        printf '%s 启动脚本不存在或不可执行：%s\n' "${LLM_BACKEND}" "${MODEL_START_SCRIPT}" >&2
-        exit 1
-    fi
-    printf '正在启动 %s，日志文件：%s\n' "${LLM_BACKEND}" "${MODEL_LOG}"
-    prepare_log_file "${MODEL_LOG}" "${MODEL_LOG_WRITE_MODE}"
-    "${MODEL_START_SCRIPT}" \
-        >>"${MODEL_LOG}" 2>&1 &
-    MODEL_PID=$!
-    deadline=$((SECONDS + MODEL_STARTUP_TIMEOUT_S))
-    until model_healthcheck; do
-        if ! kill -0 "${MODEL_PID}" 2>/dev/null; then
-            printf '%s 在启动过程中退出。\n' "${LLM_BACKEND}" >&2
-            tail_log "Model" "${MODEL_LOG}"
+    # An occupied endpoint belongs to an existing service. Never launch a second
+    # engine, even while that service is still loading or failing its HTTP probe.
+    if "${CONFIG_PYTHON_BIN:-python3}" "${SCRIPT_DIR}/check_model_endpoint.py" --port-open; then
+        printf '模型端口已占用，等待并复用已有服务：%s\n' "${LLM_BASE_URL}"
+        deadline=$((SECONDS + MODEL_STARTUP_TIMEOUT_S))
+        until model_healthcheck; do
+            if ((SECONDS >= deadline)); then
+                printf '端口已占用，但模型接口未就绪；未启动第二个模型。请检查接口、鉴权及模型名称。\n' >&2
+                exit 1
+            fi
+            sleep 2
+        done
+    else
+        should_start=0
+        case "${START_MODEL}" in
+            1 | true | yes) should_start=1 ;;
+            0 | false | no) ;;
+            auto) if is_local_endpoint; then should_start=1; fi ;;
+            *) printf 'START_MODEL 的值无效：%s\n' "${START_MODEL}" >&2; exit 2 ;;
+        esac
+        if [[ "${should_start}" != "1" ]]; then
+            printf '%s 接口不可用：%s。请检查 API 配置或先启动模型服务。\n' "${MODEL_LABEL}" "${LLM_BASE_URL}" >&2
             exit 1
         fi
-        if ((SECONDS >= deadline)); then
-            printf '等待 %s 超时（已等待 %s 秒）。\n' "${LLM_BACKEND}" "${MODEL_STARTUP_TIMEOUT_S}" >&2
-            tail_log "Model" "${MODEL_LOG}"
+        if [[ ! -x "${MODEL_START_SCRIPT}" ]]; then
+            printf '%s 启动脚本不存在或不可执行：%s\n' "${LLM_BACKEND}" "${MODEL_START_SCRIPT}" >&2
             exit 1
         fi
-        sleep 2
-    done
-    printf '%s 启动成功：%s\n' "${LLM_BACKEND}" "${LLM_BASE_URL}"
+        printf '正在启动 %s，日志文件：%s\n' "${LLM_BACKEND}" "${MODEL_LOG}"
+        prepare_log_file "${MODEL_LOG}" "${MODEL_LOG_WRITE_MODE}"
+        setsid "${MODEL_START_SCRIPT}" \
+            >>"${MODEL_LOG}" 2>&1 &
+        MODEL_PID=$!
+        deadline=$((SECONDS + MODEL_STARTUP_TIMEOUT_S))
+        until model_healthcheck; do
+            if ! kill -0 "${MODEL_PID}" 2>/dev/null; then
+                printf '%s 在启动过程中退出。\n' "${LLM_BACKEND}" >&2
+                tail_log "Model" "${MODEL_LOG}"
+                exit 1
+            fi
+            if ((SECONDS >= deadline)); then
+                printf '等待 %s 超时（已等待 %s 秒）。\n' "${LLM_BACKEND}" "${MODEL_STARTUP_TIMEOUT_S}" >&2
+                tail_log "Model" "${MODEL_LOG}"
+                exit 1
+            fi
+            sleep 2
+        done
+        printf '%s 启动成功：%s\n' "${LLM_BACKEND}" "${LLM_BASE_URL}"
+    fi
 fi
 
 printf '正在启动报告 Worker，日志：%s\n' "${REPORT_LOG}"
 prepare_log_file "${REPORT_LOG}" "${REPORT_LOG_WRITE_MODE}"
-"${REPORT_START_SCRIPT}" >>"${REPORT_LOG}" 2>&1 &
+setsid "${REPORT_START_SCRIPT}" >>"${REPORT_LOG}" 2>&1 &
 REPORT_PID=$!
 
 printf '正在启动 Agent 服务，日志：%s\n' "${AGENT_LOG}"
 prepare_log_file "${AGENT_LOG}" "${AGENT_LOG_WRITE_MODE}"
-"${AGENT_START_SCRIPT}" >>"${AGENT_LOG}" 2>&1 &
+setsid "${AGENT_START_SCRIPT}" >>"${AGENT_LOG}" 2>&1 &
 AGENT_PID=$!
 
 deadline=$((SECONDS + AGENT_STARTUP_TIMEOUT_S))
-until curl --fail --silent --connect-timeout 2 --max-time 5 \
+until curl --fail --silent --noproxy '*' --connect-timeout 2 --max-time 5 \
     "${AGENT_READY_URL}" >/dev/null 2>&1; do
     if ! kill -0 "${REPORT_PID}" 2>/dev/null; then
         printf '报告服务在启动阶段退出。\n' >&2
@@ -238,7 +260,15 @@ printf 'Agent 就绪检查：%s\n' "${AGENT_READY_URL}"
 printf '报告日志：%s\n' "${REPORT_LOG}"
 printf 'Agent 日志：%s\n' "${AGENT_LOG}"
 printf 'Agent JSONL 日志：%s\n' "${AGENT_JSONL_LOG}"
-printf '按 Ctrl+C 停止本脚本启动的服务。\n'
+if ! kill -0 "${REPORT_PID}" 2>/dev/null || ! kill -0 "${AGENT_PID}" 2>/dev/null; then
+    printf '业务服务已退出，请检查日志。\n' >&2
+    exit 1
+fi
+if [[ -n "${AGENT_LAUNCH_READY_FILE:-}" ]]; then
+    printf 'Agent 已就绪：http://127.0.0.1:%s/ready\n模型接口：%s\n日志目录：%s\n' \
+        "${AGENT_PORT}" "${LLM_BASE_URL}" "${RUNTIME_DIR}" >"${AGENT_LAUNCH_READY_FILE}"
+fi
+printf '使用 bash Agent/scripts/stop.sh 停止本入口创建的服务。\n'
 
 child_pids=("${REPORT_PID}" "${AGENT_PID}")
 if [[ -n "${MODEL_PID}" ]]; then

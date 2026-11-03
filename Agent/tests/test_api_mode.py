@@ -123,7 +123,7 @@ finally:
         env = dict(os.environ, LLM_MODE="api", LLM_REMOTE_BASE_URL="",
                    LLM_REMOTE_MODEL_ID="", CONFIG_PYTHON_BIN=sys.executable)
         for backend in ("vllm", "sglang"):
-            result = subprocess.run([str(ROOT / "scripts/start_all.sh"), backend, "--show-config"],
+            result = subprocess.run([str(ROOT / "scripts/internal/run_stack.sh"), backend, "--show-config"],
                                     cwd=ROOT, env=env, text=True, capture_output=True, timeout=10)
             self.assertEqual(result.returncode, 0, result.stderr)
             fields = dict(line.split("=", 1) for line in result.stdout.splitlines())

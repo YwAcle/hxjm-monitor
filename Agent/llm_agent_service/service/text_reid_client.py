@@ -44,12 +44,16 @@ class TextReIDClient:
             # 与 CLIP-ReID 客户端一致，私网直连不走系统 HTTP 代理。
             with httpx.Client(trust_env=False, timeout=httpx.Timeout(self.timeout_s, connect=5)) as client:
                 response = client.request(method, self.base_url + path, **kwargs)
+        except httpx.ConnectError:
+            raise ValueError("Chinese-CLIP 文本检索服务请求失败：无法连接服务，请检查地址、端口及服务是否启动") from None
+        except httpx.TimeoutException:
+            raise ValueError("Chinese-CLIP 文本检索服务请求超时，请检查服务负载或网络") from None
         except httpx.HTTPError:
             raise ValueError("Chinese-CLIP 文本检索服务请求失败，请检查服务地址或服务负载") from None
         if response.status_code == 422 and self._error_code(response) == "TEXT_TOO_LONG":
             raise TextTooLongError("文本描述超过模型可编码长度，请精简后重试")
         if response.status_code >= 400:
-            raise ValueError("Chinese-CLIP 文本检索服务请求失败，请检查服务地址、文本限制或服务负载")
+            raise ValueError(f"Chinese-CLIP 文本检索服务请求失败（HTTP {response.status_code}），请检查服务接口或服务日志")
         try:
             data = response.json()
         except (ValueError, AttributeError):
@@ -62,7 +66,7 @@ class TextReIDClient:
         data = self._request("GET", "/health")
         block = data.get("text_reid")
         if not isinstance(block, dict):
-            raise ValueError("远端未提供 Chinese-CLIP 文本检索配置")
+            raise ValueError("远端未提供 Chinese-CLIP 文本检索配置；仅有 CLIP-ReID 图片服务不能用于文字找人")
         space = block.get("feature_space_id")
         dim = block.get("embedding_dim")
         contract = block.get("text_contract_id")

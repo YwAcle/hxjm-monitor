@@ -19,6 +19,14 @@ load_env_defaults() {
             fi
         done < "${env_file}"
     fi
+    local env_root path_key
+    env_root="$(cd -- "$(dirname -- "${env_file}")" && pwd)"
+    for path_key in VLLM_ENV_ROOT SGLANG_ENV_ROOT VLLM_PYTHON_BIN SGLANG_PYTHON_BIN AGENT_PYTHON_BIN REPORT_PYTHON_BIN; do
+        value="${!path_key:-}"
+        if [[ "${value}" == ./* || "${value}" == ../* ]]; then
+            export "${path_key}=${env_root}/${value}"
+        fi
+    done
     # 共享 Python 配置解析，按 key=value 传递，无 eval、无 shell 展开。
     local resolver_dir resolved
     resolver_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"

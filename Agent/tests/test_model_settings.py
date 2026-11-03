@@ -56,7 +56,7 @@ class ModelSettingsTests(unittest.TestCase):
                        LLM_MODEL_PATH="./weights/preview", LLM_MODEL_ID="preview-alias",
                        LLM_SERVER_PORT="18081", LLM_BASE_URL="http://127.0.0.1:18081/v1",
                        LLM_API_KEY="test-secret-must-not-print")
-            result = subprocess.run([str(ROOT / "scripts/start_all.sh"), backend, "--show-config"],
+            result = subprocess.run([str(ROOT / "scripts/internal/run_stack.sh"), backend, "--show-config"],
                                     cwd=ROOT, env=env, capture_output=True, text=True, check=True)
             fields = dict(line.split("=", 1) for line in result.stdout.splitlines())
             expected = resolve_model_settings(dict(env, LLM_MODE="local", LLM_BACKEND=backend))
@@ -85,7 +85,7 @@ class ModelSettingsTests(unittest.TestCase):
                        LLM_MODEL_PATH=str(model), LLM_MODEL_ID="shared-name", LLM_TP_SIZE="2",
                        LLM_CONTEXT_LENGTH="12345", LLM_GPU_MEMORY_UTILIZATION="0.75",
                        LLM_SERVER_PORT="18082", LLM_API_KEY="test-key")
-            result = subprocess.run([str(ROOT / "scripts/start_sglang.sh")], cwd=ROOT,
+            result = subprocess.run([str(ROOT / "scripts/internal/start_sglang.sh")], cwd=ROOT,
                                     env=env, capture_output=True, text=True, check=True)
             args = result.stdout.splitlines()
             for flag, value in (("--model-path", str(model)), ("--served-model-name", "shared-name"),
@@ -164,7 +164,7 @@ class ModelSettingsTests(unittest.TestCase):
         env = dict(os.environ, LLM_MODE="local", CONFIG_PYTHON_BIN=sys.executable,
                    LLM_API_KEY="local-preview-secret", LLM_REMOTE_API_KEY="remote-preview-secret",
                    LLM_REMOTE_BASE_URL="https://example.invalid/v1", LLM_REMOTE_MODEL_ID="remote-model")
-        result = subprocess.run([str(ROOT / "scripts/start_all.sh"), "api", "--show-config"],
+        result = subprocess.run([str(ROOT / "scripts/internal/run_stack.sh"), "api", "--show-config"],
                                 cwd=ROOT, env=env, capture_output=True, text=True, check=True)
         fields = dict(line.split("=", 1) for line in result.stdout.splitlines())
         self.assertEqual(fields["LLM_MODE"], "api")
@@ -195,7 +195,7 @@ class ModelSettingsTests(unittest.TestCase):
                        LLM_BASE_URL=f"http://127.0.0.1:{server.server_port}/v1",
                        LLM_MODEL_ID="wrong-model", NO_PROXY="127.0.0.1,localhost",
                        no_proxy="127.0.0.1,localhost")
-            command = [sys.executable, "-B", str(ROOT / "scripts/check_model_endpoint.py")]
+            command = [sys.executable, "-B", str(ROOT / "scripts/internal/check_model_endpoint.py")]
             result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True, check=True)
             self.assertIn("跳过", result.stdout)
             self.assertEqual(Handler.requests, [])
@@ -226,8 +226,9 @@ class ModelSettingsTests(unittest.TestCase):
                        VLLM_START_SCRIPT=str(engine), SGLANG_START_SCRIPT=str(engine),
                        REPORT_START_SCRIPT=str(worker), AGENT_START_SCRIPT=str(worker),
                        SERVICE_STACK_RUNTIME_DIR=str(base / "logs"),
+                       AGENT_PORT="0",
                        AGENT_READY_URL="http://127.0.0.1:1/ready")
-            result = subprocess.run([str(ROOT / "scripts/start_all.sh"), "api"], cwd=ROOT,
+            result = subprocess.run([str(ROOT / "scripts/internal/run_stack.sh"), "api"], cwd=ROOT,
                                     env=env, capture_output=True, text=True, timeout=10)
             # 假 Worker 会立即退出；只检查启动流程已越过模型阶段且未启动本地引擎。
             self.assertIn("正在启动报告 Worker", result.stdout)
@@ -251,7 +252,7 @@ class ModelSettingsTests(unittest.TestCase):
             env = dict(os.environ, LLM_BASE_URL=f"http://127.0.0.1:{server.server_port}/v1",
                        LLM_MODEL_ID="wrong-model", NO_PROXY="127.0.0.1,localhost",
                        no_proxy="127.0.0.1,localhost")
-            command = 'source scripts/load_env.sh; load_env_defaults .env; if model_endpoint_ready; then echo READY; else echo WOULD_START; fi'
+            command = 'source scripts/internal/load_env.sh; load_env_defaults .env; if model_endpoint_ready; then echo READY; else echo WOULD_START; fi'
             result = subprocess.run(["bash", "-c", command], cwd=ROOT, env=env,
                                     capture_output=True, text=True, timeout=10)
             self.assertEqual(result.returncode, 2)
