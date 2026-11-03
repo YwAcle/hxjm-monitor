@@ -278,9 +278,7 @@ class Extractor:
                                      + (REID_ROOT / "CLIP-ReID/model/clip/model.py").read_bytes()).hexdigest()
         pipeline = json.dumps({"weights": digest, "model_code": code_digest, "config": cfg.dump(),
                                "preprocess": "rgb_resize_tensor_v1"}, sort_keys=True)
-        self.definition_text = pipeline
-        self.definition_sha256 = hashlib.sha256(pipeline.encode()).hexdigest()
-        self.feature_space_id = "clipreid-rn50-" + self.definition_sha256[:24]
+        self.feature_space_id = "clipreid-rn50-" + hashlib.sha256(pipeline.encode()).hexdigest()[:24]
         self.embedding_dim = 3072
         self.extract_features([Image.new("RGB", (128, 256))])
 
@@ -456,9 +454,6 @@ def create_app(settings=None, extractor_factory=Extractor, detector_factory=Pers
                              "model": "CLIP-ReID-RN50",
                              "feature_space_id": getattr(extractor, "feature_space_id", None),
                              "embedding_dim": getattr(extractor, "embedding_dim", None),
-                             "definition_text": getattr(extractor, "definition_text", None),
-                             "definition_sha256": getattr(extractor, "definition_sha256", None),
-                             "definition_version": "1",
                              "device": getattr(extractor, "device", None),
                              "detector_loaded": getattr(app.state, "detector", None) is not None},
                             status_code=200 if app.state.ready else 503)

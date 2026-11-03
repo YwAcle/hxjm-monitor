@@ -1,7 +1,7 @@
 # 公共 BoT-SORT 部署
 
-主目录 `/data/nfs_storage/hxjm` 运行公共 MediaMTX 和 BoT-SORT。其余开发 worktree
-保留自己的业务服务及端口，通过公共服务播放四路视频、订阅框和 ID。
+主目录 `/home/guest/hxjm` 运行公共 BoT-SORT 和主目录自己的 MediaMTX。其余开发
+worktree 各自运行 MediaMTX、摄像头源和业务服务，只通过公共分析 API 订阅框和 ID。
 这份部署使用现有 YOLOX-X 与 FastReID，不使用 OSNet。
 
 ## 启动和更新
@@ -9,7 +9,7 @@
 主目录先更新到包含本次改动的版本，然后启动：
 
 ```bash
-cd /data/nfs_storage/hxjm
+cd /home/guest/hxjm
 bash scripts/start-local.sh --check
 bash scripts/start-local.sh
 ```
@@ -27,23 +27,28 @@ bash scripts/start-local.sh
 bash scripts/stop-local.sh
 ```
 
-该操作保留公共服务。公共服务不随开发终端退出而结束；服务器重启后需再次运行
-启动命令，没有安装额外的开机启动单元。脚本不进行 Git 拉取、提交、合并或推送。
+公共算法服务由主目录项目拥有：主目录启动项目时启动 BoT-SORT，主目录停止项目时
+只停止 BoT-SORT。其他 worktree 启动自己的 MediaMTX 并直接连接数据库摄像头源；算法
+未启动或健康检查失败时，不启动第二份算法服务，但仍可播放各自的原始视频，只是不显示
+检测框。服务器重启后需先启动主目录项目，其他 worktree 才能订阅算法。脚本不进行 Git
+拉取、提交、合并或推送。
 
 必要的七个启动脚本、公共管理器和前端代理均纳入版本控制；`local-ports.env`、
 `.run/`、模型权重和二进制继续忽略。各目录使用自己的原端口文件。
 `PRIMARY_ROOT` 从 Git 的 common directory 确定，当前 worktree 对应主目录为
-`/data/nfs_storage/hxjm`。本说明针对当前同服务器的 Git worktree 部署；独立克隆或新服务器
+`/home/guest/hxjm`。本说明针对当前同服务器的 Git worktree 部署；独立克隆或新服务器
 仍需准备环境、主目录模型和端口文件，不能仅凭 Git 拉取下载权重。
 
 ## 运行结构和播放行为
 
-1. 公共媒体从数据库读取 machine_id 1–4 的有效摄像头地址，每路统一接入一次。
+1. 主目录公共算法服务从数据库读取 machine_id 1–4 的有效摄像头地址；每个 worktree 的
+   MediaMTX 也从同一数据库读取自己的摄像头源，媒体连接彼此独立。
 2. 公共算法使用一个模型进程，四路分别保留独立 tracker、GMC、帧序号和时钟。
 3. 所有页面播放连续 WebRTC，WebSocket 默认只传检测元数据，不传 JPEG。
 4. 每路解码只保存最新一帧；推理按轮询取新帧，无等待帧队列，不按浏览器重复推理。
-5. 开发目录的本地 MediaMTX 仅为其余原有任务中继公共 RTSP，不再重复连接摄像头或录像。
-6. 录像仅保留主目录一份，沿用其分段/保留策略及主后端回调。
+5. 开发目录的本地 MediaMTX 直接连接摄像头，播放不依赖主目录媒体服务。
+6. 每个 worktree 的媒体服务、摄像头路径和播放代理都使用自己的端口；只有检测 WebSocket
+   连接主目录的 BoT-SORT 分析 API。
 
 默认实时模式下，框是异步结果，最多显示一秒，并受服务端有效期限制。
 AI 暂时中断只清空检测框，不覆盖视频。独立视频和检测链路不能保证逐帧严格对齐。
@@ -89,7 +94,7 @@ WSC 前端 `3002` 保持原值。SSH 网络浏览器入口分别是
 | SHARED_BOTSORT_RECORD | yes | 主目录单份录像，no 显式关闭 |
 | SHARED_BOTSORT_SOURCE_TRANSPORT | 沿用主目录原配置 | 摄像头上游 RTSP 传输方式 |
 | VIDEO_ANALYSIS_SHARED_ORIGIN | http://127.0.0.1:28010 | 启动前端代理的公共分析目标 |
-| SHARED_MEDIA_ORIGIN | 从主目录 WebRTC 端口读取 | 启动前端代理的公共媒体目标 |
+| SHARED_MEDIA_ORIGIN | 当前 worktree WebRTC 端口 | 启动前端代理的当前 worktree 媒体目标 |
 
 公共算法固定一个 worker，OpenCV 计算线程为 8，OpenMP/BLAS/Torch 和每路 FFmpeg
 解码线程为 1。`MALLOC_ARENA_MAX=2`、`MALLOC_TRIM_THRESHOLD_=131072` 限制并及时
@@ -140,7 +145,7 @@ CUDA Graph 的固定工作区增加显存使用，启动器的 glibc 设置降�
 以下命令由公共服务所有者（当前为 guest）运行：
 
 ```bash
-cd /data/nfs_storage/hxjm
+cd /home/guest/hxjm
 python3 deploy/botsort/shared_service.py status
 python3 deploy/botsort/shared_service.py check
 curl -fsS http://127.0.0.1:28010/health
@@ -151,11 +156,11 @@ curl -fsS http://127.0.0.1:28010/health
 公共日志在 `.run/shared-botsort/{supervisor,media,analysis,bootstrap}.log`；单份日志
 默认上限 8 MiB，保留三份轮转文件。含源地址的运行 YAML 权限为 0600。
 
-正常个人启动不会重启已运行的公共服务。主目录算法代码/依赖更新，或数据库摄像头
-地址变更后，由所有者统一重启公共服务应用更新：
+主目录正常启动时会恢复主目录自己的媒体服务和 BoT-SORT，不重复加载模型。主目录算法代码/依赖更新，
+或数据库摄像头地址变更后，可由所有者统一重启公共服务应用更新：
 
 ```bash
-cd /data/nfs_storage/hxjm
+cd /home/guest/hxjm
 python3 deploy/botsort/shared_service.py stop
 python3 deploy/botsort/shared_service.py start
 ```
@@ -193,7 +198,8 @@ PYTHONPATH=python /home/guest/anaconda3/envs/botsort39/bin/python -B \
 
 实流验收应同时打开至少两个项目的四路页面，测量实际 video frame callbacks
 和最长停顿，确认浏览器增加后模型进程仍为一个。浏览器仅阻断 AI WebSocket 时
-视频应继续播放；关闭任一开发项目后公共媒体/模型 PID 应保持不变。
+视频应继续播放；关闭非主目录 worktree 不影响主目录算法及其他目录的媒体服务。停止主目录项目后，
+公共 BoT-SORT 应停止，其他 worktree 的原始视频仍应继续播放，且不再显示 AI 检测框。
 短时间实测不替代长期负载测试；摄像头上游丢包和外部 GPU/CPU 任务仍可影响质量。
 
 ## 历史记录：2026-10-25 首轮上线实测
@@ -207,8 +213,9 @@ PYTHONPATH=python /home/guest/anaconda3/envs/botsort39/bin/python -B \
 3 次短冻结、合计 609 ms；实际呈现 15.4–17.0 FPS，最长呈现间隔约 267 ms。测试浏览器在服务器上运行，最终客户端呈现速度仍应
 以开发者自己的浏览器为准。
 
-仅阻断测试浏览器 AI WebSocket、切换同帧验收、关闭主目录业务项目后，
-3002 原始视频均继续播放；主目录业务随后已恢复。公共媒体/API/模型 PID 保持不变，
+旧版本测试中，仅阻断测试浏览器 AI WebSocket、切换同帧验收、关闭主目录业务项目后，
+3002 原始视频均继续播放；主目录业务随后已恢复。当时采用公共媒体/API/模型进程维持运行的旧生命周期，
+不代表当前“主目录停止时关闭 BoT-SORT、各 worktree 媒体独立”的停止行为。
 模型初始化 1 次、重启 0 次，四路推理失败均为 0。同帧模式图像和检测 frame_id 一致。
 
 60 秒公共服务资源采样：模型显存 1124 MiB，全部公共进程 RSS 峰值约 3.8 GiB，

@@ -10,24 +10,25 @@ while (($#)); do
         *) echo "Usage: $0 [--worktree DIRECTORY] [--check]" >&2; exit 2 ;;
     esac
 done
-PRIMARY_ROOT="${HXJM_PRIMARY_ROOT:-$ROOT_DIR}"
-if [[ -z "${HXJM_PRIMARY_ROOT:-}" && -f "$ROOT_DIR/.git" ]]; then
-    IFS= read -r git_pointer < "$ROOT_DIR/.git"
-    if [[ "$git_pointer" == 'gitdir: '* ]]; then
-        git_directory="${git_pointer#gitdir: }"
-        [[ "$git_directory" == /* ]] || git_directory="$ROOT_DIR/$git_directory"
-        if [[ -f "$git_directory/commondir" ]]; then
-            IFS= read -r common_directory < "$git_directory/commondir"
-            [[ "$common_directory" == /* ]] || common_directory="$git_directory/$common_directory"
-            PRIMARY_ROOT="$(cd -- "$common_directory/.." && pwd -P)"
-        fi
-    fi
-fi
-PRIMARY_ROOT="$(cd -- "$PRIMARY_ROOT" && pwd -P)"
+COMMON_GIT_DIR="$(git -C "$ROOT_DIR" rev-parse --path-format=absolute --git-common-dir)"
+PRIMARY_ROOT="$(dirname "$COMMON_GIT_DIR")"
+# A copied Git repository is not automatically an algorithm owner.
+if [[ -f "$ROOT_DIR/local-video.env" ]]; then source "$ROOT_DIR/local-video.env"; fi
+ANALYSIS_ROOT="${HXJM_ANALYSIS_ROOT:-$PRIMARY_ROOT}"
+[[ "$ANALYSIS_ROOT" == /* ]] || { echo 'HXJM_ANALYSIS_ROOT must be an absolute path.' >&2; exit 1; }
+ANALYSIS_ROOT="$(realpath -m -- "$ANALYSIS_ROOT")"
 RUN_DIR="$ROOT_DIR/.run/local-runtime"
 LOG_DIR="$ROOT_DIR/log/local"
 PORT_CONFIG="$ROOT_DIR/local-ports.env"
 SERVICE_TOOL="$SCRIPT_DIR/local-runtime.py"
+is_primary_worktree() { [[ "$ROOT_DIR" == "$PRIMARY_ROOT" ]]; }
+is_analysis_owner() { [[ "$ROOT_DIR" == "$ANALYSIS_ROOT" ]]; }
+stop_shared_service() {
+    # Stop only this directory's supervisor, including copies left by older launchers.
+    if [[ -d "$ROOT_DIR/.run/shared-botsort" ]]; then
+        python3 "$ROOT_DIR/deploy/botsort/shared_service.py" stop --root "$ROOT_DIR"
+    fi
+}
 PORT_KEYS=(FRONTEND_PORT BACKEND_PORT MTX_RTMP_PORT MTX_RTSP_PORT MTX_RTP_PORT
     MTX_RTCP_PORT MTX_HLS_PORT MTX_WEBRTC_PORT MTX_WEBRTC_ICE_PORT MTX_SRT_PORT
     MTX_PLAYBACK_PORT MTX_API_PORT AI_STREAM_PORT REDIS_DATABASE)
@@ -60,41 +61,84 @@ load_port_config() {
 }
 load_video_config() {
     export VIDEO_ANALYSIS_MODE="${VIDEO_ANALYSIS_MODE:-shared}"
+    if ! is_analysis_owner && [[ "$VIDEO_ANALYSIS_MODE" != shared ]]; then
+        echo 'This project only subscribes to shared analysis; local model startup is disabled.' >&2
+        return 1
+    fi
+    export LOCAL_MEDIA_ORIGIN="http://127.0.0.1:$MTX_WEBRTC_PORT"
     case "$VIDEO_ANALYSIS_MODE" in
         local)
             if [[ -f "$ROOT_DIR/.run/video-analysis.env" ]]; then
                 source "$ROOT_DIR/.run/video-analysis.env"
             fi
-            # Bootstrap-generated source/session mappings are deployment state,
-            # kept separate from hand-maintained video settings and safe to
-            # regenerate after the backend assigns stable UUIDs.
-            if [[ -f "$ROOT_DIR/.run/yh-business-runtime.env" ]]; then
-                source "$ROOT_DIR/.run/yh-business-runtime.env"
-            fi
-            # The business configuration names a token environment variable.
-            # Load the deployment-local secret alongside the generated runtime
-            # mapping so result/recording delivery can actually authenticate.
-            if [[ -f "$ROOT_DIR/.run/yh-business-secrets.env" ]]; then
-                source "$ROOT_DIR/.run/yh-business-secrets.env"
-                export HXJM_YH_BUSINESS_TOKEN
-            fi
             export LOCAL_MEDIA_ENABLED=true
             ;;
         shared)
-            local shared_ports rtsp_port media_port api_port
-            shared_ports="$(PORT_CONFIG="$PRIMARY_ROOT/local-ports.env"; load_port_config; printf '%s %s %s' "$MTX_RTSP_PORT" "$MTX_WEBRTC_PORT" "$MTX_API_PORT")" || return 1
-            read -r rtsp_port media_port api_port <<< "$shared_ports"
             export VIDEO_ANALYSIS_SHARED_ORIGIN="${VIDEO_ANALYSIS_SHARED_ORIGIN:-http://127.0.0.1:28010}"
-            export SHARED_MEDIA_ORIGIN="${SHARED_MEDIA_ORIGIN:-http://127.0.0.1:$media_port}"
-            export SHARED_MEDIA_RTSP_BASE="rtsp://127.0.0.1:$rtsp_port/live"
-            export SHARED_MEDIA_API_ORIGIN="http://127.0.0.1:$api_port"
+            export SHARED_MEDIA_ORIGIN="$LOCAL_MEDIA_ORIGIN"
+            export SHARED_MEDIA_RTSP_BASE="rtsp://127.0.0.1:$MTX_RTSP_PORT/live"
+            export SHARED_MEDIA_API_ORIGIN="http://127.0.0.1:$MTX_API_PORT"
             export LOCAL_MEDIA_ENABLED=true
-            [[ "$ROOT_DIR" != "$PRIMARY_ROOT" ]] || export LOCAL_MEDIA_ENABLED=false
+            if is_analysis_owner; then export LOCAL_MEDIA_ENABLED=false; fi
             ;;
         *) echo 'VIDEO_ANALYSIS_MODE must be shared or local.' >&2; return 1 ;;
     esac
 }
 runtime() { python3 "$SERVICE_TOOL" --state "$RUN_DIR" --root "$ROOT_DIR" "$@"; }
+ensure_service_group() {
+    local group relaunch
+    group="$(runtime service-group)" || return 1
+    [[ -n "$group" ]] || return 0
+    if command -v sg >/dev/null 2>&1 && [[ " $(id -nG "$(id -un)") " == *" $group "* ]]; then
+        relaunch="$(python3 -c 'import shlex,sys; print(" ".join(map(shlex.quote, sys.argv[1:])))' bash "$@")" || return 1
+        printf '[local-runtime] using existing %s group to manage this project.\n' "$group"
+        exec sg "$group" -c "exec $relaunch"
+    fi
+    printf '[local-runtime] error: Cannot inspect this project; run with its service group: %s\n' "$group" >&2
+    return 1
+}
+verify_local_ports_stopped() {
+    [[ -f "$PORT_CONFIG" ]] || return 0
+    local key value port listeners filter=''
+    while IFS='=' read -r key value; do
+        case "$key" in
+            FRONTEND_PORT|BACKEND_PORT|AI_STREAM_PORT|MTX_RTMP_PORT|MTX_RTSP_PORT|MTX_HLS_PORT|MTX_WEBRTC_PORT|MTX_PLAYBACK_PORT|MTX_API_PORT)
+                [[ "$value" =~ ^([1-9][0-9]{0,4})[[:space:]]*(#.*)?$ ]] || { echo "Invalid port: $key" >&2; return 1; }
+                port=${BASH_REMATCH[1]}
+                [[ "$port" -le 65535 ]] || return 1
+                filter+="${filter:+ or }sport = :$port"
+                ;;
+        esac
+    done < "$PORT_CONFIG"
+    if is_analysis_owner; then
+        [[ "${SHARED_BOTSORT_ANALYSIS_PORT:-28010}" =~ ^[1-9][0-9]{0,4}$ ]] || return 1
+        filter+="${filter:+ or }sport = :${SHARED_BOTSORT_ANALYSIS_PORT:-28010}"
+    fi
+    [[ -n "$filter" ]] || return 0
+    listeners="$(ss -H -ltn "( $filter )")" || return 1
+    if [[ -n "$listeners" ]]; then
+        printf '[stop-local] error: Application ports are still listening; stop is incomplete:\n%s\n' "$listeners" >&2
+        return 1
+    fi
+}
+ensure_docker_access() {
+    command -v docker >/dev/null 2>&1 || { echo '[start-local] error: Docker is required.' >&2; return 1; }
+    local error relaunch
+    if error="$(docker info --format '{{.ServerVersion}}' 2>&1)"; then return 0; fi
+
+    # Account membership can be newer than the groups inherited by an old terminal.
+    if [[ "$error" == *'permission denied'* &&
+          ( "$error" == *'unix:///var/run/docker.sock'* || "$error" == *'unix:///run/docker.sock'* ) ]] &&
+       command -v sg >/dev/null 2>&1 &&
+       [[ " $(id -nG "$(id -un)") " == *' docker '* && " $(id -nG) " != *' docker '* ]]; then
+        relaunch="$(python3 -c 'import shlex,sys; print(" ".join(map(shlex.quote, sys.argv[1:])))' bash "$@")" || return 1
+        echo '[start-local] activating existing docker group membership for this startup.'
+        exec sg docker -c "exec $relaunch"
+    fi
+
+    printf '[start-local] error: Cannot access Docker; check daemon status and user/group permissions.\n%s\n' "$error" >&2
+    return 1
+}
 lock_runtime() {
     mkdir -p "$RUN_DIR" "$LOG_DIR"
     exec 9>"$RUN_DIR/operation.lock"

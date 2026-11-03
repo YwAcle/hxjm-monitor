@@ -4,11 +4,11 @@
 }
 
 .headerSection {
-  width: 100%;
+  width: 320px;
   height: 48px;
   background-position: 0px 6px;
   background-repeat: no-repeat;
-  background-size: 100% 42px;
+  background-size: 321px 42px;
 }
 
 .decorLine {

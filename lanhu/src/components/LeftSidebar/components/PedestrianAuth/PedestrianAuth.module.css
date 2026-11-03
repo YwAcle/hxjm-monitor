@@ -8,7 +8,7 @@
 
 .titleBar {
   position: relative;
-  width: 100%;
+  width: 653px;
   height: 42px;
   background-size: 100% 100%;
   background-repeat: no-repeat;
@@ -47,7 +47,7 @@
   left: 0;
   top: 18px;
   z-index: 1;
-  width: 100%;
+  width: 653px;
   height: 64px;
   background-size: cover;
   background-repeat: no-repeat;
@@ -84,11 +84,10 @@
   text-align: left;
   white-space: nowrap;
   line-height: 26px;
-  margin: 43px 0 0 auto;
+  margin: 43px 0 0 473px;
 }
 
 .flowValueWrapper {
-  flex-shrink: 0;
   width: 49px;
   height: 32px;
   overflow-wrap: break-word;
@@ -128,11 +127,10 @@
 
 .contentContainer {
   background-color: rgba(62, 135, 206, 0.08);
-  flex: 1 0 486px;
-  min-height: 486px;
+  height: 486px;
   border: 1px solid;
   margin-top: -2px;
-  width: 100%;
+  width: 653px;
   position: relative;
 }
 
@@ -143,15 +141,14 @@
 }
 
 .chartWrapper {
-  width: calc(100% - 56px);
+  width: 598px;
   margin: 20px 0 0 28px;
   position: relative;
 }
 
 .chart {
   display: block;
-  width: 100%;
-  height: auto;
+  width: 598px;
   cursor: crosshair;
 }
 
@@ -372,10 +369,9 @@
 
 /* 人员列表滚动容器 */
 .personListWrapper {
-  width: calc(100% - 60px);
-  flex: 1;
-  min-height: 120px;
-  margin: 15px 30px 0;
+  width: 600px;
+  height: 200px;
+  margin: 15px 0 0 30px;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -468,7 +464,7 @@
 .dotDecor {
   width: 6px;
   height: 6px;
-  margin: 12px 0 0 auto;
+  margin: 12px 0 0 647px;
 }
 
 .dot {

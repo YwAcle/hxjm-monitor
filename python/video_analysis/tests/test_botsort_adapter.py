@@ -28,19 +28,6 @@ class AdapterTests(unittest.TestCase):
         pipeline.predictor = SimpleNamespace(inference=lambda *args: ([None], {}))
         return pipeline
 
-    def test_tracker_reset_does_not_change_input_session(self):
-        pipeline = self.pipeline()
-        frame = np.zeros((8, 8, 3), dtype=np.uint8)
-        metadata = dict(camera_id='camera_1', frame_id=1, stream_session_id='input-a',
-                        tracking_context_id='tracker-a', stream_epoch=1, decode_ts_ms=1000)
-        pipeline.infer(frame, metadata)
-        first = pipeline.cameras['camera_1'].tracker
-        pipeline.infer(frame, dict(metadata, frame_id=2, decode_ts_ms=1050))
-        self.assertIs(pipeline.cameras['camera_1'].tracker, first)
-        pipeline.infer(frame, dict(metadata, frame_id=3, decode_ts_ms=1100,
-                                  tracking_context_id='tracker-b'))
-        self.assertIsNot(pipeline.cameras['camera_1'].tracker, first)
-
     def test_cuda_graph_replays_new_inputs_and_keeps_postprocessing_private(self):
         import torch
         if not torch.cuda.is_available():

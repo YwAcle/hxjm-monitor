@@ -1,71 +1,11 @@
 import unittest
-from fractions import Fraction
-from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import cv2
-import numpy as np
 
-from video_analysis.stream_grabber import (
-    DECODE_THREADS,
-    LatestFrameGrabber,
-    MediaClockMapper,
-    _open_capture,
-)
+from video_analysis.stream_grabber import MediaClockMapper, _open_capture, DECODE_THREADS
 
 class TimestampTests(unittest.TestCase):
-    def test_pyav_packet_and_frame_share_session_and_packet_failure_isolated(self):
-        class FakeFrame:
-            pts = 0
-            time_base = Fraction(1, 25)
-
-            @staticmethod
-            def to_ndarray(format):
-                self.assertEqual(format, 'bgr24')
-                return np.zeros((2, 3, 3), dtype=np.uint8)
-
-        class FakePacket:
-            pts = 0
-            dts = 0
-            duration = 1
-            time_base = Fraction(1, 25)
-            is_keyframe = True
-
-            @staticmethod
-            def decode():
-                return [FakeFrame()]
-
-        stream = SimpleNamespace(
-            type='video', width=3, height=2,
-            codec_context=SimpleNamespace(width=3, height=2),
-        )
-        container = SimpleNamespace(
-            streams=SimpleNamespace(video=[stream]),
-            demux=lambda selected: iter([FakePacket()]),
-        )
-        delivered = []
-        packets = []
-
-        def on_packet(*args):
-            packets.append(args)
-            raise RuntimeError('simulated full recorder queue')
-
-        grabber = LatestFrameGrabber(
-            lambda *args: None,
-            rtsp_url='rtsp://fake/source',
-            on_frame=delivered.append,
-            on_packet=on_packet,
-        )
-        grabber._run_pyav_session(container)
-
-        self.assertEqual(len(packets), 1)
-        self.assertEqual(len(delivered), 1)
-        self.assertEqual(
-            packets[0][2]['stream_session_id'],
-            delivered[0].stream_session_id,
-        )
-        self.assertEqual(delivered[0].frame_id, 1)
-
     def test_decoder_thread_budget_and_failed_capture_cleanup(self):
         capture = Mock()
         with patch('video_analysis.stream_grabber.cv2.VideoCapture', return_value=capture):

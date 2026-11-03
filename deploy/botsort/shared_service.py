@@ -174,24 +174,33 @@ def read_sources():
 
 def render_media(settings, sources):
     import yaml
+    source_template = settings.root / 'mtx/mediamtx/mediamtx.yml'
     template = settings.root / '.run/local-runtime/mediamtx.yml'
-    if not template.is_file():
-        template = settings.root / 'mtx/mediamtx/mediamtx.yml'
     try:
-        media = yaml.safe_load(template.read_text())
+        source_media = yaml.safe_load(source_template.read_text())
+        media = yaml.safe_load(template.read_text()) if template.is_file() else source_media
     except yaml.YAMLError:
         raise ValueError('Invalid media YAML; source credentials were not printed') from None
-    if not isinstance(media, dict):
+    if not isinstance(media, dict) or not isinstance(source_media, dict):
         raise ValueError('Media configuration must be a YAML object')
+    source_defaults = source_media.get('pathDefaults')
+    record_path = source_defaults.get('recordPath') if isinstance(source_defaults, dict) else None
+    if not isinstance(record_path, str) or not Path(record_path).is_absolute():
+        raise ValueError('Source media recordPath must be an absolute path')
     media.update({name: ':' + str(settings.ports[key]) for name, (key, _) in LISTENERS.items()})
     media.update(api=True, apiAddress='127.0.0.1:' + str(settings.ports['MTX_API_PORT']),
                  logDestinations=['stdout'], rtspTransports=['udp', 'tcp'])
     defaults = media.setdefault('pathDefaults', {})
     defaults['record'] = settings.record and defaults.get('record', True)
-    defaults['recordPath'] = str(settings.root / '.run/recordings/%path/%Y-%m-%d_%H-%M-%S-%f')
+    # A previously generated runtime file must not restore an obsolete storage root.
+    defaults['recordPath'] = record_path
     # Keep the existing retention/segment policy and send the single recording hook to main.
     for config in [defaults, *(media.get('paths') or {}).values()]:
-        if isinstance(config, dict) and isinstance(config.get('runOnRecordSegmentComplete'), str):
+        if not isinstance(config, dict):
+            continue
+        if 'recordPath' in config:
+            config['recordPath'] = record_path
+        if isinstance(config.get('runOnRecordSegmentComplete'), str):
             config['runOnRecordSegmentComplete'] = re.sub(
                 r'http://[^\s"\x27]+(?=/media-assets)',
                 'http://127.0.0.1:' + str(settings.ports['BACKEND_PORT']), config['runOnRecordSegmentComplete'])
@@ -225,7 +234,7 @@ def analysis_environment(settings, token):
                VIDEO_ANALYSIS_GPU=str(settings.gpu), VIDEO_ANALYSIS_CAMERAS=json.dumps(cameras),
                VIDEO_ANALYSIS_RTSP_TRANSPORT='tcp', VIDEO_ANALYSIS_DECODE_THREADS='1',
                VIDEO_ANALYSIS_OPENCV_THREADS='8', VIDEO_ANALYSIS_MEMORY_RESERVE_GIB='4',
-               VIDEO_ANALYSIS_MODEL_HEADROOM_GIB='1',
+               VIDEO_ANALYSIS_MODEL_HEADROOM_GIB='3',
                VIDEO_ANALYSIS_CUDA_GRAPH=os.getenv('SHARED_BOTSORT_CUDA_GRAPH', '1'))
     env.update(MALLOC_ARENA_MAX='2', MALLOC_TRIM_THRESHOLD_='131072')
     for name in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'NUMEXPR_NUM_THREADS',
@@ -270,6 +279,18 @@ def listening(port):
             return True
     except OSError:
         return False
+
+
+def analysis_disabled(settings):
+    return (settings.state / 'analysis.disabled').exists()
+
+
+def set_analysis_disabled(settings, disabled):
+    marker = settings.state / 'analysis.disabled'
+    if disabled:
+        marker.touch(mode=0o600, exist_ok=True)
+    else:
+        marker.unlink(missing_ok=True)
 
 
 def run(settings):
@@ -329,6 +350,8 @@ def run(settings):
                     if proc is not None and now - child['started'] > 60:
                         child['delay'] = 2.
                     if proc is None and now >= child['next']:
+                        if role == 'analysis' and analysis_disabled(settings):
+                            continue
                         if role == 'analysis' and children['media']['process'] is None:
                             continue
                         try:
@@ -351,8 +374,12 @@ def run(settings):
                         key.data.write(chunk)
                 if now - last_write >= 1:
                     record['children'] = {role: process(child['process'].pid) if child['process'] else None for role, child in children.items()}
-                    ports = (settings.ports['MTX_RTSP_PORT'], settings.ports['MTX_API_PORT'], settings.analysis_port)
-                    record['phase'] = 'running' if all(record['children'].values()) and all(listening(port) for port in ports) else 'starting'
+                    media_ports = (settings.ports['MTX_RTSP_PORT'], settings.ports['MTX_API_PORT'])
+                    analysis_ports = (settings.analysis_port,)
+                    media_ready = bool(record['children'].get('media')) and all(listening(port) for port in media_ports)
+                    analysis_ready = bool(record['children'].get('analysis')) and all(listening(port) for port in analysis_ports)
+                    record['phase'] = ('running' if media_ready and analysis_ready else
+                                       'media-only' if media_ready and analysis_disabled(settings) else 'starting')
                     private_write(settings.state / 'service.json', json.dumps(record, indent=2) + '\n')
                     last_write = now
         finally:
@@ -384,6 +411,8 @@ def start(settings):
     # Serialize bootstrap callers too: one app starting must not make another fail.
     with open(settings.state / 'start.lock', 'a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        # Starting the primary project resumes analysis after a primary stop.
+        set_analysis_disabled(settings, False)
         record_path = settings.state / 'service.json'
         record = read_json(record_path)
         current = summary(settings, record)
@@ -410,8 +439,8 @@ def start(settings):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('start', 'stop', 'status', 'check', 'run'))
-    parser.add_argument('--root', default='/data/nfs_storage/hxjm')
+    parser.add_argument('command', choices=('start', 'stop', 'stop-analysis', 'status', 'check', 'run'))
+    parser.add_argument('--root', default='/home/guest/hxjm')
     args = parser.parse_args(argv)
     settings = Settings(args.root)
     record_path = settings.state / 'service.json'
@@ -430,7 +459,14 @@ def main(argv=None):
                 os.kill(record['pid'], signal.SIGKILL)
         if record.get('root') == str(settings.root):
             stop_children(record.get('token'))
-        print('Shared BoT-SORT services stopped; developer applications were not stopped.')
+        set_analysis_disabled(settings, False)
+        print(f'Shared BoT-SORT analysis and media stopped ({settings.root}).')
+        return 0
+    if args.command == 'stop-analysis':
+        if current['running'] and same_process(record, 'manager'):
+            set_analysis_disabled(settings, True)
+            stop_children(record.get('token'), 'analysis')
+        print('Shared BoT-SORT analysis stopped; shared media remains running.')
         return 0
     settings.validate()
     if args.command == 'check':

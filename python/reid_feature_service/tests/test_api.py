@@ -1,7 +1,6 @@
 """API tests use synthetic images and an injected extractor; no model or DB needed."""
 
 import asyncio
-import hashlib
 import json
 import threading
 import unittest
@@ -26,8 +25,6 @@ def picture(color="red", size=(16, 32), format="PNG"):
 class FakeExtractor:
     embedding_dim = 3
     feature_space_id = "test-space"
-    definition_text = '{"weights":"synthetic","preprocess":"test"}'
-    definition_sha256 = hashlib.sha256(definition_text.encode()).hexdigest()
     device = "cpu"
     loads = 0
 
@@ -54,11 +51,7 @@ class ApiTests(unittest.TestCase):
             data={"metadata": metadata})
 
     def test_health_and_repeated_requests_share_one_model(self):
-        health = self.client.get("/health").json()
-        self.assertTrue(health["ready"])
-        self.assertEqual(health["definition_text"], FakeExtractor.definition_text)
-        self.assertEqual(health["definition_sha256"], hashlib.sha256(health["definition_text"].encode()).hexdigest())
-        self.assertEqual(health["definition_version"], "1")
+        self.assertTrue(self.client.get("/health").json()["ready"])
         first, second = self.image().json(), self.image().json()
         np.testing.assert_array_equal(first["embedding"], second["embedding"])
         self.assertAlmostEqual(np.linalg.norm(first["embedding"]), 1, places=6)

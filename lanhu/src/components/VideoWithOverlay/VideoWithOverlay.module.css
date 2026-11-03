@@ -19,6 +19,26 @@
   z-index: 12;
 }
 
+.toolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  max-width: calc(100% - 16px);
+  color: #e0f3ff;
+  background: rgba(0, 0, 0, 0.72);
+  border-radius: 4px;
+  font: 12px/1.5 system-ui, sans-serif;
+  z-index: 15;
+}
+
+.toolbar span {
+  white-space: nowrap;
+}
+
 .playback {
   position: absolute;
   inset: 0;

@@ -206,9 +206,3 @@
   box-shadow: 0 0 10px rgba(65, 177, 255, 0.3);
 }
 
-.assetPlayback { width: 100%; }
-.historyToolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-bottom: 10px; color: #bdd9eb; font: 14px/1.5 system-ui, sans-serif; }
-.historyToolbar label { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
-.historyToolbar span { overflow-wrap: anywhere; }
-.historyCanvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-

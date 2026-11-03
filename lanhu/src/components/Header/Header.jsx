@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import styles from './Header.module.css';
-import BusinessPanel from '../BusinessPanel/BusinessPanel';
 
 // 导入图片资源
 import headerBg from '../../view/lanhu_shipinjiankonguisheji1230/assets/img/SketchPng927056555a45da5d4a56e0fc6257f591053eac029bf9acede2db9b0f571a5acd.png';
@@ -47,7 +46,6 @@ function Header() {
       
       {/* 主标题区域 - 绝对定位在顶部 */}
       <div className={`${styles.headerContainer} flex-col`}>
-        <BusinessPanel />
         <div className={`${styles.headerBlock} flex-col`}>
           <div className={`${styles.headerRow} flex-row`}>
             <div 

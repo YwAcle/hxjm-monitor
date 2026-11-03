@@ -1,7 +1,6 @@
 /* 顶部装饰图片 */
 .imageWrapper {
-  flex-shrink: 0;
-  width: 100%;
+  width: 2752px;
   height: 71px;
   margin-top: 4px;
 }
@@ -19,7 +18,7 @@
 /* 主标题容器 */
 .headerContainer {
   height: 104px;
-  width: 100%;
+  width: 2752px;
   position: absolute;
   left: 0;
   top: -9px;
@@ -30,11 +29,11 @@
   background: url('../../view/lanhu_shipinjiankonguisheji1230/assets/img/SketchPngc3031fc1123d1b010190460a04384359b42254dee5d8be030a4bb0ae38107df0.png') 100% no-repeat;
   background-size: 100% 100%;
   margin-top: 9px;
-  width: 100%;
+  width: 2752px;
 }
 
 .headerRow {
-  width: 100%;
+  width: 2752px;
   height: 93px;
   background: url('../../view/lanhu_shipinjiankonguisheji1230/assets/img/SketchPngd6d401097b4d283db02035920dd34e7202c84767722521b18b58f2c6419042d6.png') 0px -1px no-repeat;
   background-size: 2752px 95px;

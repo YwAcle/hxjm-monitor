@@ -1,6 +1,5 @@
 import { HISTORY_MAX } from './videoAlignment.js';
 import { isNewerFrame, resultLifetime } from './detectionProtocol.js';
-import { REALTIME_MAX_RESULT_AGE_MS } from '../config/syncPlayback.js';
 
 export const detectionKey = (cameraId, task = 'deepsort') => `${cameraId}:${task}`;
 
@@ -33,7 +32,6 @@ export class DetectionChannel {
     this.historyRef.current = [];
     this.revision += 1;
     this.result = null;
-    this.analysisDelayed = false;
     this.aiStatus = status;
   }
 
@@ -69,13 +67,11 @@ export class DetectionChannel {
       const failed = ['worker_timeout', 'inference_error', 'model_error'].includes(analyzer)
         || ['worker_timeout', 'inference_error', 'model_error'].includes(message.state);
       this.available = !noSource && !failed && !['loading_model', 'no_new_frame'].includes(analyzer);
-      this.analysisDelayed = this.analysisDelayed && !noSource && ['ready', 'detecting'].includes(analyzer);
       if (noSource || failed || analyzer === 'loading_model' || analyzer === 'no_new_frame') {
         this.clear(noSource ? (capture === 'reconnecting' ? '取帧重连' : '等待视频源')
           : failed ? (analyzer === 'model_error' ? '模型加载异常' : '推理异常')
             : analyzer === 'loading_model' ? '模型加载中' : '暂无新结果');
-      } else this.aiStatus = this.analysisDelayed ? '分析延迟'
-        : this.result ? '检测正常' : this.everDetected ? '暂无新结果' : '等待检测';
+      } else this.aiStatus = this.result ? '检测正常' : this.everDetected ? '暂无新结果' : '等待检测';
       return true;
     }
     if (!this.available || !isNewerFrame(message, this.previous)) return false;
@@ -94,36 +90,24 @@ export class DetectionChannel {
         .sort((a, b) => a.frameAt - b.frameAt).slice(-HISTORY_MAX);
       this.result = message;
       this.everDetected = true;
-      this.analysisDelayed = ['ready', 'detecting'].includes(this.analyzerState)
-        && now - frameAt >= REALTIME_MAX_RESULT_AGE_MS;
-      this.aiStatus = this.analysisDelayed ? '分析延迟' : '检测正常';
+      this.aiStatus = '检测正常';
     } else return false;
     return true;
   }
 
   expire(now) {
-    let changed = false;
-    const packet = this.latestRef.current;
-    if (packet && !this.analysisDelayed && this.available
-        && ['ready', 'detecting'].includes(this.analyzerState)
-        && now >= Math.min(packet.expiresAt, packet.frameAt + REALTIME_MAX_RESULT_AGE_MS)) {
-      this.analysisDelayed = true;
-      this.aiStatus = '分析延迟';
-      changed = true;
-    }
     this.historyRef.current = this.historyRef.current.filter(p => now < p.expiresAt);
     if (this.latestRef.current && now >= this.latestRef.current.expiresAt) {
       this.latestRef.current = null;
       this.result = null;
-      this.aiStatus = this.analysisDelayed ? '分析延迟' : '暂无新结果';
+      this.aiStatus = '暂无新结果';
       return true;
     }
-    return changed;
+    return false;
   }
 
   snapshot() {
     return { latestRef: this.latestRef, historyRef: this.historyRef, result: this.result, aiStatus: this.aiStatus,
-      analysisDelayed: this.analysisDelayed,
       captureState: this.captureState, analyzerState: this.analyzerState, revision: this.revision,
       identity: `${this.service}:${this.session}:${this.epoch}` };
   }

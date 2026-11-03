@@ -10,7 +10,8 @@ from unittest.mock import patch
 
 import numpy as np
 
-from video_analysis.worker import ModelWorker, RecoverableInferenceError, model_process
+from video_analysis.worker import (ModelWorker, RecoverableInferenceError, model_process,
+                                   check_memory, MEMORY_RESERVE_BYTES, MODEL_HEADROOM_BYTES)
 
 
 def test_model(connection):
@@ -59,6 +60,14 @@ def recoverable_model(connection):
 
 
 class WorkerTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        # Synthetic workers must not depend on unrelated jobs using the host's RAM.
+        available = MEMORY_RESERVE_BYTES + MODEL_HEADROOM_BYTES + 1024 ** 3
+        memory = patch('video_analysis.worker.Path.read_text',
+                       return_value=f'MemAvailable: {available // 1024} kB\n')
+        memory.start()
+        self.addCleanup(memory.stop)
+
     async def test_tracking_error_keeps_same_model_process_and_next_job_succeeds(self):
         worker = ModelWorker(0, target=recoverable_model, model_timeout=10)
         try:
@@ -74,16 +83,31 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
         finally:
             await worker.stop()
 
-    async def test_model_runs_without_reading_host_memory_thresholds(self):
+    async def test_low_memory_blocks_loading_and_retires_loaded_model(self):
         worker = ModelWorker(0, target=test_model, model_timeout=10)
         try:
-            with patch('pathlib.Path.read_text', side_effect=AssertionError('No host memory preflight')):
-                await worker.start()
-                self.assertEqual(await worker.infer(np.zeros((4, 4, 3), dtype=np.uint8)), ([], 1))
-            self.assertTrue(worker.ready)
-            self.assertEqual(worker.restarts, 0)
+            with patch('video_analysis.worker.Path.read_text', return_value='MemAvailable: 1 kB\n'):
+                with self.assertRaises(MemoryError):
+                    await worker.start()
+            self.assertIsNone(worker.process)
+            self.assertEqual(worker.generation, 0)
+            await worker.start()
+            with patch('video_analysis.worker.Path.read_text', return_value='MemAvailable: 1 kB\n'):
+                with self.assertRaises(MemoryError):
+                    await worker.infer(np.zeros((4, 4, 3), dtype=np.uint8))
+            self.assertIsNone(worker.process)
         finally:
             await worker.stop()
+
+    def test_loading_requires_headroom_in_addition_to_reserve(self):
+        available = MEMORY_RESERVE_BYTES + MODEL_HEADROOM_BYTES // 2
+        with patch('video_analysis.worker.Path.read_text', return_value=f'MemAvailable: {available // 1024} kB\n'):
+            check_memory()
+            with self.assertRaises(MemoryError):
+                check_memory(loading=True)
+        with patch('video_analysis.worker.Path.read_text', return_value='MemTotal: 1 kB\n'):
+            with self.assertRaises(RuntimeError):
+                check_memory(loading=True)
 
     async def test_partial_ipc_response_cannot_block_supervisor(self):
         worker = ModelWorker(0, target=partial_response, model_timeout=10, inference_timeout=0.15)

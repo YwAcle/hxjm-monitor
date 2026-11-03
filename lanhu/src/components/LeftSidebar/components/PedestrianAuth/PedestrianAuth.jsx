@@ -364,7 +364,6 @@ function PedestrianAuth() {
             ref={svgRef}
             width={chartWidth} 
             height={chartHeight} 
-            viewBox={`0 0 ${chartWidth} ${chartHeight}`}
             className={styles.chart}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}

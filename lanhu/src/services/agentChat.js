@@ -1,4 +1,3 @@
-import { collectAgentResults } from './agentResults.js';
 const DEFAULT_AGENT_BASE_URL = '/api';
 const DEFAULT_TIMEOUT_MS = 190_000;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -95,10 +94,8 @@ async function request(
   const timeoutId = setTimeout(() => controller.abort('timeout'), timeoutMs);
 
   try {
-    const url = `${AGENT_BASE_URL}${path}`;
-    const response = await fetchImpl(url, {
+    const response = await fetchImpl(`${AGENT_BASE_URL}${path}`, {
       ...options,
-      credentials: 'omit',
       signal: controller.signal,
     });
     return await parseResponse(response);
@@ -251,10 +248,8 @@ export async function streamAgentMessage(prompt, sessionId, onEvent, options = {
   }
 
   try {
-    const url = `${AGENT_BASE_URL}/chat/stream`;
-    const response = await fetchImpl(url, {
+    const response = await fetchImpl(`${AGENT_BASE_URL}/chat/stream`, {
       method: 'POST',
-      credentials: 'omit',
       headers: {
         ...(file ? {} : { 'Content-Type': 'application/json' }),
         Accept: 'text/event-stream',
@@ -275,10 +270,8 @@ export async function streamAgentMessage(prompt, sessionId, onEvent, options = {
     }
 
     let doneEvent = null;
-    let results = [];
     await consumeSse(response, streamEvent => {
       const { event, data } = streamEvent;
-      if (event === 'result') results = collectAgentResults(data, results);
       if (event === 'error') {
         throw new AgentApiError(data?.error || '处理请求失败', response.status, {
           errorCode: data?.error_code,
@@ -297,7 +290,7 @@ export async function streamAgentMessage(prompt, sessionId, onEvent, options = {
     if (!doneEvent) {
       throw new AgentApiError('Agent 流式响应意外中断', response.status, { traceId });
     }
-    return { ...doneEvent, results: collectAgentResults(doneEvent, results) };
+    return doneEvent;
   } catch (error) {
     if (error instanceof AgentApiError) throw error;
     if (signal?.aborted || error?.name === 'AbortError') {

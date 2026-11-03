@@ -1,19 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { videoProxies } from './video-proxy.js';
-import { videoMediaBase, detectionSocketPath } from './src/config/videoDeployment.js';
+import { videoAnalysisEnabled, videoMediaBase, detectionSocketPath, synchronizedAnalysisAllowed } from './src/config/videoDeployment.js';
 
-test('shared video and AI ignore old launcher-local settings unless local mode is explicit', () => {
+test('shared algorithm uses its origin while each worktree serves video from local MediaMTX', () => {
   const env = { VITE_VIDEO_ANALYSIS_ORIGIN: 'http://127.0.0.1:28012', VITE_MEDIA_PORT: '19089' };
   const page = { protocol: 'http:', hostname: '100.127.237.7' };
   assert.equal(videoProxies(env)['/ws/detections'].target, 'http://127.0.0.1:28010');
+  assert.equal(videoProxies(env)['/shared-media'].target, 'http://127.0.0.1:19089');
   assert.equal(videoMediaBase(env, page), '/shared-media/live');
+  assert.equal(videoAnalysisEnabled({ VITE_VIDEO_ANALYSIS_MODE: 'shared', VITE_VIDEO_ANALYSIS_ENABLED: 'false' }), true);
+  assert.equal(videoAnalysisEnabled({ VITE_VIDEO_ANALYSIS_MODE: 'local', VITE_VIDEO_ANALYSIS_ENABLED: 'false' }), false);
   assert.equal(videoProxies({ ...env, VIDEO_ANALYSIS_SHARED_ORIGIN: 'http://127.0.0.1:29999' })['/ws/detections'].target,
     'http://127.0.0.1:29999');
   env.VITE_VIDEO_ANALYSIS_MODE = 'local';
   assert.equal(videoProxies(env)['/ws/detections'].target, env.VITE_VIDEO_ANALYSIS_ORIGIN);
   assert.equal(videoMediaBase(env, page), 'http://100.127.237.7:19089/live');
   assert.equal(detectionSocketPath(), '/ws/detections');
+  assert.equal(detectionSocketPath(true), '/ws/detections?frames=1');
 });
 
 test('shared media proxy keeps WHEP Location and session methods on its public prefix', () => {
@@ -33,4 +37,14 @@ test('shared media proxy keeps WHEP Location and session methods on its public p
   response(upstream, { url: '/live/camera_1/whep' });
   assert.equal(upstream.headers.location, '/shared-media/live/camera_1/whep/id?token=one');
   response({ headers: {} }, { url: request });
+});
+
+test('subscriber shares only detections and ignores an inherited primary media origin', () => {
+  const env = { VITE_VIDEO_ANALYSIS_MODE: 'shared', VITE_VIDEO_ANALYSIS_SUBSCRIBER: 'true',
+    VITE_MEDIA_PORT: '19089', SHARED_MEDIA_ORIGIN: 'http://main.invalid:18889',
+    VIDEO_ANALYSIS_SHARED_ORIGIN: 'http://127.0.0.1:28010' };
+  assert.equal(videoProxies(env)['/ws/detections'].target, 'http://127.0.0.1:28010');
+  assert.equal(videoProxies(env)['/shared-media'].target, 'http://127.0.0.1:19089');
+  assert.equal(synchronizedAnalysisAllowed(env), false);
+  assert.equal(synchronizedAnalysisAllowed({}), true);
 });

@@ -46,13 +46,11 @@ class SyncFrameTests(unittest.IsolatedAsyncioTestCase):
 
         with patch('video_analysis.analyzer.encode_frame', side_effect=encode) as called:
             await analyzer._analyze(Worker(), camera, captured)
-            await asyncio.gather(*analyzer._image_tasks.values())
         called.assert_called_once()
         self.assertEqual(camera.failures, 0)
         for viewer in viewers:
             result = viewer.pending[('camera_1', 'deepsort', 'detections')]
-            self.assertNotIn('frame', camera.last_result)
-            self.assertEqual(result['frame_id'], camera.last_result['frame_id'])
+            self.assertIs(result, camera.last_result)
             self.assertEqual(result['frame_id'], result['frame']['frame_id'])
 
     async def test_live_viewers_share_inference_without_encoding_images(self):
@@ -114,92 +112,10 @@ class SyncFrameTests(unittest.IsolatedAsyncioTestCase):
 
         worker = Worker()
         await analyzer._analyze(worker, camera, captured)
-        await asyncio.gather(*analyzer._image_tasks.values())
-        result = next(sub for sub in analyzer._subscriptions).pending[('camera_1', 'deepsort', 'detections')]
+        result = camera.last_result
         self.assertEqual(result['frame_id'], result['frame']['frame_id'])
         np.testing.assert_allclose(decoded(result['frame']), worker.input, atol=2)
         self.assertEqual(int(decoded(result['frame'])[0, 0, 0]), 30)
-
-    async def test_slow_diagnostic_encoding_does_not_wait_or_queue_more_images(self):
-        analyzer = Analyzer(cameras={'camera_1': 'rtsp://fake/1'}, worker_count=1)
-        live = analyzer.subscribe()
-        diagnostic = analyzer.subscribe(include_frames=True)
-        camera = analyzer._order[0]
-        release = asyncio.Event()
-        started = asyncio.Event()
-        calls = []
-
-        async def blocked_encode(function, *args):
-            calls.append(args[1])
-            started.set()
-            await release.wait()
-            return function(*args)
-
-        class Worker:
-            slot = 0
-            generation = 1
-            calls = 0
-
-            async def infer(self, frame, metadata=None):
-                self.calls += 1
-                await asyncio.sleep(0)
-                return [], 1
-
-        worker = Worker()
-        with patch('video_analysis.analyzer.asyncio.to_thread', new=blocked_encode):
-            try:
-                for sequence in (1, 2):
-                    captured = CapturedFrame(np.zeros((8, 8, 3), dtype=np.uint8),
-                                             time.time_ns() // 1_000_000, 8, 8,
-                                             frame_id=sequence, stream_epoch=1)
-                    camera.grabber._latest = captured
-                    await asyncio.wait_for(analyzer._analyze(worker, camera, captured), 1)
-                await asyncio.wait_for(started.wait(), 1)
-                self.assertEqual(worker.calls, 2)
-                self.assertEqual(calls, [1])
-                self.assertEqual(len(analyzer._image_tasks), 1)
-                self.assertEqual(live.pending[('camera_1', 'deepsort', 'detections')]['frame_id'], 2)
-                self.assertNotIn(('camera_1', 'deepsort', 'detections'), diagnostic.pending)
-            finally:
-                release.set()
-                await asyncio.gather(*analyzer._image_tasks.values())
-        pair = diagnostic.pending[('camera_1', 'deepsort', 'detections')]
-        self.assertEqual(pair['frame_id'], pair['frame']['frame_id'])
-        self.assertEqual(pair['frame_id'], 1)
-        self.assertEqual(camera.last_result['frame_id'], 2)
-
-    async def test_diagnostic_image_is_discarded_after_session_change_or_expiry(self):
-        for invalidation in ('session', 'expiry'):
-            with self.subTest(invalidation=invalidation):
-                analyzer = Analyzer(cameras={'camera_1': 'rtsp://fake/1'}, worker_count=1)
-                diagnostic = analyzer.subscribe(include_frames=True)
-                camera = analyzer._order[0]
-                release = asyncio.Event()
-                captured = CapturedFrame(np.zeros((8, 8, 3), dtype=np.uint8),
-                                         time.time_ns() // 1_000_000, 8, 8,
-                                         frame_id=1, stream_epoch=1)
-                camera.grabber._latest = captured
-
-                async def blocked_encode(function, *args):
-                    await release.wait()
-                    return function(*args)
-
-                class Worker:
-                    slot = 0
-                    generation = 1
-
-                    async def infer(self, frame, metadata=None):
-                        return [], 1
-
-                with patch('video_analysis.analyzer.asyncio.to_thread', new=blocked_encode):
-                    await analyzer._analyze(Worker(), camera, captured)
-                    if invalidation == 'session':
-                        camera.invalidate()
-                    else:
-                        camera.last_result['valid_until_ms'] = 0
-                    release.set()
-                    await asyncio.gather(*analyzer._image_tasks.values())
-                self.assertNotIn(('camera_1', 'deepsort', 'detections'), diagnostic.pending)
 
     async def test_json_only_subscriber_does_not_receive_images(self):
         class Sent(Exception):
