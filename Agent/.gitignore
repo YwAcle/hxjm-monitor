@@ -132,3 +132,5 @@ temp/
 /backup/
 /.git-repositories-backup/
 sql/public.sql
+
+**/.python/

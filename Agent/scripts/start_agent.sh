@@ -18,7 +18,8 @@ LLM_BACKEND="${LLM_BACKEND:-sglang}"
 LOG_PROFILE="${LLM_BACKEND}"
 if [[ "${LLM_MODE}" == api ]]; then LOG_PROFILE=api; fi
 export AGENT_JSONL_LOG="${AGENT_JSONL_LOG:-${SERVICE_STACK_RUNTIME_DIR:-${ROOT_DIR}/.runtime-cache/service-stack/${LOG_PROFILE}}/agent.jsonl}"
-PYTHON_BIN="${AGENT_PYTHON_BIN:-/data1/userhome/va/miniconda3/envs/monitor/bin/python}"
+# Agent 服务固定使用仓库内的服务环境（依赖见 llm_agent_service/requirements.txt）。
+PYTHON_BIN="${ROOT_DIR}/.venv/bin/python"
 AGENT_HOST="${AGENT_HOST:-0.0.0.0}"
 AGENT_PORT="${AGENT_PORT:-8002}"
 
