@@ -178,3 +178,10 @@ mtx/mediamtx/mediamtx
 /deploy/config/generated/
 
 /deploy/config/cameras.local.json
+
+# Local environments, runtime uploads and upstream reference material
+**/.venv*/
+/SmartMonitor-wangzj/uploadPath/
+/python/tracker/BoT-SORT/assets/*.mov
+*.ipynb
+/python/reid/yolov7/paper/yolov7.pdf
