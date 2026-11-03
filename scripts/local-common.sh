@@ -60,6 +60,12 @@ load_port_config() {
     done
 }
 load_video_config() {
+    if is_analysis_owner; then
+        if [[ -f "$ROOT_DIR/local-results.env" ]]; then source "$ROOT_DIR/local-results.env"; fi
+    else
+        # Personal applications never inherit permission to publish production results.
+        export VIDEO_RESULTS_PERSIST_ENABLED=false
+    fi
     export VIDEO_ANALYSIS_MODE="${VIDEO_ANALYSIS_MODE:-shared}"
     if ! is_analysis_owner && [[ "$VIDEO_ANALYSIS_MODE" != shared ]]; then
         echo 'This project only subscribes to shared analysis; local model startup is disabled.' >&2

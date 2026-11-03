@@ -161,3 +161,24 @@ smartmonitor:
       initLimit: 20
       initLookbackSeconds: 3600
       pushLimit: 200
+# BoT-SORT 轨迹入库
+hxjm:
+  business:
+    enabled: true
+    security:
+      services:
+        botsort-producer:
+          token: ${VIDEO_RESULTS_SERVICE_TOKEN}
+          operations:
+            - instances.query
+            - streams.open
+            - streams.close
+            - tasks.submit
+            - tasks.start
+            - results.register
+            - tracking.close
+          source-ids:
+            - "3180e74c-e18c-4288-97ea-ddc394efc15d"
+            - "b01796f4-14ef-4125-b0bd-9f21419bd4e5"
+            - "1206ff4c-e3ed-48c8-937a-8ff9eb63ca15"
+            - "a6dd6e98-0aae-4f5a-8436-e1fbfbc8316a"

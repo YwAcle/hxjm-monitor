@@ -146,7 +146,8 @@ def stop_children(token, role=None):
 def base_environment(token, role):
     # Never inherit a caller's worktree ownership, media ports or camera settings.
     env = {key: value for key, value in os.environ.items()
-           if not key.startswith(('HXJM_LOCAL_', 'MTX_', 'VIDEO_ANALYSIS_'))}
+           if not key.startswith(('HXJM_LOCAL_', 'MTX_', 'VIDEO_ANALYSIS_'))
+           and (role in {'analysis', 'manager'} or not key.startswith('VIDEO_RESULTS_'))}
     env.update(HXJM_SHARED_SERVICE='1', HXJM_SHARED_TOKEN=token, HXJM_SHARED_ROLE=role)
     return env
 
@@ -237,6 +238,12 @@ def analysis_environment(settings, token):
                VIDEO_ANALYSIS_MODEL_HEADROOM_GIB='3',
                VIDEO_ANALYSIS_CUDA_GRAPH=os.getenv('SHARED_BOTSORT_CUDA_GRAPH', '1'))
     env.update(MALLOC_ARENA_MAX='2', MALLOC_TRIM_THRESHOLD_='131072')
+    enabled = os.getenv('VIDEO_RESULTS_PERSIST_ENABLED', 'false').lower()
+    if enabled not in {'true', 'false'}:
+        raise ValueError('VIDEO_RESULTS_PERSIST_ENABLED must be true or false')
+    env['VIDEO_RESULTS_PERSIST_ENABLED'] = enabled
+    if enabled == 'true':
+        env.setdefault('VIDEO_RESULTS_BUSINESS_BASE_URL', 'http://127.0.0.1:' + str(settings.ports['BACKEND_PORT']) + '/api/v1/business')
     for name in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'NUMEXPR_NUM_THREADS',
                  'VECLIB_MAXIMUM_THREADS', 'BLIS_NUM_THREADS'):
         env[name] = '1'
