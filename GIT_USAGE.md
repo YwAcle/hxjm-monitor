@@ -1,4 +1,4 @@
-# HXJM Git Worktree 协同开发使用手册
+# HXJM Git Worktree 协同开发使用手册1
 
 本手册适用于当前协作方式：每个人在自己的 worktree 目录和开发分支中开发，由集成人员在 `/home/guest/hxjm` 的 `main` 分支合并、验证，并将 `main` 推送到远程仓库。
 
