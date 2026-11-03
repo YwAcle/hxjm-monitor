@@ -50,7 +50,8 @@ def model_process(connection):
                     detections, duration = detect_people(frame)
                 del frame
                 connection.send({"type": "result", "job_id": job["job_id"],
-                                 "detections": detections[:500], "inference_ms": duration})
+                                 "detections": detections, "inference_ms": duration,
+                                 "removed_tracks": getattr(pipeline, 'last_removed_tracks', []) if ALGORITHM == 'botsort' else []})
             except Exception as exc:
                 connection.send({"type": "error", "job_id": job["job_id"],
                                  "recoverable": ALGORITHM == 'botsort' and isinstance(exc, np.linalg.LinAlgError),
@@ -85,6 +86,7 @@ class ModelWorker:
         self.busy = False
         self.last_error = None
         self.assigned_camera = None
+        self.last_removed_tracks = []
 
     async def _receive(self, timeout):
         deadline = asyncio.get_running_loop().time() + timeout
@@ -145,6 +147,7 @@ class ModelWorker:
                 raise RecoverableInferenceError(result.get('error', 'Tracking failed'))
             if result.get("job_id") != job_id or result["type"] != "result":
                 raise RuntimeError(result.get("error", "Worker returned an invalid job"))
+            self.last_removed_tracks = result.get('removed_tracks', [])
             return result["detections"], result["inference_ms"]
         except RecoverableInferenceError as exc:
             self.last_error = f'{type(exc).__name__}: {exc}'[:1000]

@@ -11,7 +11,10 @@ single WebSocket per page. Each camera has its own Canvas, video status and AI
 status. One dashboard button toggles annotations for all four cameras. Fullscreen
 includes the overlay and compact toolbar. The shared toggle is above the grid
 and moves into the active fullscreen view, still controlling all four cameras.
-The service does not draw boxes or write business database records. Synchronized
+The service does not draw boxes. Optional BoT-SORT business persistence is disabled
+by default; see [trajectory persistence](PERSISTENCE.md) for configuration, reliable
+delivery, deployment requirements and offline checks. Personal projects continue
+to subscribe to the shared producer. Synchronized
 clients also receive the clean inference input image. The dashboard defaults to continuous realtime WebRTC playback with asynchronous
 metadata overlays that expire after at most one second. Same-frame JPEG playback is opt-in. Module
 responsibilities, configuration and validation limits are in [SYNC_PLAYBACK.md](SYNC_PLAYBACK.md).

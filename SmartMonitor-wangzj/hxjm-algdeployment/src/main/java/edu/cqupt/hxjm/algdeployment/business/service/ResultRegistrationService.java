@@ -159,6 +159,9 @@ public class ResultRegistrationService {
                 if ("continuous".equals(task.get("task_mode"))) {
                     jdbc.update("UPDATE public.business_task SET expires_at=GREATEST(expires_at,?) WHERE task_id=?::uuid",expires,uuid(body,"task_id"));
                     jdbc.update("UPDATE public.task_attempt SET expires_at=GREATEST(expires_at,?) WHERE run_id=?::uuid",expires,run);
+                    if(run.equals(String.valueOf(task.get("current_run_id")))){
+                        jdbc.update("UPDATE public.task_attempt SET lease_until=now()+interval '1 minute',updated_at=now() WHERE run_id=?::uuid",run);
+                    }
                 }
                 store.event(jdbc,"results.registered","result_set",set,nextEventRevision(jdbc,set),
                         values("result_set_id",set,"result_ids",accepted),expires);
@@ -253,7 +256,7 @@ public class ResultRegistrationService {
         if (context!=null) {
             Map<String,Object> tracking=one(jdbc,"SELECT started_at,ended_at FROM public.tracking_context WHERE id=?::uuid",context);
             if (occurred.isBefore(at(tracking.get("started_at"))) ||
-                    (tracking.get("ended_at")!=null && occurred.isAfter(at(tracking.get("ended_at"))))) {
+                    tracking.get("ended_at")!=null) {
                 throw BusinessException.invalid("输入帧不在跟踪状态范围内");
             }
         }
@@ -303,18 +306,24 @@ public class ResultRegistrationService {
         OffsetDateTime occurred=time(result,"occurred_at");
         boolean observed=!Boolean.TRUE.equals(target.get("is_prediction"));
         String id=UUID.randomUUID().toString(); long local=integer(target,"local_track_id",0,Long.MAX_VALUE);
+        if(!observed&&jdbc.queryForList("SELECT id FROM public.tracklet WHERE tracking_context_id=?::uuid AND local_track_id=?",context,local).isEmpty()){
+            // Keep the predicted observation, but do not invent a real appearance or start time.
+            return null;
+        }
         String stream=uuidStream?String.valueOf(session.get("camera_stream_id")):String.valueOf(session.get("stream_name"));
         jdbc.update("INSERT INTO public.tracklet(id,stream_id,start_ts,cls_name,source_id,stream_session_id,tracking_context_id,local_track_id,"+
                 "origin_result_set_id,first_observed_at,last_observed_at,expires_at) VALUES (?::uuid,"+(uuidStream?"?::uuid":"?")+
                 ",?,?,?::uuid,?::uuid,?::uuid,?,?::uuid,?,?,?) ON CONFLICT (tracking_context_id,local_track_id) WHERE tracking_context_id IS NOT NULL DO NOTHING",
                 id,stream,occurred,text(target,"class_code",64),uuid(body,"source_id"),uuid(body,"stream_session_id"),context,local,
                 uuid(body,"result_set_id"),observed?occurred:null,observed?occurred:null,expires);
-        Map<String,Object> track=one(jdbc,"SELECT id::text AS id,cls_name FROM public.tracklet WHERE tracking_context_id=?::uuid AND local_track_id=? FOR UPDATE",context,local);
+        Map<String,Object> track=one(jdbc,"SELECT id::text AS id,cls_name,end_reason FROM public.tracklet WHERE tracking_context_id=?::uuid AND local_track_id=? FOR UPDATE",context,local);
         id=track.get("id").toString();
-        jdbc.update("UPDATE public.tracklet SET start_ts=LEAST(start_ts,?),expires_at=GREATEST(expires_at,?),revision=revision+1,updated_at=now() "+
-                "WHERE id=?::uuid",occurred,expires,id);
+        if(track.get("end_reason")!=null){throw BusinessException.conflict("轨迹已经结束；新状态必须使用新上下文");}
+        if(!text(target,"class_code",64).equals(track.get("cls_name"))){throw BusinessException.conflict("同局部轨迹的类别不一致");}
+        jdbc.update("UPDATE public.tracklet SET revision=revision+1,updated_at=now() WHERE id=?::uuid",id);
         if (observed) {
-            jdbc.update("UPDATE public.tracklet SET first_observed_at=LEAST(first_observed_at,?),last_observed_at=GREATEST(last_observed_at,?) WHERE id=?::uuid",occurred,occurred,id);
+            jdbc.update("UPDATE public.tracklet SET first_observed_at=LEAST(first_observed_at,?),last_observed_at=GREATEST(last_observed_at,?),"+
+                    "start_ts=LEAST(COALESCE(first_observed_at,?),?),expires_at=GREATEST(expires_at,?) WHERE id=?::uuid",occurred,occurred,occurred,occurred,expires,id);
             refreshIdentity(jdbc,id);
         }
         return id;
