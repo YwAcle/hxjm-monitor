@@ -36,8 +36,20 @@ def test_four_distinct_sources_and_paths():
     assert len({mock.whep_url(c) for c in mock.cameras}) == 4
     assert [c.source for c in hardware.cameras] == ["m20", "m20", "publisher", "publisher"]
     assert [c.url for c in hardware.cameras[:2]] == [
-        "ws://192.168.126.176:8765/front", "ws://192.168.126.176:8765/back"]
+        "ws://192.168.126.176:8765/all", "ws://192.168.126.176:8765/all"]
+    assert [c.fps for c in hardware.cameras[:2]] == [30, 30]
     assert all(c.source == "simulated" for c in mock.cameras)
+
+
+def test_empty_m20_urls_share_documented_endpoint(tmp_path):
+    data = json.loads(CONFIG.read_text())
+    for row in data["cameras"][:2]:
+        row["url"] = ""
+    config = tmp_path / "cameras.json"
+    config.write_text(json.dumps(data))
+    settings = Settings(mode="hardware", robot_host="10.0.0.8", robot_port=9000).load_cameras(config)
+    assert [c.url for c in settings.cameras[:2]] == ["ws://10.0.0.8:9000/all"] * 2
+    assert [c.camera for c in settings.cameras[:2]] == ["front", "back"]
 
 
 def test_local_ports_and_publisher_config():
@@ -47,6 +59,23 @@ def test_local_ports_and_publisher_config():
     assert "rtspAddress: 127.0.0.1:28554" in yaml
     assert "webrtcLocalUDPAddress: 127.0.0.1:28189" in yaml
     assert yaml.count("source: publisher") == 4
+
+
+def test_mediamtx_environment_paths_match_only_configured_channels(tmp_path):
+    import re
+    data = json.loads(CONFIG.read_text())
+    data["cameras"][2].update(source="rtsp", url="rtsp://10.0.0.5:554/color")
+    data["cameras"][3]["source"] = "disabled"
+    config = tmp_path / "cameras.json"
+    config.write_text(json.dumps(data))
+    env = Settings(mode="hardware").load_cameras(config).mediamtx_env()
+    paths = {key[len("MTX_PATHS_"):-len("_SOURCE")].lower()[1:]: value
+             for key, value in env.items() if key.startswith("MTX_PATHS_") and key.endswith("_SOURCE")}
+    for index in range(1, 5):
+        matches = [value for pattern, value in paths.items() if re.fullmatch(pattern, f"live/camera_{index}")]
+        assert matches == (["publisher"] if index < 3 else ["rtsp://10.0.0.5:554/color"] if index == 3 else [])
+    assert all(not re.fullmatch(pattern, "live/cameraX1") for pattern in paths)
+    assert env["MTX_RTSPTRANSPORTS"] == "tcp" and env["MTX_HLS"] == "no"
 
 
 def test_dashboard_config_process_health_and_resources():

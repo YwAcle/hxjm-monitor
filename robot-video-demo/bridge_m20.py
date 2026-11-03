@@ -9,6 +9,7 @@ import contextlib
 import logging
 import math
 import os
+import re
 import shutil
 import struct
 from dataclasses import dataclass
@@ -35,8 +36,8 @@ class Packet:
 def parse_packet(message, camera):
     """One binary WS message = 24-byte header + Annex-B payload.
 
-    Flags and timestamp are preserved but not interpreted: vendor units and flag
-    semantics weren't supplied. Raw H.264 publishing generates timestamps by fps.
+    README_frontend_zh.md defines flags bit 0 as keyframe and timestamp as Unix
+    milliseconds. Raw H.264 publishing generates timestamps from configured fps.
     """
     if not isinstance(message, bytes) or len(message) <= HEADER.size:
         return None
@@ -45,6 +46,13 @@ def parse_packet(message, camera):
         return None
     payload = message[HEADER.size:]
     return Packet(payload, flags, sequence, timestamp)
+
+
+def is_keyframe(packet):
+    # Also recognize IDR NALs from sources that don't populate the keyframe flag.
+    return bool(packet.flags & 1) or any(
+        match[1][0] & 0x1F == 5
+        for match in re.finditer(b"\x00\x00\x01(.)", packet.payload, re.DOTALL))
 
 
 def ffmpeg_command(args):
@@ -109,6 +117,9 @@ async def relay_session(args):
                 message = await asyncio.wait_for(websocket.recv(), remaining)
                 packet = parse_packet(message, args.camera)
                 if packet is None:
+                    other_camera = "back" if args.camera == "front" else "front"
+                    if parse_packet(message, other_camera) is not None:
+                        continue  # /all carries both cameras; the other camera is valid.
                     invalid += 1
                     if invalid == 1 or loop.time() - report_at >= 5:
                         status.write("invalid", count, invalid)
@@ -116,6 +127,11 @@ async def relay_session(args):
                     continue
                 last_valid = loop.time()
                 if process is None:
+                    if not is_keyframe(packet):
+                        if last_valid - report_at >= 2:
+                            status.write("waiting_keyframe", count, invalid)
+                            report_at = last_valid
+                        continue
                     process = await asyncio.create_subprocess_exec(
                         *ffmpeg_command(args), stdin=asyncio.subprocess.PIPE,
                         stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
@@ -154,7 +170,9 @@ async def run(args):
                     import json
                     from pathlib import Path
                     previous = json.loads(Path(args.status_file).read_text(encoding="utf-8"))["stage"]
-                    if previous != "connecting":
+                    if previous == "connected" and isinstance(exc, TimeoutError):
+                        stage = "no_video"
+                    elif previous != "connecting":
                         stage = "stream_error"
                 except (OSError, ValueError, KeyError):
                     pass
@@ -189,7 +207,7 @@ def parse_args(argv=None):
         parser.error("fps 应为 1~120")
     if not math.isfinite(args.timeout) or args.timeout <= 0:
         parser.error("timeout 必须大于零")
-    args.ws_url = args.ws_url or f"ws://{args.host}:{args.port}/{args.camera}"
+    args.ws_url = args.ws_url or f"ws://{args.host}:{args.port}/all"
     camera_path = "camera_1" if args.camera == "front" else "camera_2"
     args.rtsp_url = args.rtsp_url or os.getenv("M20_RTSP_URL") or f"rtsp://127.0.0.1:18554/live/{camera_path}"
     try:

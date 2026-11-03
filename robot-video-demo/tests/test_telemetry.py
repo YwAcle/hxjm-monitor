@@ -86,3 +86,18 @@ def test_sse_delivers_snapshot_and_updated_state_then_cancels_cleanly():
         await generator.aclose()
 
     asyncio.run(exercise())
+
+
+def test_sse_finishes_when_server_shutdown_is_requested():
+    class Request:
+        async def is_disconnected(self):
+            return False
+
+    async def exercise():
+        stopping = asyncio.Event()
+        generator = telemetry_events(Request(), TelemetryStore("hardware"), stopping.is_set)
+        assert (await anext(generator)).startswith("event: telemetry\n")
+        stopping.set()
+        assert await anext(generator, None) is None
+
+    asyncio.run(exercise())

@@ -17,7 +17,6 @@ from source_diagnostics import SourceStatus, read_source_status
 ROOT = Path(__file__).resolve().parent
 
 
-#测试GitHub
 def resolve_tool(name, override=None):
     local = ROOT / ".runtime" / (name + (".exe" if os.name == "nt" else ""))
     found = override or (str(local) if local.exists() else shutil.which(name))
@@ -56,25 +55,44 @@ def main():
     runtime = ROOT / ".runtime"
     logs = runtime / "logs" / str(args.web_port)
     config = runtime / f"mediamtx-{args.web_port}.yml"
+    pid_file = runtime / f"run-demo-{args.web_port}.pid"
     # Don't silently replace an existing project using one of our ports.
     for port, kind in [(args.web_port, socket.SOCK_STREAM), (args.rtsp_port, socket.SOCK_STREAM),
                        (args.whep_port, socket.SOCK_STREAM), (args.ice_port, socket.SOCK_DGRAM)] + ([(args.mock_port, socket.SOCK_STREAM)] if args.mode == "simulated" else []):
         with socket.socket(socket.AF_INET, kind) as probe:
+            if kind == socket.SOCK_STREAM:
+                # Match the servers' reuse policy so TIME_WAIT doesn't block a restart.
+                probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             probe.bind((args.bind, port))
     logs.mkdir(parents=True, exist_ok=True)
     config.write_text(settings.mediamtx_yaml(), encoding="utf-8")
     children, handles = {}, []
-    def start(name, cmd):
+    def start(name, cmd, *, cwd=ROOT, env=None):
         handle = (logs / (name + ".log")).open("w", encoding="utf-8")
         handles.append(handle)
-        children[name] = subprocess.Popen(cmd, cwd=ROOT, stdout=handle, stderr=subprocess.STDOUT,
+        children[name] = subprocess.Popen(cmd, cwd=cwd, stdout=handle, stderr=subprocess.STDOUT,
                                          start_new_session=os.name != "nt",
-                                         env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"})
+                                         env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1", **(env or {})})
+    def terminate(signum, frame):
+        # Uvicorn replays SIGTERM after shutdown; unwind through child cleanup.
+        raise SystemExit(0)
     try:
+        signal.signal(signal.SIGTERM, terminate)
+        pid_file.write_text(f"{os.getpid()}\n", encoding="utf-8")
         start("mediamtx", [mtx, str(config)])
         if args.mode == "simulated":
             start("mock", [sys.executable, "mock_robot.py", "--port", str(args.mock_port), "--fps", str(args.fps), "--ffmpeg", ffmpeg])
         time.sleep(.5)
+        mtx_log = (logs / "mediamtx.log").read_text(encoding="utf-8")
+        if (children["mediamtx"].poll() is not None and
+                "no space left on device" in mtx_log and "confwatcher" in mtx_log):
+            # inotify quota exhaustion must not prevent an otherwise valid startup.
+            empty_config_dir = runtime / f"mediamtx-env-{args.web_port}"
+            empty_config_dir.mkdir(exist_ok=True)
+            print("文件监控配额不足，MediaMTX 改用环境变量配置；修改配置后需重启。", flush=True)
+            start("mediamtx", [shutil.which(mtx)], cwd=empty_config_dir,
+                  env=settings.mediamtx_env())
+            time.sleep(.5)
         for name, child in children.items():
             if child.poll() is not None:
                 raise RuntimeError(f"{name} 启动失败，查看 .runtime/logs/{args.web_port}/{name}.log")
@@ -92,8 +110,11 @@ def main():
         print("子进程存活不代表有视频，请以大屏收到的解码帧为准。Ctrl+C 停止。", flush=True)
         print(f"代码目录：{ROOT}", flush=True)
         print(f"摄像头配置：{Path(args.config).resolve()}", flush=True)
-        uvicorn.run(create_app(settings, status, source_status=lambda: read_source_status(settings, logs)),
-                    host=args.bind, port=args.web_port)
+        app = create_app(settings, status, source_status=lambda: read_source_status(settings, logs),
+                         shutdown_requested=lambda: server.should_exit)
+        server = uvicorn.Server(uvicorn.Config(app, host=args.bind, port=args.web_port,
+                                              timeout_graceful_shutdown=3))
+        server.run()
     finally:
         # Stop bridge first so mock_robot can cleanly terminate its own encoder.
         for name in reversed(children):
@@ -113,11 +134,14 @@ def main():
                     child.wait()
         for handle in handles:
             handle.close()
+        pid_file.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
     try:
         main()
+    except KeyboardInterrupt:
+        pass
     except (RuntimeError, OSError, ValueError) as exc:
         print(f"启动失败：{exc}", file=sys.stderr)
         raise SystemExit(1)

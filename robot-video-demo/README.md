@@ -2,6 +2,8 @@
 
 本手册对应 `/home/guest/hxjm-wxl/robot-video-demo`，用于在 Linux 服务器运行程序、在自己电脑的浏览器观看 M20 机器狗视频。按第 1～7 节顺序操作；已经完成安装的用户，下次直接执行第 7 节。
 
+按所附 `README_frontend_zh.md` 接入现有 `/all` 服务，请先看 [M20 双路视频接入](docs/M20_CONNECTION.md)，包含本服务器的启动命令和“已连接但没有视频”的检查方法。下文默认端口示例与该命令不同，不要混用。
+
 视频链路：**机器狗 WebSocket H.264 → Python 桥接 → FFmpeg RTSP/TCP → MediaMTX → WebRTC → 浏览器**。接口细节见 [接口文档](docs/INTERFACES.md)。
 
 ## 1. 确认操作位置、地址和成功目标
@@ -15,7 +17,7 @@
 | 项目目录 | `/home/guest/hxjm-wxl/robot-video-demo` | 服务器上的实际源码目录 |
 | 浏览器可达的服务器 IP | `100.127.237.7` | 来自当前会话的 SSH 截图，使用前确认仍可达；可在服务器执行 `tailscale ip -4` 查询（如已安装 Tailscale） |
 | 狗端视频 IP | `192.168.126.176` | 项目默认示例，须向设备负责人确认 |
-| 狗端端口、前摄路径 | `8765`、`/front` | 须确认厂家视频服务已启动 |
+| 视频服务端口、双路路径 | `8765`、`/all` | 前后摄共用接口，以消息内编号分流 |
 
 如果地址不同，替换后文所有对应 IP。`--public-host` 是**服务器地址**；`--robot-host` 是**狗端地址**，不能混用。主机参数不带 `http://`、端口或路径。
 
@@ -34,7 +36,7 @@
 | 本项目 `.venv` | 核查时未创建 | 按下一节创建 |
 | FastAPI、Uvicorn、WebSockets | 默认 Python 中未安装 | 从 `requirements.txt` 安装 |
 | `/usr/bin/ffmpeg` | 4.4.2，支持 RTSP 输出和 libx264 | 直接使用 |
-| `/data/nfs_storage/hxjm/mtx/mediamtx/mediamtx` | v1.15.5，可执行 | 显式指定路径复用二进制 |
+| `/home/guest/hxjm/mtx/mediamtx/mediamtx` | v1.15.5，可执行 | 显式指定路径复用二进制 |
 
 不需要重新安装 Python、Node.js、数据库或 CUDA。观看狗端已有视频也不需要在服务器安装 RealSense SDK。项目环境只安装自身依赖，不修改原大屏算法环境。
 
@@ -60,7 +62,7 @@ cd /home/guest/hxjm-wxl/robot-video-demo
 .venv/bin/python -c 'import sys, fastapi, uvicorn, websockets; from websockets.asyncio.client import connect; print(sys.executable); print("Python dependencies OK")'
 /usr/bin/ffmpeg -hide_banner -version
 /usr/bin/ffmpeg -hide_banner -encoders 2>/dev/null | rg libx264
-/data/nfs_storage/hxjm/mtx/mediamtx/mediamtx --version
+/home/guest/hxjm/mtx/mediamtx/mediamtx --version
 ```
 
 应看到项目 `.venv` 解释器、`Python dependencies OK`、FFmpeg 版本、libx264 编码器和 MediaMTX 版本。没有 `rg` 时，编码器检查可改用 `grep libx264`。
@@ -78,7 +80,7 @@ cd /home/guest/hxjm-wxl/robot-video-demo
 .runtime/mediamtx --version
 ```
 
-然后将后文每条启动命令的 `--mediamtx /data/nfs_storage/hxjm/mtx/mediamtx/mediamtx` 替换为 `--mediamtx /home/guest/hxjm-wxl/robot-video-demo/.runtime/mediamtx`。不要覆盖原大屏的二进制或配置。
+然后将后文每条启动命令的 `--mediamtx /home/guest/hxjm/mtx/mediamtx/mediamtx` 替换为 `--mediamtx /home/guest/hxjm-wxl/robot-video-demo/.runtime/mediamtx`。不要覆盖原大屏的二进制或配置。
 
 ## 3. 确认观看网络和端口
 
@@ -111,7 +113,7 @@ cd /home/guest/hxjm-wxl/robot-video-demo
 .venv/bin/python run_demo.py \
   --mode simulated \
   --ffmpeg /usr/bin/ffmpeg \
-  --mediamtx /data/nfs_storage/hxjm/mtx/mediamtx/mediamtx \
+  --mediamtx /home/guest/hxjm/mtx/mediamtx/mediamtx \
   --bind 0.0.0.0 \
   --public-host 100.127.237.7
 ```
@@ -152,7 +154,7 @@ cd /home/guest/hxjm-wxl/robot-video-demo
 | 未通过阶段 | 应检查 |
 |---|---|
 | tcp | 狗端开机、服务器到狗的路由、实际 IP、端口和视频服务 |
-| websocket | `/front` 路径、厂家鉴权、视频服务是否支持外部客户端 |
+| websocket | `/all` 路径、厂家鉴权、视频服务是否支持外部客户端 |
 | packet | 厂家实际是否输出 24 字节 M20 包头 + H.264，前摄相机编号是否为 0 |
 
 项目接受的源不是任意 WebSocket 图像。狗端服务必须输出本项目约定的二进制格式，见 [上游协议](docs/INTERFACES.md#3-m20-上游-websocket-二进制协议)。遥控器有画面不能证明该服务已经开放。
@@ -171,7 +173,7 @@ cd /home/guest/hxjm-wxl/robot-video-demo
   --robot-host 192.168.126.176 \
   --robot-port 8765 \
   --ffmpeg /usr/bin/ffmpeg \
-  --mediamtx /data/nfs_storage/hxjm/mtx/mediamtx/mediamtx \
+  --mediamtx /home/guest/hxjm/mtx/mediamtx/mediamtx \
   --bind 0.0.0.0 \
   --public-host 100.127.237.7
 ```
@@ -194,14 +196,14 @@ cd /home/guest/hxjm-wxl/robot-video-demo
   --robot-port 8765 \
   --codec h264 \
   --ffmpeg /usr/bin/ffmpeg \
-  --mediamtx /data/nfs_storage/hxjm/mtx/mediamtx/mediamtx \
+  --mediamtx /home/guest/hxjm/mtx/mediamtx/mediamtx \
   --bind 0.0.0.0 \
   --public-host 100.127.237.7
 ```
 
 它会启用 libx264 转码，增加 CPU 开销；不能修复网络或包头错误。若已按第 2.3 节更换 MediaMTX 路径，这里也使用更换后的路径。
 
-默认 `--fps 25` 只是软件假设，真实帧率需厂家确认后通过 `--fps` 修改。FPS 统计不等于端到端延迟。
+前后摄配置使用所附视频工具默认的 30 FPS；如果源端启动参数改变了帧率，请同步修改配置中的 `fps`。模拟模式仍使用全局 `--fps`，默认为 25。FPS 统计不等于端到端延迟。
 
 ## 7. 下次如何启动、如何关闭
 
