@@ -1,12 +1,10 @@
 """Service-owned round-robin scheduler; clients subscribe without creating work."""
 import asyncio
-import inspect
 import logging
 import math
 import time
 import uuid
 from collections import OrderedDict, deque
-from functools import partial
 
 from .config import (
     CAMERAS, INFERENCE_INTERVAL_SECONDS, RESULT_TTL_MS, WORKER_COUNT,
@@ -16,13 +14,10 @@ from .config import (
 from .stream_grabber import LatestFrameGrabber
 from .sync_frame import encode_frame
 from .worker import ModelWorker
-from .frame_result import FrameResultInput, frame_result
+from .result_publisher import PersistenceError
 
 logger = logging.getLogger(__name__)
-# Keep the public task key aligned with the configured detector.  The
-# subscription key and result metadata must not advertise a different
-# algorithm when the service is running in BoT-SORT mode.
-TASK = ALGORITHM
+TASK = 'deepsort'
 
 
 class Subscription:
@@ -54,7 +49,6 @@ class CameraAnalysis:
         self.grabber = grabber_factory(callback, rtsp_url=url)
         self.session_id = uuid.uuid4().hex
         self.session_generation = 0
-        self.tracking_started_at_ms = None
         self.states = {'capture': {'state': 'idle', 'error': None},
                        'analyzer': {'state': 'waiting_source', 'error': None}}
         self.inflight = False
@@ -73,20 +67,7 @@ class CameraAnalysis:
     def invalidate(self):
         self.session_id = uuid.uuid4().hex
         self.session_generation += 1
-        self.tracking_started_at_ms = None
         self.last_result = None
-
-    @property
-    def tracking_context_id(self):
-        return str(uuid.UUID(self.session_id))
-
-    def input_session_id(self, captured=None):
-        if captured is not None:
-            reference = getattr(captured, 'public_frame_ref', None)
-            session = getattr(reference, 'stream_session_id', None) or getattr(captured, 'stream_session_id', None)
-            if session:
-                return session
-        return self.grabber.snapshot().get('stream_session_id')
 
 
 class Analyzer:
@@ -94,8 +75,7 @@ class Analyzer:
                  worker_count=WORKER_COUNT, grabber_factory=LatestFrameGrabber,
                  worker_factory=ModelWorker, worker_retry=WORKER_RETRY_SECONDS,
                  worker_idle=WORKER_IDLE_SECONDS, algorithm=ALGORITHM,
-                 worker_retry_max=WORKER_RETRY_MAX_SECONDS, result_sink=None,
-                 frame_hub=None, source_ids=None, sample_pipeline=None):
+                 worker_retry_max=WORKER_RETRY_MAX_SECONDS, result_publisher=None):
         if not math.isfinite(inference_interval) or inference_interval <= 0:
             raise ValueError('Inference interval must be finite and positive')
         if not 1 <= worker_count <= 4:
@@ -108,6 +88,7 @@ class Analyzer:
             raise ValueError('Worker retry maximum must be finite and at least the retry time')
         self._inference_interval = inference_interval
         self.algorithm = algorithm
+        self.result_publisher = result_publisher
         self._worker_retry = worker_retry
         self._worker_retry_max = worker_retry_max
         self._loading_lock = asyncio.Lock()
@@ -118,35 +99,16 @@ class Analyzer:
         self._loop = None
         self._tasks = []
         self._heartbeat = None
-        self._image_tasks = {}
         self._cursor = 0
         self._service_id = uuid.uuid4().hex
-        if result_sink is not None and (not callable(result_sink)
-                or inspect.iscoroutinefunction(result_sink)
-                or inspect.iscoroutinefunction(getattr(result_sink, '__call__', None))):
-            raise ValueError('result_sink must be a synchronous nonblocking callable')
-        self._result_sink = result_sink
-        self._sample_pipeline = sample_pipeline
-        self._result_handoffs = 0
-        self._result_failures = 0
-        self._result_error = None
         camera_urls = CAMERAS if cameras is None else cameras
-        if frame_hub is not None and (not isinstance(source_ids, dict)
-                                       or set(source_ids) != set(camera_urls)):
-            raise ValueError('Shared input requires a source ID for every configured camera')
-        if frame_hub is None and source_ids is not None:
-            raise ValueError('Source mappings require a shared frame input')
         self._workers = [worker_factory(i) for i in range(min(worker_count, len(camera_urls)))]
         self._cameras = {}
         for camera_id, url in camera_urls.items():
             def callback(state, error, epoch, camera_id=camera_id):
                 if self._loop is not None and not self._loop.is_closed():
                     self._loop.call_soon_threadsafe(self._capture_status, camera_id, state, error, epoch)
-            factory = grabber_factory
-            if frame_hub is not None:
-                source_id = source_ids[camera_id]
-                factory = lambda callback, rtsp_url, sid=source_id: frame_hub.reader(sid, callback)
-            self._cameras[camera_id] = CameraAnalysis(camera_id, url, callback, factory)
+            self._cameras[camera_id] = CameraAnalysis(camera_id, url, callback, grabber_factory)
         if not self._cameras:
             raise ValueError('At least one camera is required')
         self._order = list(self._cameras.values())
@@ -169,11 +131,6 @@ class Analyzer:
             if task is not None:
                 task.cancel()
         await asyncio.gather(*self._tasks, *([self._heartbeat] if self._heartbeat else []), return_exceptions=True)
-        image_tasks = list(self._image_tasks.values())
-        for task in image_tasks:
-            task.cancel()
-        await asyncio.gather(*image_tasks, return_exceptions=True)
-        self._image_tasks.clear()
         await asyncio.gather(*(worker.stop() for worker in self._workers))
         await asyncio.gather(*(asyncio.to_thread(camera.grabber.stop) for camera in self._order))
         self._subscriptions.clear()
@@ -188,8 +145,6 @@ class Analyzer:
         return {'status': 'ok' if available and fresh else 'degraded',
                 'camera_id': camera.camera_id, 'task': TASK,
                 'stream_session_id': camera.session_id, 'session_generation': camera.session_generation,
-                'input_stream_session_id': camera.input_session_id(),
-                'tracking_context_id': camera.tracking_context_id if self.algorithm == 'botsort' else None,
                 'capture': capture, 'components': dict(camera.states), 'inflight': camera.inflight,
                 'inference_attempts': camera.attempts, 'inference_count': camera.inferences,
                 'published_count': camera.published, 'discarded_stale_results': camera.discarded,
@@ -201,7 +156,9 @@ class Analyzer:
         cameras = {camera.camera_id: self._camera_health(camera) for camera in self._order}
         workers = [worker.snapshot() for worker in self._workers]
         alive = bool(self._tasks) and all(not task.done() for task in self._tasks)
-        snapshot = {'status': 'ok' if alive and all(c['status'] == 'ok' for c in cameras.values()) else 'degraded',
+        persistence = self.result_publisher.health() if self.result_publisher else {'enabled': False}
+        return {'status': 'ok' if (alive and all(c['status'] == 'ok' for c in cameras.values())
+                                  and persistence.get('state') != 'degraded') else 'degraded',
                 'algorithm': self.algorithm, 'tracking': self.algorithm == 'botsort',
                 'service_session_id': self._service_id, 'cameras': cameras, 'workers': workers,
                 'analysis_task_alive': alive, 'worker_count': len(workers),
@@ -210,20 +167,13 @@ class Analyzer:
                 'active_inferences': sum(camera.inflight for camera in self._order),
                 'model_initializations': sum(w['model_initializations'] for w in workers),
                 'inference_interval_seconds': self._inference_interval, 'clients': len(self._subscriptions),
-                'max_pending_messages_per_client': 2 * len(cameras)}
-        if self._result_sink is not None:
-            snapshot['result_handoff'] = {
-                'handed_off_count': self._result_handoffs,
-                'failure_count': self._result_failures, 'last_error': self._result_error,
-            }
-        return snapshot
+                'max_pending_messages_per_client': 2 * len(cameras),
+                'persistence': persistence}
 
     def _status_message(self, camera, component='service', state=None):
         return {'type': 'status', 'camera_id': camera.camera_id, 'task': TASK,
                 'algorithm': self.algorithm,
                 'service_session_id': self._service_id, 'stream_session_id': camera.session_id,
-                'input_stream_session_id': camera.input_session_id(),
-                'tracking_context_id': camera.tracking_context_id if self.algorithm == 'botsort' else None,
                 'session_generation': camera.session_generation,
                 'stream_epoch': camera.grabber.snapshot()['stream_epoch'],
                 'component': component, 'state': state or camera.states['analyzer']['state'],
@@ -241,35 +191,9 @@ class Analyzer:
     def unsubscribe(self, subscription):
         self._subscriptions.discard(subscription)
 
-    def _publish(self, message, include_frames=None):
+    def _publish(self, message):
         for subscription in self._subscriptions:
-            if include_frames is None or subscription.include_frames == include_frames:
-                subscription.put(message)
-
-    def _start_image(self, camera, captured, session):
-        if (camera.camera_id in self._image_tasks
-                or not any(sub.include_frames for sub in self._subscriptions)):
-            return None
-        result_ready = asyncio.get_running_loop().create_future()
-        task = asyncio.create_task(self._deliver_image(camera, captured, session, result_ready))
-        self._image_tasks[camera.camera_id] = task
-        task.add_done_callback(lambda _: self._image_tasks.pop(camera.camera_id, None))
-        return result_ready
-
-    async def _deliver_image(self, camera, captured, session, result_ready):
-        try:
-            frame = await asyncio.to_thread(encode_frame, captured.frame, captured.frame_id)
-            result = await result_ready
-            latest = camera.grabber.latest_frame()
-            now = time.time_ns() // 1_000_000
-            if (result is None or self._stop_event.is_set() or latest is None
-                    or latest.stream_epoch != captured.stream_epoch or camera.session_id != session
-                    or now >= result['valid_until_ms']):
-                return
-            self._publish({**result, 'frame': frame, 'sent_at_ms': now}, include_frames=True)
-        except Exception as exc:
-            # Diagnostic image failure must not invalidate a successful inference/tracker.
-            logger.warning('%s diagnostic image failed: %s: %s', camera.camera_id, type(exc).__name__, exc)
+            subscription.put(message)
 
     def _set_status(self, camera, component, state, error=None):
         updated = {'state': state, 'error': error}
@@ -297,6 +221,12 @@ class Analyzer:
     async def _send_heartbeat(self):
         while not self._stop_event.is_set():
             for camera in self._order:
+                if (self.result_publisher and not camera.inflight
+                        and camera.grabber.snapshot()['state'] != 'streaming'):
+                    try:
+                        await self.result_publisher.interrupt(camera.camera_id, 'source_interrupted', input_ended=True)
+                    except PersistenceError:
+                        logger.error('%s input close could not be queued', camera.camera_id)
                 self._refresh_waiting(camera)
                 self._publish(self._status_message(camera))
             await self._wait(1)
@@ -330,6 +260,8 @@ class Analyzer:
 
     def _claim(self, worker=None):
         # Reserve only a camera with a fresh frame. No frame FIFO during model loading.
+        if self.result_publisher and not self.result_publisher.can_accept():
+            return None
         now = self._loop.time()
         for offset in range(len(self._order)):
             index = (self._cursor + offset) % len(self._order)
@@ -366,6 +298,8 @@ class Analyzer:
                                     # Restart loses every tracker owned by this process.
                                     for index, owned in enumerate(self._order):
                                         if index % len(self._workers) == worker.slot:
+                                            if self.result_publisher:
+                                                await self.result_publisher.interrupt(owned.camera_id, 'worker_restart')
                                             owned.invalidate()
                                 self._set_status(camera, 'analyzer', 'loading_model')
                                 await worker.start()
@@ -411,60 +345,34 @@ class Analyzer:
 
     async def _analyze(self, worker, camera, captured):
         session = camera.session_id
-        input_session = camera.input_session_id(captured)
-        tracking_context = camera.tracking_context_id
-        session_generation = camera.session_generation
-        worker_generation = worker.generation
-        if camera.tracking_started_at_ms is None:
-            camera.tracking_started_at_ms = captured.frame_ts_ms
-        tracking_started_at_ms = camera.tracking_started_at_ms
         self._set_status(camera, 'analyzer', 'detecting')
-        # At most one diagnostic image per camera; ordinary live results never wait for it.
-        image_result = self._start_image(camera, captured, session)
+        # Encode this same immutable capture while the model works, once for all viewers.
+        frame_task = (asyncio.create_task(asyncio.to_thread(encode_frame, captured.frame, captured.frame_id))
+                      if any(sub.include_frames for sub in self._subscriptions) else None)
         try:
+            ticket = (await self.result_publisher.begin_frame(camera.camera_id, captured, self._service_id, session)
+                      if self.result_publisher else None)
             if self.algorithm == 'botsort':
-                metadata = {'camera_id': camera.camera_id, 'stream_session_id': input_session or session,
-                            'tracking_context_id': tracking_context,
+                metadata = {'camera_id': camera.camera_id, 'stream_session_id': session,
                             'stream_epoch': captured.stream_epoch, 'frame_id': captured.frame_id,
                             'frame_ts_ms': captured.frame_ts_ms,
                             'decode_ts_ms': getattr(captured, 'decode_ts_ms', 0) or captured.frame_ts_ms,
                             'media_pts_ms': getattr(captured, 'media_pts_ms', None)}
-                options = {'full_results': True} if self._result_sink is not None else {}
-                detections, inference_ms = await worker.infer(captured.frame, metadata, **options)
+                detections, inference_ms = await worker.infer(captured.frame, metadata)
             else:
-                options = {'full_results': True} if self._result_sink is not None else {}
-                detections, inference_ms = await worker.infer(captured.frame, **options)
-            if self._sample_pipeline is not None:
-                try:
-                    self._sample_pipeline.offer(captured, detections,
-                        tracking_context_id=tracking_context, algorithm=self.algorithm)
-                except Exception:
-                    logger.exception('%s sample handoff failed', camera.camera_id)
-            if self._result_sink is not None:
-                try:
-                    factory = partial(frame_result,
-                        FrameResultInput.from_capture(captured), detections,
-                        camera_id=camera.camera_id, algorithm=self.algorithm,
-                        tracking_session=session, session_generation=session_generation,
-                        tracking_started_at_ms=tracking_started_at_ms,
-                        worker_slot=worker.slot, worker_generation=worker_generation,
-                        processed_at_ms=time.time_ns() // 1_000_000)
-                    deferred = getattr(self._result_sink, 'defer', None)
-                    # Worker IPC transfers a fresh detection list; it is not mutated after handoff.
-                    delivery = (deferred(factory) if callable(deferred)
-                                else self._result_sink(factory()))
-                    if inspect.isawaitable(delivery):
-                        if inspect.iscoroutine(delivery):
-                            delivery.close()
-                        raise TypeError('result_sink must hand off synchronously')
-                    self._result_handoffs += 1
-                    self._result_error = None
-                except Exception as exc:
-                    # Persistence must not reset a successful model or its tracker.
-                    self._result_failures += 1
-                    self._result_error = f'{type(exc).__name__}: {exc}'[:1000]
-                    logger.error('%s result handoff failed: %s', camera.camera_id, self._result_error)
+                detections, inference_ms = await worker.infer(captured.frame)
+            if self.result_publisher:
+                # Persist facts before JPEG encoding, session/TTL checks or coalescing for display.
+                await self.result_publisher.record(ticket, captured, detections, time.time_ns() // 1_000_000,
+                                                   getattr(worker, 'last_removed_tracks', ()))
             self._retry_delays.pop(worker.slot, None)
+            frame = None
+            if frame_task is not None:
+                try:
+                    frame = await frame_task
+                except Exception:
+                    # JPEG is a presentation artifact; its failure does not break tracking.
+                    logger.warning('%s display frame encoding failed', camera.camera_id)
             camera.inferences += 1
             camera.recent.append({'frame_id': captured.frame_id, 'stream_epoch': captured.stream_epoch,
                                   'inference_ms': inference_ms, 'worker_slot': worker.slot,
@@ -480,8 +388,6 @@ class Analyzer:
             result = {'type': 'detections', 'camera_id': camera.camera_id, 'task': TASK,
                       'algorithm': self.algorithm,
                       'service_session_id': self._service_id, 'stream_session_id': session,
-                      'input_stream_session_id': input_session,
-                      'tracking_context_id': tracking_context if self.algorithm == 'botsort' else None,
                       'session_generation': camera.session_generation,
                       'frame_ts_ms': captured.frame_ts_ms, 'timestamp_kind': getattr(captured, 'timestamp_kind', 'decode_wall_clock'),
                       'decode_ts_ms': getattr(captured, 'decode_ts_ms', captured.frame_ts_ms),
@@ -492,13 +398,21 @@ class Analyzer:
                       'inference_ms': inference_ms, 'detections': detections[:500],
                       'frame_id': captured.frame_id, 'stream_epoch': captured.stream_epoch,
                       'sent_at_ms': completed}
+            if frame is not None:
+                result['frame'] = frame
             camera.last_result = result
             camera.published += 1
-            self._publish(result, include_frames=False)
-            if image_result is not None and not image_result.done():
-                image_result.set_result(result)
+            self._publish(result)
+        except PersistenceError:
+            self._set_status(camera, 'persistence', 'blocked', 'PERSISTENCE_ENQUEUE_FAILED')
+            logger.error('%s persistence paused; pending results retained', camera.camera_id)
         except Exception as exc:
             camera.failures += 1
+            if self.result_publisher:
+                try:
+                    await self.result_publisher.failure(camera.camera_id, captured)
+                except PersistenceError:
+                    logger.error('%s lifecycle enqueue failed; persistence paused', camera.camera_id)
             camera.invalidate()
             state = 'worker_timeout' if isinstance(exc, TimeoutError) else 'inference_error'
             self._set_status(camera, 'analyzer', state, f'{type(exc).__name__}: {exc}'[:1000])
@@ -506,5 +420,6 @@ class Analyzer:
                            'retained' if worker.ready else 'will reload')
             await self._backoff(worker)
         finally:
-            if image_result is not None and not image_result.done():
-                image_result.set_result(None)
+            if frame_task is not None:
+                frame_task.cancel()
+                await asyncio.gather(frame_task, return_exceptions=True)

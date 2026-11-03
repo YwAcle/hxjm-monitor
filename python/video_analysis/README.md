@@ -13,24 +13,18 @@ single WebSocket per page. Each camera has its own Canvas, video status and AI
 status. One dashboard button toggles annotations for all four cameras. Fullscreen
 includes the overlay and compact toolbar. The shared toggle is above the grid
 and moves into the active fullscreen view, still controlling all four cameras.
-The service sends structured boxes; optional business delivery registers complete
-historical results through the business API. Synchronized
+The service does not draw boxes. Optional BoT-SORT business persistence is disabled
+by default; see [trajectory persistence](PERSISTENCE.md) for configuration, reliable
+delivery, deployment requirements and offline checks. Personal projects continue
+to subscribe to the shared producer. Synchronized
 clients also receive the clean inference input image. The dashboard defaults to continuous realtime WebRTC playback with asynchronous
 metadata overlays that expire after at most one second. Same-frame JPEG playback is opt-in. Module
 responsibilities, configuration and validation limits are in [SYNC_PLAYBACK.md](SYNC_PLAYBACK.md).
 
 ## Deployment
 
-Unified input and background recording are enabled with
-`VIDEO_ANALYSIS_RECORDING_ENABLED=true` and explicit source UUID mappings.
-The local launcher uses the existing `botsort39` interpreter and adds this
-checkout's `.run/media-deps` to `PYTHONPATH` for PyAV. Recording packets and
-decoded public frames share one connection and media clock; MediaMTX playback
-remains independent. File and API configuration are described in
-[the stage-one integration guide](../../docs/README.md#统一输入与后台录像配置).
-
 The versioned `scripts/start-local.sh` launcher defaults to shared mode. The primary
-checkout `/data/nfs_storage/hxjm` owns the MediaMTX relay and exactly one Uvicorn supervisor
+checkout `/home/guest/hxjm` owns the MediaMTX relay and exactly one Uvicorn supervisor
 with one YOLOX-X/FastReID model subprocess. Worktrees subscribe through same-origin
 Vite proxies. Stopping a developer application does not stop the shared services.
 See [BoT-SORT deployment](BOTSORT_DEPLOYMENT.md) for startup, ownership and maintenance.
@@ -39,9 +33,9 @@ The shared launcher selects GPU 0 by default (`SHARED_BOTSORT_GPU` overrides it)
 the device also serves VLLM workloads and is not reserved exclusively. It fixes
 OpenCV compute threads at 8, Torch/OpenMP/BLAS and per-camera decoder threads at 1,
 and sets `MALLOC_ARENA_MAX=2`, `MALLOC_TRIM_THRESHOLD_=131072` before process startup.
-Model loading and inference do not use a host available-memory threshold to pause
-workers. Actual allocation failures, worker exits and inference timeouts are
-handled by the worker supervisor and its retry policy.
+Shared inference requires 4 GiB host `MemAvailable`; model loading needs an extra
+3 GiB (7 GiB total). Insufficient memory retires/pauses the model and waits
+with backoff. Direct/local defaults remain 8 GiB reserve plus 4 GiB load headroom.
 
 The shared detector defaults to a fixed `1×3×800×1440` FP16 CUDA Graph. It verifies
 capture/replay against the ordinary model and clones output before YOLOX's in-place
@@ -99,6 +93,8 @@ from the existing business `/ws`. Production needs an equivalent reverse proxy.
 | VIDEO_ANALYSIS_MODEL_TIMEOUT_SECONDS | 60 | Model initialization deadline |
 | VIDEO_ANALYSIS_WORKER_RETRY_SECONDS | 5 | Initial per-worker exponential retry delay; resets after successful inference |
 | VIDEO_ANALYSIS_WORKER_RETRY_MAX_SECONDS | 120 | Maximum retry delay |
+| VIDEO_ANALYSIS_MEMORY_RESERVE_GIB | 8 | Minimum host MemAvailable for inference; retire worker below this |
+| VIDEO_ANALYSIS_MODEL_HEADROOM_GIB | 4 | Extra available RAM required before model loading |
 | VIDEO_ANALYSIS_WORKER_IDLE_SECONDS | 60 | Delayed idle model retirement |
 | VIDEO_ANALYSIS_FRAME_FRESH_SECONDS | 2 | Maximum decoded-frame age before scheduling |
 | VIDEO_ANALYSIS_RESULT_TTL_SECONDS | 3 | Result lifespan measured from frame capture |
@@ -153,10 +149,6 @@ Messages identify `camera_id`, `task=deepsort`, `service_session_id`,
 `stream_session_id`, monotonically increasing `session_generation`, and
 `stream_epoch` (RTSP reconnect). Worker failures rotate the affected analysis
 session; service restarts create a new service session and WebSocket connection.
-The legacy `stream_session_id` remains an analysis reset token. With shared input,
-`input_stream_session_id` identifies the actual video input session and
-`tracking_context_id` identifies the tracker state. Resetting a tracker retains
-the input session used by recording and historical results.
 Only a status establishes a frontend session. Older generations/epochs, mismatched
 sessions/tasks/cameras and duplicate frame IDs are rejected. All timers and caches
 are separated by camera/task; video components remain mounted during AI updates.

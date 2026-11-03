@@ -20,7 +20,8 @@ case "${LLM_BACKEND}" in
     *) printf '不支持的 LLM_BACKEND：%s\n' "${LLM_BACKEND}" >&2; exit 2 ;;
 esac
 
-PYTHON_BIN="${REPORT_PYTHON_BIN:-/data1/userhome/va/miniconda3/envs/monitor/bin/python}"
+# 报告 Worker 固定使用仓库内的服务环境（依赖见 llm_report_service/requirements.txt）。
+PYTHON_BIN="${ROOT_DIR}/.venv/bin/python"
 
 LLM_BASE_URL="${LLM_BASE_URL:-http://127.0.0.1:8000/v1}"
 LLM_MODEL_ID="${LLM_MODEL_ID:-internvl3.5-8b}"

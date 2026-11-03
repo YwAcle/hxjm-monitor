@@ -78,7 +78,7 @@ MediaMTX 原始流 → 前端 WebRTC 播放
 
 ## 唯一摄像头配置与启动
 
-**唯一需要修改的文件：`/data/nfs_storage/hxjm/video_ai_decoupling/demo.env`。**
+**唯一需要修改的文件：`/home/guest/hxjm/video_ai_decoupling/demo.env`。**
 该文件只配置一项，摄像头编号格式为 `camera_` 加正整数：
 
 ```dotenv
@@ -88,7 +88,7 @@ DEMO_CAMERA_ID=camera_1
 使用流程固定为：**修改 demo.env 的摄像头编号 → 执行 bash start_demo.sh → 打开或刷新 3010 页面**。
 
 ```bash
-cd /data/nfs_storage/hxjm/video_ai_decoupling
+cd /home/guest/hxjm/video_ai_decoupling
 bash start_demo.sh
 ```
 
@@ -98,7 +98,7 @@ bash start_demo.sh
   `http://192.168.109.191:18889/live/<摄像头编号>/` 和取帧地址
   `rtsp://127.0.0.1:18554/live/<摄像头编号>`，不需要修改第二份配置。
 - 脚本通过自身位置推导 demo 根目录，也可以在任意工作目录执行
-  `bash /data/nfs_storage/hxjm/video_ai_decoupling/start_demo.sh`。
+  `bash /home/guest/hxjm/video_ai_decoupling/start_demo.sh`。
 - 先检查两个端口的监听进程、工作目录、实际解释器和完整启动参数；确认是本
   demo 后再核对该进程实际环境与目标摄像头。配置一致且就绪时跳过启动，
   仅摄像头/地址不匹配的 demo 服务需要重启；另一项配置一致时不动它。
@@ -245,7 +245,7 @@ VITE_DETECTIONS_WS_URL=ws://192.168.109.191:8010/ws/detections
 可重复执行的命令（不要使用前端的 npm 环境代替 Python 算法环境）：
 
 ```bash
-cd /data/nfs_storage/hxjm/video_ai_decoupling
+cd /home/guest/hxjm/video_ai_decoupling
 DEMO_RTSP_URL='rtsp://127.0.0.1:18554/live/camera_1' \
 DEMO_RTSP_TRANSPORT='udp' \
 DEMO_CAMERA_ID='camera_1' \
@@ -326,7 +326,7 @@ DEMO_CAMERA_ID='camera_1' \
 首次准备依赖时可执行；当前服务器已经完成，不必重复安装：
 
 ```bash
-cd /data/nfs_storage/hxjm/video_ai_decoupling
+cd /home/guest/hxjm/video_ai_decoupling
 /home/guest/anaconda3/envs/deepsort/bin/python -B -m pip install \
   --target .runtime/python_deps --cache-dir .runtime/pip-cache \
   --disable-pip-version-check --no-input --no-compile --only-binary=:all: \
@@ -337,7 +337,7 @@ cd /data/nfs_storage/hxjm/video_ai_decoupling
 日常恢复或切换摄像头使用：
 
 ```bash
-cd /data/nfs_storage/hxjm/video_ai_decoupling
+cd /home/guest/hxjm/video_ai_decoupling
 bash start_demo.sh
 ```
 
@@ -420,7 +420,7 @@ bash start_demo.sh
   `.runtime/ws_messages.jsonl`。本机重复验证命令（服务保持运行）：
 
 ```bash
-cd /data/nfs_storage/hxjm/video_ai_decoupling
+cd /home/guest/hxjm/video_ai_decoupling
 PYTHONPATH="$PWD/.runtime/python_deps:$PWD" \
 /home/guest/anaconda3/envs/deepsort/bin/python -B .runtime/check_websocket.py
 ```
@@ -452,7 +452,7 @@ PYTHONPATH="$PWD/.runtime/python_deps:$PWD" \
 ### 原因核对与接入文件
 
 检查确认 3010 的进程工作目录是
-`/data/nfs_storage/hxjm/video_ai_decoupling/frontend`，入口为 `index.html → src/main.jsx → src/App.jsx`。
+`/home/guest/hxjm/video_ai_decoupling/frontend`，入口为 `index.html → src/main.jsx → src/App.jsx`。
 原先该入口仍只有第二步视频组件，未实现 AI 接收、Canvas 或标注开关，
 不是访问到了另一份 lanhu 页面。现在 `App` 已挂载新版 `VideoWithOverlay`。
 
@@ -531,7 +531,7 @@ PYTHONPATH="$PWD/.runtime/python_deps:$PWD" \
 复查证据和重复命令（服务应保持运行；浏览器驱动仅在 demo 的忽略目录内）：
 
 ```bash
-cd /data/nfs_storage/hxjm/video_ai_decoupling
+cd /home/guest/hxjm/video_ai_decoupling
 node .runtime/check_overlay.mjs
 node .runtime/check_overlay_browser.mjs
 node .runtime/probe_whep.mjs

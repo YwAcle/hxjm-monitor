@@ -3,11 +3,11 @@ import cv2
 import os
 
 def main():
-    model = YOLO("/data/nfs_storage/hxjm/python/deep_sort-master/detection/yolov5mu.pt")
+    model = YOLO("/home/guest/hxjm/python/deep_sort-master/detection/yolov5mu.pt")
 
-    img_dir = "/data/nfs_storage/hxjm/python/deep_sort-master/MOTSChallenge/train/0001/img1"   # 图片文件夹(改成你的实际路径)
-    out_dir = "/data/nfs_storage/hxjm/python/deep_sort-master/MOTSChallenge/train/0001/det"    # det.txt 输出目录
-    vis_dir = "/data/nfs_storage/hxjm/python/deep_sort-master/MOTSChallenge/train/0001/det_images"
+    img_dir = "/home/guest/hxjm/python/deep_sort-master/MOTSChallenge/train/0001/img1"   # 图片文件夹(改成你的实际路径)
+    out_dir = "/home/guest/hxjm/python/deep_sort-master/MOTSChallenge/train/0001/det"    # det.txt 输出目录
+    vis_dir = "/home/guest/hxjm/python/deep_sort-master/MOTSChallenge/train/0001/det_images"
     os.makedirs(out_dir, exist_ok=True)
     os.makedirs(vis_dir, exist_ok=True)
 

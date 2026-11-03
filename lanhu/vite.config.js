@@ -31,11 +31,6 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
-      '/auth': {
-        target: backendOrigin,
-        changeOrigin: true,
-        rewrite: path => path.replace(/^\/auth(?=\/|$)/, ''),
-      },
       '/api': {
         target: backendOrigin,
         changeOrigin: true,

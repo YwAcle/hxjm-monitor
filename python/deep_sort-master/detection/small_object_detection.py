@@ -3,8 +3,8 @@ from sahi.predict import get_sliced_prediction
 from pathlib import Path
 
 
-MODEL_PATH = "/data/nfs_storage/hxjm/python/deep_sort-master/detection/yolov5mu.pt"
-IMAGE_PATH = "/data/nfs_storage/hxjm/python/deep_sort-master/detection/image.png"
+MODEL_PATH = "/home/guest/hxjm/python/deep_sort-master/detection/yolov5mu.pt"
+IMAGE_PATH = "/home/guest/hxjm/python/deep_sort-master/detection/image.png"
 
 
 def main():

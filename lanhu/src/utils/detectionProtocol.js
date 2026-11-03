@@ -5,7 +5,7 @@ export const DETECTION_TTL_MS = 3000;
 export function parseDetectionMessage(raw) {
   const message = JSON.parse(raw);
   if (!message || Array.isArray(message) || typeof message !== 'object'
-      || typeof message.camera_id !== 'string' || !['botsort', 'deepsort'].includes(message.task)
+      || typeof message.camera_id !== 'string' || message.task !== 'deepsort'
       || typeof message.stream_session_id !== 'string' || !message.stream_session_id
       || typeof message.service_session_id !== 'string' || !message.service_session_id
       || !Number.isInteger(message.session_generation) || message.session_generation < 0

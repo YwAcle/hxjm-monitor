@@ -101,7 +101,7 @@ test('bounded history, factual state precedence and channel recovery', () => {
   assert.equal(c.historyRef.current.length, 64);
   c.expire(10000);
   assert.equal(c.historyRef.current.length, 0);
-  assert.equal(c.aiStatus, '分析延迟');
+  assert.equal(c.aiStatus, '暂无新结果');
 });
 
 test('future results cannot advance the ordering baseline; expiry stays visible on heartbeat', () => {
@@ -114,5 +114,5 @@ test('future results cannot advance the ordering baseline; expiry stays visible 
   assert.equal(c.accept(p, 100, clock), false);
   assert.equal(c.accept({...p,frame_id:1,frame_ts_ms:100050,sent_at_ms:100060},100,clock), true);
   c.expire(5000);c.accept(s,5000);
-  assert.equal(c.aiStatus,'分析延迟');
+  assert.equal(c.aiStatus,'暂无新结果');
 });

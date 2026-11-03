@@ -1,16 +1,17 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import styles from './MonitorGrid.module.css';
 import WebRTCPlayer from './WebRTCPlayer/index.jsx';
 import VideoWithOverlay from '../../../VideoWithOverlay/index.jsx';
 import { DetectionWebSocketProvider } from '../../../../contexts/DetectionWebSocketContext.jsx';
-import { videoMediaBase } from '../../../../config/videoDeployment.js';
+import { videoAnalysisEnabled, videoMediaBase, synchronizedAnalysisAllowed } from '../../../../config/videoDeployment.js';
 
 function MonitorGrid() {
   // 视频流地址
   const mediaBaseUrl = videoMediaBase(import.meta.env, window.location);
   const algorithmsEnabled = import.meta.env.VITE_VIDEO_ANALYSIS_MODE === 'local'
     && import.meta.env.VITE_ENABLE_DEEPSORT !== 'false';
-  const analysisEnabled = import.meta.env.VITE_VIDEO_ANALYSIS_ENABLED !== 'false';
+  const analysisEnabled = videoAnalysisEnabled(import.meta.env);
   const analysisCameras = (import.meta.env.VITE_VIDEO_ANALYSIS_CAMERAS || 'camera_1,camera_2,camera_3,camera_4').split(',');
 
   // 摄像头配置 - 包含视频流URL
@@ -44,6 +45,16 @@ function MonitorGrid() {
 
   // 跟踪每个摄像头的连接状态
   const [cameraStatus, setCameraStatus] = useState({});
+  const [annotationsEnabled, setAnnotationsEnabled] = useState(true);
+  const [synchronized, setSynchronized] = useState(false);
+  const [controlsTarget, setControlsTarget] = useState(null);
+  useEffect(() => {
+    const onFullscreen = () => setControlsTarget(
+      document.fullscreenElement?.matches('[data-testid="video-with-overlay"]') ? document.fullscreenElement : null,
+    );
+    document.addEventListener('fullscreenchange', onFullscreen);
+    return () => document.removeEventListener('fullscreenchange', onFullscreen);
+  }, []);
 
   // 处理状态变化
   const handleStatusChange = (cameraId, status) => {
@@ -63,14 +74,29 @@ function MonitorGrid() {
     const onStatusChange = status => handleStatusChange(camera.id, status);
     if (analysisEnabled && analysisCameras.includes(`camera_${Number(camera.id)}`)) {
       return <VideoWithOverlay cameraId={`camera_${Number(camera.id)}`} originalVideoUrl={camera.fallbackUrl}
-        onStatusChange={onStatusChange} />;
+        onStatusChange={onStatusChange} annotationsEnabled={annotationsEnabled} synchronized={synchronized} />;
     }
     return <WebRTCPlayer primaryUrl={camera.primaryUrl} fallbackUrl={camera.fallbackUrl} onStatusChange={onStatusChange} />;
   };
 
+  const controls = (
+    <div className={controlsTarget ? styles.fullscreenControls : styles.controls}>
+      {synchronizedAnalysisAllowed(import.meta.env) && <button type="button" aria-label="同帧验收模式" aria-pressed={synchronized}
+        onClick={() => setSynchronized(value => !value)}
+        title="同帧验收时画面随 AI 更新；实时视频中的框可能存在时间偏差">
+        {synchronized ? '同帧验收（随 AI 更新）' : '实时视频（异步检测框）'}
+      </button>}
+      <button type="button" aria-label="显示检测框" aria-pressed={annotationsEnabled}
+        onClick={() => setAnnotationsEnabled(value => !value)}>
+        检测框：{annotationsEnabled ? '显示' : '隐藏'}
+      </button>
+    </div>
+  );
+
   return (
-    <DetectionWebSocketProvider enabled={analysisEnabled}>
+    <DetectionWebSocketProvider enabled={analysisEnabled} synchronized={synchronized}>
       <div className={styles.gridContainer}>
+        {analysisEnabled && (controlsTarget ? createPortal(controls, controlsTarget) : controls)}
         {/* 第一行摄像头 */}
         <div className={`${styles.cameraRow} flex-row justify-between`}>
           {cameras.slice(0, 2).map((camera) => (

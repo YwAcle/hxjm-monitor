@@ -1,8 +1,6 @@
-# HXJM Git Worktree 协同开发使用手册
+# HXJM Git Worktree 协同开发使用手册1
 
-> 协作方式更新（2026-10-29，v0.2）：本文件保留旧工作区／worktree方式的历史操作说明。后续开发采用独立账号、独立clone仓库和按需求创建的功能分支，以[协同开发流程](COLLABORATION_WORKFLOW.md)为准；旧目录迁移前仍需保留未交付改动。本文中的旧工作区启动说明不代表新账号下启动配置已验证。
-
-本手册适用于当前协作方式：每个人在自己的 worktree 目录和开发分支中开发，由集成人员在 `/data/nfs_storage/hxjm` 的 `main` 分支合并、验证，并将 `main` 推送到远程仓库。
+本手册适用于当前协作方式：每个人在自己的 worktree 目录和开发分支中开发，由集成人员在 `/home/guest/hxjm` 的 `main` 分支合并、验证，并将 `main` 推送到远程仓库。
 
 远程名称：`origin`。远程地址：`https://gitee.com/wo_di_chao_chao/HXJM.git`。
 
@@ -34,23 +32,23 @@
 当前工作树信息：
 
 ```text
-/data/nfs_storage/hxjm      f9d5396 [main]
+/home/guest/hxjm      f9d5396 [main]
 /home/guest/hxjm-wsc  3d89f1c [dev/wsc]
 /home/guest/hxjm-wyf  e687e06 [dev/wyf]
 ```
 
 | 使用者 / 用途 | 工作目录 | 本地分支 | 主要操作 |
 | --- | --- | --- | --- |
-| 集成人员 | `/data/nfs_storage/hxjm` | `main` | 更新主分支、合并、验证、推送 `origin/main` |
+| 集成人员 | `/home/guest/hxjm` | `main` | 更新主分支、合并、验证、推送 `origin/main` |
 | WSC | `/home/guest/hxjm-wsc` | `dev/wsc` | 开发、提交、同步主分支 |
 | WYF | `/home/guest/hxjm-wyf` | `dev/wyf` | 开发、提交、同步主分支 |
 
 查看实时状态：
 
 ```bash
-git -C /data/nfs_storage/hxjm worktree list
-git -C /data/nfs_storage/hxjm branch -vv
-git -C /data/nfs_storage/hxjm remote -v
+git -C /home/guest/hxjm worktree list
+git -C /home/guest/hxjm branch -vv
+git -C /home/guest/hxjm remote -v
 ```
 
 手册编写时（2026-10-10）检查到的本地状态如下。这只是快照，`origin/*` 记录以最近一次 fetch 为准，不代表已实时查询远程服务器：
@@ -77,13 +75,13 @@ git -C /data/nfs_storage/hxjm remote -v
        ↑ main 由集成人员推送
        |
 本地共享仓库
-  /data/nfs_storage/hxjm      → main
+  /home/guest/hxjm      → main
                             ↑ 合并 dev/wsc、dev/wyf
   /home/guest/hxjm-wsc  → dev/wsc
   /home/guest/hxjm-wyf  → dev/wyf
 ```
 
-同一个本地分支通常只能在一个 worktree 中检出。因此，在个人目录不要执行 `git switch main`，需要操作 main 时进入 `/data/nfs_storage/hxjm`。
+同一个本地分支通常只能在一个 worktree 中检出。因此，在个人目录不要执行 `git switch main`，需要操作 main 时进入 `/home/guest/hxjm`。
 
 ### 2.2 本地分支、远程跟踪分支和上游
 
@@ -110,7 +108,7 @@ git -C /data/nfs_storage/hxjm remote -v
 ## 3. 团队约定
 
 1. **个人开发在自己的目录完成。** WSC 使用 `hxjm-wsc`，WYF 使用 `hxjm-wyf`；main 工作目录用于集成。
-2. **main 由约定的集成人员串行操作。** 同一时段只允许一人操作 `/data/nfs_storage/hxjm`，提前协调集成时间。worktree 不提供多人编辑同一工作目录的隔离。
+2. **main 由约定的集成人员串行操作。** 同一时段只允许一人操作 `/home/guest/hxjm`，提前协调集成时间。worktree 不提供多人编辑同一工作目录的隔离。
 3. **日常采用 merge 同步。** 长期个人分支不随意 rebase，main 不强制推送，避免改写他人已使用的历史。
 4. **操作前查看目录、分支和工作区。** 合并和拉取前先提交或保存未完成修改。
 5. **提交后再交付。** 未提交文件不会随分支合并。交付时说明分支、提交 ID、变更和验证结果。
@@ -159,7 +157,7 @@ git config --show-origin --get user.email
 支持 worktree 配置的 Git 版本，可由集成人员在主目录一次性开启：
 
 ```bash
-git -C /data/nfs_storage/hxjm config extensions.worktreeConfig true
+git -C /home/guest/hxjm config extensions.worktreeConfig true
 ```
 
 各成员再在自己的目录配置，换成真实姓名、邮箱：
@@ -409,12 +407,12 @@ git merge origin/dev/wsc
 
 ## 8. 在 main 合并并推送
 
-仅由集成人员在 `/data/nfs_storage/hxjm` 操作。确认无人同时修改主工作目录，开发者已冻结本次交付提交。
+仅由集成人员在 `/home/guest/hxjm` 操作。确认无人同时修改主工作目录，开发者已冻结本次交付提交。
 
 ### 8.1 更新并检查 main
 
 ```bash
-cd /data/nfs_storage/hxjm
+cd /home/guest/hxjm
 git branch --show-current
 git status
 git fetch origin
@@ -636,7 +634,7 @@ stash 恢复冲突也需编辑、`git add` 标记解决，再按进度提交或�
 新增成员 `abc` 示例，由维护者协调，确认目标目录和分支名称未占用：
 
 ```bash
-cd /data/nfs_storage/hxjm
+cd /home/guest/hxjm
 git fetch origin
 git worktree add -b dev/abc /home/guest/hxjm-abc origin/main
 git -C /home/guest/hxjm-abc branch --show-current
@@ -693,7 +691,7 @@ git worktree list
 ```bash
 git -C /home/guest/hxjm-abc status --short
 git -C /home/guest/hxjm-abc status --short --ignored
-git -C /data/nfs_storage/hxjm merge-base --is-ancestor dev/abc main
+git -C /home/guest/hxjm merge-base --is-ancestor dev/abc main
 ```
 
 最后一条退出码 `0` 表示该分支全部提交已包含在本地 main，`1` 表示未全部包含。这不证明 main 已推送，仍需确认发布结果。
@@ -771,7 +769,7 @@ git rev-parse --short HEAD
 ### 第三步：集成人员在 main 依次合并
 
 ```bash
-cd /data/nfs_storage/hxjm
+cd /home/guest/hxjm
 git status
 git fetch origin
 git merge --ff-only origin/main

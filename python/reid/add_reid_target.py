@@ -451,7 +451,7 @@ async def batch_add_from_person_dir():
     批量从 ./data/person 目录添加目标人物（直接执行）
     目录结构：./data/person/姓名/图片1.jpg, 图片2.jpg, ...
     """
-    person_dir = "/data/nfs_storage/hxjm/python/reid/data/2026hanjia/2"
+    person_dir = "/home/guest/hxjm/python/reid/data/2026hanjia/2"
     print("=" * 60)
     print(f"批量添加目标人物（从 {person_dir} 目录）")
     print("=" * 60)

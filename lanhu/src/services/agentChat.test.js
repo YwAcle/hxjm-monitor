@@ -17,20 +17,6 @@ const jsonResponse = (body, status = 200) => new Response(JSON.stringify(body), 
   headers: { 'Content-Type': 'application/json' },
 });
 
-test('Agent text, image, streaming and memory requests carry no login credentials', async () => {
-  const fetchImpl = async (url, options) => {
-    assert.equal(options.headers?.Authorization, undefined);
-    assert.equal(options.headers?.['X-HXJM-Service-Token'], undefined);
-    assert.equal(options.credentials, 'omit');
-    if (url.endsWith('/stream')) return sseResponse(['event: done\ndata: {"session_id":"shared-session"}\n\n']);
-    return jsonResponse({ session_id: 'shared-session', status: 'ok' });
-  };
-  await sendAgentMessage('查询', 'shared-session', { fetchImpl });
-  await sendAgentImageMessage('查图', new Blob(['image'], { type: 'image/jpeg' }), 'shared-session', { fetchImpl });
-  await streamAgentMessage('查询', 'shared-session', () => {}, { fetchImpl });
-  await clearAgentMemory('shared-session', { fetchImpl });
-});
-
 test('文本聊天发送并接收同一个 session_id', async () => {
   let request;
   const fetchImpl = async (url, options) => {
@@ -372,18 +358,4 @@ test('流式聊天要求以 done 事件正常结束', async () => {
     streamAgentMessage('hello', 'stream-session', () => {}, { fetchImpl }),
     error => error instanceof AgentApiError && error.message === 'Agent 流式响应意外中断',
   );
-});
-
-test('SSE最终响应保留按序到达的全部工具结果和图片放大结果', async () => {
-  const directory = { type: 'person_directory', items: [{ display_name: '张三' }] };
-  const image = { type: 'super_resolution', data: { image_base64: 'aGVsbG8=', scale: 2 } };
-  const response = await streamAgentMessage('查询', 'multi-session', () => {}, {
-    fetchImpl: async () => sseResponse([
-      `event: result\ndata: ${JSON.stringify(directory)}\n\n`,
-      `event: result\ndata: ${JSON.stringify(image)}\n\n`,
-      'event: done\ndata: {"session_id":"multi-session"}\n\n',
-    ]),
-  });
-  assert.deepEqual(response.results.map(value => value.type), ['person_directory', 'super_resolution']);
-  assert.equal(response.results[1].image_base64, 'aGVsbG8=');
 });

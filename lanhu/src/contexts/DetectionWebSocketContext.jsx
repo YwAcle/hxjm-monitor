@@ -2,16 +2,15 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { parseDetectionMessage } from '../utils/detectionProtocol.js';
 import { DetectionChannel, detectionKey } from '../utils/detectionChannel.js';
 import { ServerClock } from '../utils/videoAlignment.js';
-import { detectionSocketPath, detectionTask } from '../config/videoDeployment.js';
+import { detectionSocketPath } from '../config/videoDeployment.js';
 
 const DetectionContext = createContext(null);
 const CAMERA_IDS = ['camera_1', 'camera_2', 'camera_3', 'camera_4'];
-const TASK = detectionTask(import.meta.env);
 
-export function DetectionWebSocketProvider({ enabled, children }) {
+export function DetectionWebSocketProvider({ enabled, synchronized = false, children }) {
   const channelsRef = useRef(null);
   if (!channelsRef.current) channelsRef.current = Object.fromEntries(
-    CAMERA_IDS.map(id => [detectionKey(id, TASK), new DetectionChannel(id, TASK)]),
+    CAMERA_IDS.map(id => [detectionKey(id), new DetectionChannel(id)]),
   );
   const [channels, setChannels] = useState({});
 
@@ -30,15 +29,15 @@ export function DetectionWebSocketProvider({ enabled, children }) {
     const reset = status => { all.forEach(c => c.reset(status)); refresh(); };
     const connect = () => {
       if (disposed) return;
-      reset('连接中');
+      reset('AI 连接中');
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      socket = new WebSocket(`${protocol}//${window.location.host}${detectionSocketPath()}`);
+      socket = new WebSocket(`${protocol}//${window.location.host}${detectionSocketPath(synchronized)}`);
       const current = socket;
       const watchHeartbeat = () => {
         clearTimeout(heartbeatTimer);
         heartbeatTimer = setTimeout(() => {
           if (disposed || socket !== current) return;
-          reset('响应超时');
+          reset('AI 响应超时');
           current.close();
         }, 5000);
       };
@@ -76,11 +75,11 @@ export function DetectionWebSocketProvider({ enabled, children }) {
         if (disposed || socket !== current) return;
         clearTimeout(heartbeatTimer);
         clearInterval(clockTimer);
-        reset('连接已断开，正在重连');
+        reset('服务离线，正在重连');
         reconnectTimer = setTimeout(connect, Math.min(1000 * (2 ** attempt++), 10000));
       };
     };
-    reset(enabled ? '连接中' : '分析未启用');
+    reset(enabled ? 'AI 连接中' : '分析未启用');
     if (enabled) connect();
     const expiryTimer = setInterval(() => {
       let changed = false;
@@ -102,18 +101,18 @@ export function DetectionWebSocketProvider({ enabled, children }) {
       clearTimeout(heartbeatTimer);
       clearInterval(clockTimer);
       document.removeEventListener('visibilitychange', visibility);
-      all.forEach(c => c.reset('连接已断开'));
+      all.forEach(c => c.reset('AI 已断开'));
       if (socket) {
         socket.onopen = socket.onmessage = socket.onerror = socket.onclose = null;
         socket.close();
       }
     };
-  }, [enabled]);
+  }, [enabled, synchronized]);
 
   return <DetectionContext.Provider value={channels}>{children}</DetectionContext.Provider>;
 }
 
-export function useDetections(cameraId, task = TASK) {
+export function useDetections(cameraId, task = 'deepsort') {
   const channels = useContext(DetectionContext);
   const emptyRef = useRef(null);
   const emptyHistory = useRef([]);

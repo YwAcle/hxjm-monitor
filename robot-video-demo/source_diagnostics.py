@@ -7,6 +7,8 @@ import time
 LABELS = {
     "connecting": "正在连接摄像头 WebSocket；若超时请先检查网络和视频服务。",
     "connected": "WebSocket 已建立；等待符合 M20 协议的视频包。",
+    "no_video": "视频接口已连接，但未收到该摄像头视频；请检查源端 RTSP 地址、拉流服务和日志。",
+    "waiting_keyframe": "已收到视频；等待关键帧后开始转发。",
     "forwarding": "已收到有效协议包并交给 FFmpeg；最终播放以浏览器解码为准。",
     "invalid": "已收到消息，但包头/版本/相机编号不符合约定；请核对厂家协议。",
     "connect_error": "WebSocket 未建立；检查 IP、端口、路径及视频服务。",

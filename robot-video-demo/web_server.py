@@ -17,15 +17,16 @@ class StateReport(BaseModel):
     state: str = Field(min_length=1, max_length=40)
 
 
-async def telemetry_events(request, store):
+async def telemetry_events(request, store, shutdown_requested=None):
     # Snapshots coalesce updates and keep memory bounded for slow clients.
-    while not await request.is_disconnected():
+    while not (shutdown_requested and shutdown_requested()) and not await request.is_disconnected():
         payload = json.dumps(store.snapshot(), ensure_ascii=False)
         yield f"event: telemetry\ndata: {payload}\n\n"
         await asyncio.sleep(1)
 
 
-def create_app(settings: Settings, process_status=None, telemetry_store=None, source_status=None):
+def create_app(settings: Settings, process_status=None, telemetry_store=None, source_status=None,
+               shutdown_requested=None):
     store = telemetry_store if telemetry_store is not None else TelemetryStore(settings.mode)
 
     @asynccontextmanager
@@ -65,7 +66,7 @@ def create_app(settings: Settings, process_status=None, telemetry_store=None, so
 
     @app.get("/api/telemetry/events")
     async def events(request: Request):
-        return StreamingResponse(telemetry_events(request, store), media_type="text/event-stream",
+        return StreamingResponse(telemetry_events(request, store, shutdown_requested), media_type="text/event-stream",
                                  headers={"X-Accel-Buffering": "no"})
 
     @app.post("/api/devices/{device}/state")

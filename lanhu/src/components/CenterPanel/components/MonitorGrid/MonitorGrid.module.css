@@ -2,26 +2,51 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  flex: 3 1 0;
-  min-height: 0;
+}
+
+.controls {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  gap: 8px;
+}
+
+.fullscreenControls {
+  position: absolute;
+  top: 44px;
+  right: 8px;
+  z-index: 25;
+  display: flex;
+  gap: 8px;
+}
+
+.controls button,
+.fullscreenControls button {
+  padding: 4px 12px;
+  border: 1px solid rgba(65, 177, 255, 0.5);
+  border-radius: 4px;
+  color: #e0f3ff;
+  background: #102733;
+  cursor: pointer;
+  font: 13px/1.5 system-ui, sans-serif;
+}
+
+.controls button[aria-pressed='false'],
+.fullscreenControls button[aria-pressed='false'] {
+  color: #9cabb5;
 }
 
 .cameraRow {
   display: flex;
   flex-direction: row;
   justify-content: space-between;
-  width: 100%;
+  width: 1302px;
   gap: 12px;
-  flex: 1;
-  min-height: 0;
 }
 
 .cameraContainer {
-  height: 100%;
-  width: 0;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
+  height: 384px;
+  width: 645px;
   display: flex;
   flex-direction: column;
   cursor: pointer;

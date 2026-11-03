@@ -40,16 +40,19 @@ async def probe(url, camera="front", timeout=5):
                                         "payload_bytes": len(packet.payload),
                                         "detail": "收到符合 M20 包头约定的数据；仍需验证 H.264 解码及浏览器播放。"})
                         return results
+                    other_camera = "back" if camera == "front" else "front"
+                    if parse_packet(message, other_camera) is not None:
+                        continue
                     invalid += 1
             # A busy source consisting solely of invalid messages can hit this bound.
             raise TimeoutError
     except Exception as exc:
         if not opened:
-            detail = "TCP 已通，但 WebSocket 未建立；核对 /front 或 /back 路径、认证和厂家服务。"
+            detail = "TCP 已通，但 WebSocket 未建立；核对 /all 路径、认证和视频服务。"
         elif invalid:
             detail = "收到消息但均不符合 M20 协议；核对 24 字节头、magic、版本、相机编号。"
         else:
-            detail = "WebSocket 已通但未收到有效视频包；确认设备视频源和外部观看权限。"
+            detail = "WebSocket 已通但未收到该摄像头视频；检查源端 RTSP 拉流、摄像头地址和视频服务日志。"
         results.append({"stage": "packet" if opened else "websocket", "ok": False,
                         "error_type": type(exc).__name__, "messages": count,
                         "invalid_messages": invalid, "detail": detail})
@@ -69,7 +72,7 @@ def main():
         parser.error("端口或超时无效")
     if not re.fullmatch(r"[A-Za-z0-9.-]+", args.host):
         parser.error("host 请填写 IPv4 或主机名")
-    url = args.ws_url or f"ws://{args.host}:{args.port}/{args.camera}"
+    url = args.ws_url or f"ws://{args.host}:{args.port}/all"
     try:
         parsed = urlsplit(url)
         if parsed.scheme not in ("ws", "wss") or not parsed.hostname or parsed.fragment:

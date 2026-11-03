@@ -107,7 +107,7 @@ class BoTSortPipeline:
 
     def infer(self, frame, metadata):
         import torch
-        identity = (metadata['camera_id'], metadata.get('tracking_context_id') or metadata['stream_session_id'],
+        identity = (metadata['camera_id'], metadata['stream_session_id'],
                     metadata['stream_epoch'], frame.shape[:2])
         state = self.cameras.get(identity[0])
         if state is None or identity != state.identity:
@@ -136,7 +136,10 @@ class BoTSortPipeline:
                 detections = outputs[0].cpu().numpy()[:, :7].copy()
                 detections[:, :4] /= info['ratio']
             try:
+                removed_before = {t.track_id for t in getattr(state.tracker, 'removed_stracks', ())}
                 tracks = state.tracker.update(detections, frame, timestamp_ms=state.clock_ms)
+                self.last_removed_tracks = [int(t.track_id) for t in getattr(state.tracker, 'removed_stracks', ())
+                                            if t.track_id not in removed_before]
             except np.linalg.LinAlgError:
                 # A broken trajectory must not discard shared models or other cameras.
                 self.cameras.pop(identity[0], None)

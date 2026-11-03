@@ -31,6 +31,7 @@ services:
       BROWSER: none
       HOME: /tmp
       APP_HTTP_PORT: '3000'
+      LOCAL_MEDIA_ORIGIN: ${MEDIA_HTTP_URL:-http://mediamtx:8889}
     command:
     - node
     - /app/frontend-server.mjs
@@ -139,6 +140,15 @@ services:
       PYTHONPATH: /app/python:/app/python/tracker/BoT-SORT
       HOME: /runtime
       TORCH_HOME: /runtime/torch
+      VIDEO_RESULTS_PERSIST_ENABLED: 'true'
+      VIDEO_RESULTS_BUSINESS_BASE_URL: http://backend:8080/api/v1/business
+      VIDEO_RESULTS_SERVICE_ID: hxjm-pipeline
+      VIDEO_RESULTS_SERVICE_TOKEN: ${PIPELINE_TOKEN}
+      VIDEO_RESULTS_SOURCE_MAP_FILE: /config/tracking-sources.json
+      VIDEO_RESULTS_SPOOL_DIR: /runtime/tracking-results
+      VIDEO_RESULTS_CAPABILITY_CODE: person.tracking
+      VIDEO_RESULTS_IMPLEMENTATION_CODE: botsort
+      VIDEO_RESULTS_IMPLEMENTATION_VERSION: configured
     command:
     - python
     - -m

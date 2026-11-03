@@ -73,7 +73,7 @@ class Settings:
                 camera = "back" if ident == "camera_2" else "front"
                 fps = self.fps
             elif source == "m20":
-                url = url or f"ws://{self.robot_host}:{self.robot_port}/{camera}"
+                url = url or f"ws://{self.robot_host}:{self.robot_port}/all"
             if source in ("m20", "rtsp"):
                 try:
                     parsed = urlsplit(url)
@@ -121,3 +121,27 @@ paths:
             if camera.source == "rtsp":
                 result += "    rtspTransport: tcp\n    sourceOnDemand: yes\n"
         return result
+
+    def mediamtx_env(self):
+        """Equivalent config without MediaMTX's inotify file watcher."""
+        env = {
+            "MTX_LOGLEVEL": "info", "MTX_RTSP": "yes",
+            "MTX_RTSPADDRESS": f"{self.bind}:{self.rtsp_port}",
+            "MTX_RTSPTRANSPORTS": "tcp", "MTX_RTMP": "no",
+            "MTX_HLS": "no", "MTX_SRT": "no", "MTX_WEBRTC": "yes",
+            "MTX_WEBRTCADDRESS": f"{self.bind}:{self.whep_port}",
+            "MTX_WEBRTCALLOWORIGIN": "*",
+            "MTX_WEBRTCLOCALUDPADDRESS": f"{self.bind}:{self.ice_port}",
+            "MTX_WEBRTCADDITIONALHOSTS": self.public_host,
+        }
+        for camera in self.cameras:
+            if camera.source == "disabled":
+                continue
+            # MediaMTX splits env map keys at '_'; encode the fixed path's underscore.
+            path = camera.path.replace("_", r"\x5f")
+            key = f"MTX_PATHS_~^{path}$_".upper()
+            env[key + "SOURCE"] = camera.url if camera.source == "rtsp" else "publisher"
+            if camera.source == "rtsp":
+                env[key + "RTSPTRANSPORT"] = "tcp"
+                env[key + "SOURCEONDEMAND"] = "yes"
+        return env

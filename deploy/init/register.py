@@ -167,6 +167,10 @@ def main():
                                'instance_id':state['feature_instance_id'],'threshold':0.88}}
     save(path, serial)
     state["source_ids"]=source_ids; state["source_streams"]=source_streams; state["instances"]=instance_list
+    source_map = {camera: dict(source_id=source, camera_stream_id=source_streams[source],
+                              instance_id=instances[(source, "botsort")]["instance_id"], timezone="Asia/Shanghai")
+                  for camera, source in source_ids.items()}
+    save(state_path.with_name("tracking-sources.json"), source_map)
     save(state_path,state)
     print(f"Registered tracking/feature contracts, {len(instances)} camera instances and feature instance; state: {path}")
 if __name__=="__main__": main()

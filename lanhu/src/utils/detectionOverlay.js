@@ -1,5 +1,3 @@
-const smoothedBoxesByCanvas = new WeakMap();
-
 export function containRect(width, height, sourceWidth, sourceHeight) {
   if ([width, height, sourceWidth, sourceHeight].some(value => !Number.isFinite(value) || value <= 0)) {
     return null;
@@ -24,46 +22,14 @@ export function mapBox(bbox, rect) {
   };
 }
 
-function clearCanvas(canvas) {
+export function clearOverlay(canvas) {
   const context = canvas.getContext('2d');
   if (context) {
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.clearRect(0, 0, canvas.width, canvas.height);
   }
-}
-
-export function clearOverlay(canvas) {
-  clearCanvas(canvas);
-  smoothedBoxesByCanvas.delete(canvas);
   canvas.dataset.drawnBoxes = '0';
   canvas.dataset.frameId = '';
-}
-
-function smoothDetections(canvas, message) {
-  const identity = [message.service_session_id, message.stream_session_id,
-    message.session_generation, message.stream_epoch].join(':');
-  const previous = smoothedBoxesByCanvas.get(canvas);
-  const previousBoxes = previous?.identity === identity ? previous.boxes : new Map();
-  const boxes = new Map();
-  const detections = message.detections.map(detection => {
-    if (!Number.isSafeInteger(detection.track_id)) return detection;
-    const old = previousBoxes.get(detection.track_id);
-    if (!old) {
-      boxes.set(detection.track_id, detection);
-      return detection;
-    }
-    const centerDistance = Math.hypot(
-      (old.bbox[0] + old.bbox[2] - detection.bbox[0] - detection.bbox[2]) / 2,
-      (old.bbox[1] + old.bbox[3] - detection.bbox[1] - detection.bbox[3]) / 2,
-    );
-    const alpha = centerDistance > 0.018 ? 0.985 : 0.93;
-    const smoothed = { ...detection, bbox: detection.bbox.map((value, index) =>
-      old.bbox[index] + (value - old.bbox[index]) * alpha) };
-    boxes.set(detection.track_id, smoothed);
-    return smoothed;
-  });
-  smoothedBoxesByCanvas.set(canvas, { identity, boxes });
-  return detections;
 }
 
 export function drawOverlay(canvas, video, packet, enabled, now = performance.now(), frozen = false) {
@@ -73,13 +39,10 @@ export function drawOverlay(canvas, video, packet, enabled, now = performance.no
   const height = Math.round(bounds.height * pixelRatio);
   if (canvas.width !== width) canvas.width = width;
   if (canvas.height !== height) canvas.height = height;
-  clearCanvas(canvas);
-  canvas.dataset.drawnBoxes = '0';
-  canvas.dataset.frameId = '';
+  clearOverlay(canvas);
 
   if (!enabled || !packet || (!frozen && now >= packet.expiresAt)
       || !video || video.readyState < 2 || (video.paused && !frozen) || width <= 0 || height <= 0) {
-    smoothedBoxesByCanvas.delete(canvas);
     return 0;
   }
   const videoBounds = video.getBoundingClientRect();
@@ -102,8 +65,7 @@ export function drawOverlay(canvas, video, packet, enabled, now = performance.no
   context.textBaseline = 'top';
   context.setLineDash?.([]);
 
-  const detections = smoothDetections(canvas, packet.message);
-  for (const detection of detections) {
+  for (const detection of packet.message.detections) {
     const box = mapBox(detection.bbox, rect);
     const identity = detection.track_id == null ? 'person' : `ID ${detection.track_id}`;
     const label = detection.confidence == null ? identity : `${identity} ${detection.confidence.toFixed(2)}`;
