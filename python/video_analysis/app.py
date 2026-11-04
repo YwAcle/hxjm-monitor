@@ -24,10 +24,23 @@ async def lifespan(app):
     persistence = PersistenceConfig(cameras=CAMERAS)
     if persistence.enabled and ALGORITHM != 'botsort':
         raise ValueError('Reliable tracking persistence currently requires BoT-SORT')
-    publisher = ResultPublisher(persistence) if persistence.enabled else None
-    analyzer = Analyzer(result_publisher=publisher)
+    sample_pipeline = None
+    if persistence.enabled and persistence.samples is not None:
+        from .business_client import BusinessClient
+        from .sample_pipeline import LocalSamplePipeline
+        client = BusinessClient(persistence.business_base_url, service_id=persistence.service_id,
+                                token_provider=lambda: persistence.service_token,
+                                timeout=persistence.timeout)
+        sample_pipeline = LocalSamplePipeline(client, **persistence.samples, finish_tasks=True)
+    publisher = (ResultPublisher(persistence,
+                                 on_confirmed=sample_pipeline.confirmed if sample_pipeline else None)
+                 if persistence.enabled else None)
+    analyzer = Analyzer(result_publisher=publisher, sample_pipeline=sample_pipeline)
     app.state.analyzer = analyzer
+    app.state.sample_pipeline = sample_pipeline
     try:
+        if sample_pipeline:
+            sample_pipeline.start()
         if publisher:
             await publisher.start()
         await analyzer.start()
@@ -36,6 +49,8 @@ async def lifespan(app):
         try:
             await analyzer.stop()
         finally:
+            if sample_pipeline:
+                await asyncio.to_thread(sample_pipeline.stop)
             if publisher:
                 await publisher.stop()
 
@@ -45,7 +60,11 @@ app = FastAPI(title="Video analysis", lifespan=lifespan)
 
 @app.get("/health")
 async def health(request: Request):
-    return request.app.state.analyzer.health()
+    result = request.app.state.analyzer.health()
+    sample_pipeline = getattr(request.app.state, 'sample_pipeline', None)
+    if sample_pipeline is not None:
+        result = dict(result, sample_pipeline=sample_pipeline.status())
+    return result
 
 
 async def _send_messages(websocket, subscription, send_lock):

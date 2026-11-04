@@ -140,6 +140,9 @@ class LocalSamplePipeline:
         self.poll_interval_seconds = poll_interval_seconds
         self._condition = threading.Condition()
         self._jobs, self._selected = {}, {}
+        # A frame can be acknowledged before offer() runs; remember its tracklet
+        # mappings briefly so the first crop is not silently lost.
+        self._confirmed_frames = {}
         self._selection_cleanup_at = 0
         self._thread, self._stopping = None, False
         self._space, self._space_request = None, None
@@ -179,6 +182,13 @@ class LocalSamplePipeline:
             # Prune periodically rather than scanning historical tracks on every live frame.
             if now >= self._selection_cleanup_at:
                 self._selected = {key: end for key, end in self._selected.items() if end > now}
+                # A frame that is never acknowledged must not pin the bounded queue.
+                cutoff = datetime.fromtimestamp(now, timezone.utc).isoformat(timespec='milliseconds')
+                for key, job in list(self._jobs.items()):
+                    if job.tracklet_id is None and job.expires_at <= cutoff:
+                        self._jobs.pop(key, None)
+                self._confirmed_frames = {key: value for key, value in self._confirmed_frames.items()
+                                          if now - value[0] < 30}
                 self._selection_cleanup_at = now + 60
             for detection in self.selector.select(detections):
                 key = reference.source_id, tracking_context_id, detection['track_id']
@@ -194,11 +204,18 @@ class LocalSamplePipeline:
                 if x2 <= x1 or y2 <= y1:
                     continue
                 crop = captured.frame[y1:y2, x1:x2].copy()
-                self._jobs[key] = _Sample(
+                job = _Sample(
                     key, reference.source_id, reference.stream_session_id, reference.frame_id,
                     occurred.isoformat(timespec='milliseconds'), expiry.isoformat(timespec='milliseconds'),
                     {'schema_version': '1', 'xyxy': list(box),
                      'source_width': captured.source_width, 'source_height': captured.source_height}, crop)
+                acknowledged = self._confirmed_frames.get((reference.source_id, reference.frame_id))
+                if acknowledged is not None:
+                    tracklet_id = acknowledged[1].get(detection['track_id'])
+                    if tracklet_id is None:
+                        continue
+                    job.tracklet_id = tracklet_id
+                self._jobs[key] = job
                 accepted += 1
             self._condition.notify_all()
         return accepted
@@ -210,11 +227,29 @@ class LocalSamplePipeline:
                   if result.get('result_id') in confirmed}
         mappings = {(str(item['tracking_context_id']), item['local_track_id']): item['tracklet_id']
                     for item in response.get('tracklets', [])}
+        context = str(payload.get('tracking_context_id'))
+        source_id = payload.get('source_id')
         with self._condition:
-            for key, job in self._jobs.items():
-                if (job.source_id == payload.get('source_id') and job.frame_id in frames
-                        and (str(key[1]), key[2]) in mappings):
-                    job.tracklet_id = mappings[(str(key[1]), key[2])]
+            # Keep the mapping for a crop that has not been offered yet.
+            for result in payload.get('results', []):
+                if result.get('result_id') not in confirmed:
+                    continue
+                local_ids = [target.get('local_track_id') for target in result.get('targets', [])
+                             if target.get('local_track_id') is not None]
+                self._confirmed_frames[(source_id, result['frame_id'])] = (
+                    time.time(), {local: mappings.get((context, local)) for local in local_ids})
+            for key, job in list(self._jobs.items()):
+                if job.tracklet_id is not None or job.source_id != payload.get('source_id'):
+                    continue
+                if job.frame_id not in frames:
+                    continue
+                tracklet_id = mappings.get((str(key[1]), key[2]))
+                if tracklet_id is None:
+                    # The frame was acknowledged without a tracklet for this local
+                    # track (for example a predicted-only observation): drop it.
+                    self._jobs.pop(key, None)
+                else:
+                    job.tracklet_id = tracklet_id
             self._condition.notify_all()
 
     def status(self):

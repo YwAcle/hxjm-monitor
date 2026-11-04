@@ -72,6 +72,23 @@ hxjm:
 共享管理器保留生产端配置以启动算法进程；MediaMTX不会继承`VIDEO_RESULTS_*`凭据，
 算法进程通过服务身份访问后端。
 
+## 历史样本人像特征（可选）
+
+在可靠轨迹入库之上，可将每条轨迹首次真实出现的行人裁剪保存为历史样本，并提特征、关联身份。
+该链路默认关闭，只有同时满足以下条件才启动：
+
+| 变量 | 说明 |
+|------|------|
+| `VIDEO_SAMPLES_ENABLED` | 必须为`true`；未开启`VIDEO_RESULTS_PERSIST_ENABLED`时设置会直接拒绝启动 |
+| `VIDEO_SAMPLES_FEATURE_URL` | 特征服务HTTP(S) origin，如`http://127.0.0.1:28024`，不带路径、凭据或查询参数 |
+| `VIDEO_SAMPLES_INSTANCE_ID` | 后端已登记、能力码为`person.reidentification`的实例UUID |
+| `VIDEO_SAMPLES_CAPABILITY_CODE` | 默认`person.reidentification` |
+| `VIDEO_SAMPLES_THRESHOLD` | 身份关联阈值，默认`0.88` |
+| `VIDEO_SAMPLES_QUEUE_SIZE` | 内存裁剪队列上限，默认`16` |
+
+裁剪只从本次推理的原始帧复制，不使用展示用JPEG；`/results/register`确认该帧后才会尝试上传。
+待处理裁剪目前只保存在内存，进程重启会丢失；已入库的样本、特征和身份关联不会丢。
+
 ## 标识与时间
 
 算法解码连接作为明确的输入接入实例登记，`session_key`以`analysis:`开头。

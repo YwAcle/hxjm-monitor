@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import tempfile
 import time
+import uuid
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -191,6 +192,35 @@ class PersistenceTests(unittest.TestCase):
         self.assertIsNone(frames[1]['targets'][0]['confidence'])
         self.assertEqual(frames[2]['targets'], [])
 
+    def test_record_returns_public_frame_reference_for_samples(self):
+        frame = capture(1)
+        context = self.publisher._begin_frame('camera_1', frame, 'service-a', 'component-a')
+        reference = self.publisher._record(context, frame, [detection()], frame.frame_ts_ms + 10, [])
+        self.assertEqual(reference.source_id, self.config.sources['camera_1']['source_id'])
+        self.assertEqual(reference.stream_session_id, self.publisher.spool.load_state(context)['input_id'])
+        self.assertEqual(str(uuid.UUID(reference.frame_id)), reference.frame_id)
+
+    def test_confirmed_batch_notifies_sample_pipeline_after_ack(self):
+        calls = []
+        self.publisher.on_confirmed = lambda payload, response: calls.append((payload, response))
+        context = self.frame(1)
+        self.drain()
+        self.assertEqual(len(calls), 1)
+        payload, response = calls[0]
+        self.assertEqual(payload['tracking_context_id'], context)
+        self.assertEqual(payload['source_id'], self.config.sources['camera_1']['source_id'])
+        self.assertEqual(response['accepted_result_ids'], [payload['results'][0]['result_id']])
+        self.assertEqual(self.publisher.spool.lane_entries('camera_1'), [])
+
+    def test_confirmed_callback_failure_does_not_retry_acknowledged_batch(self):
+        def fail(payload, response):
+            raise RuntimeError('sample worker unavailable')
+        self.publisher.on_confirmed = fail
+        self.frame(1)
+        self.drain()
+        self.assertEqual(len(self.api.frames), 1)
+        self.assertEqual(self.publisher.spool.lane_entries('camera_1'), [])
+
     def test_predictions_do_not_advance_local_true_observation(self):
         context = self.frame(1)
         old = self.publisher.spool.load_state(context)['tracks']['7']
@@ -357,6 +387,35 @@ class ClientAndConfigTests(unittest.TestCase):
                 IMPLEMENTATION_VERSION='test-v1').items()}
             with self.assertRaisesRegex(ValueError, 'distinct camera stream'):
                 PersistenceConfig(env)
+
+    def test_sample_pipeline_is_opt_in_and_validates_feature_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            mapping = {'camera_1': dict(source_id=new_id(), camera_stream_id=new_id(), instance_id=new_id())}
+            path = Path(directory) / 'sources.json'
+            path.write_text(json.dumps(mapping))
+            base = {'VIDEO_RESULTS_' + key: value for key, value in dict(
+                PERSIST_ENABLED='true', BUSINESS_BASE_URL='http://127.0.0.1/api/v1/business',
+                SERVICE_ID='test', SERVICE_TOKEN='offline', SPOOL_DIR=directory,
+                SOURCE_MAP_FILE=str(path), IMPLEMENTATION_CODE='botsort',
+                IMPLEMENTATION_VERSION='test-v1').items()}
+            self.assertIsNone(PersistenceConfig(base).samples)
+            with self.assertRaisesRegex(ValueError, 'require VIDEO_RESULTS_PERSIST_ENABLED'):
+                PersistenceConfig({'VIDEO_SAMPLES_ENABLED': 'true'})
+            samples = {'VIDEO_SAMPLES_ENABLED': 'true',
+                       'VIDEO_SAMPLES_FEATURE_URL': 'http://127.0.0.1:28024',
+                       'VIDEO_SAMPLES_INSTANCE_ID': new_id()}
+            loaded = PersistenceConfig(dict(base, **samples)).samples
+            self.assertEqual(loaded['threshold'], 0.88)
+            self.assertEqual(loaded['queue_size'], 16)
+            self.assertEqual(loaded['capability_code'], 'person.reidentification')
+            for name, value in (('VIDEO_SAMPLES_FEATURE_URL', 'http://user@localhost:28024'),
+                                ('VIDEO_SAMPLES_FEATURE_URL', 'http://localhost:28024/path'),
+                                ('VIDEO_SAMPLES_INSTANCE_ID', '1'),
+                                ('VIDEO_SAMPLES_THRESHOLD', '-0.1'),
+                                ('VIDEO_SAMPLES_THRESHOLD', 'nan'),
+                                ('VIDEO_SAMPLES_QUEUE_SIZE', '0')):
+                with self.subTest(name=name, value=value), self.assertRaises(ValueError):
+                    PersistenceConfig(dict(base, **{**samples, name: value}))
 
     def test_manager_passes_producer_config_but_media_gets_no_token(self):
         path = Path(__file__).parents[3] / 'deploy/botsort/shared_service.py'

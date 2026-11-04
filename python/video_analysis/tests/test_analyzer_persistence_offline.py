@@ -6,7 +6,7 @@ import sys
 import time
 from types import ModuleType, SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 
 def load_analyzer():
@@ -41,6 +41,25 @@ class ProducerBoundaryTests(unittest.IsolatedAsyncioTestCase):
         worker = SimpleNamespace(slot=0, generation=1, ready=True, last_removed_tracks=[7],
                                  infer=AsyncMock(return_value=([], 1)))
         return module, analyzer, publisher, camera, worker, frame
+
+    def test_sample_pipeline_requires_result_publisher(self):
+        module = load_analyzer()
+        with self.assertRaises(ValueError):
+            module.Analyzer(cameras={'camera_1': 'rtsp://unused'}, worker_count=1,
+                            sample_pipeline=Mock())
+
+    async def test_sample_pipeline_receives_confirmed_public_reference(self):
+        _, analyzer, publisher, camera, worker, frame = self.setup_case()
+        reference = SimpleNamespace(source_id='source-id', stream_session_id='input-id',
+                                    frame_id='frame-id')
+        publisher.record.return_value = reference
+        pipeline = Mock()
+        pipeline.offer.return_value = 1
+        analyzer._sample_pipeline = pipeline
+        await analyzer._analyze(worker, camera, frame)
+        self.assertIs(frame.public_frame_ref, reference)
+        pipeline.offer.assert_called_once_with(
+            frame, [], tracking_context_id='stable-context', algorithm=analyzer.algorithm)
 
     async def test_expired_display_result_is_still_enqueued(self):
         _, analyzer, publisher, camera, worker, frame = self.setup_case()
