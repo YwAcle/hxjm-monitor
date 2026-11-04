@@ -88,6 +88,7 @@ class AgentExecutor:
         trace_id: str | None = None,
         prepare_stream: bool = False,
         context: dict[str, Any] | None = None,
+        registry: ToolRegistry | None = None,
     ) -> AgentRunResult:
         started = monotonic()
 
@@ -95,7 +96,8 @@ class AgentExecutor:
             if not prepare_stream:
                 self._log_finish(*args, **kwargs)
 
-        system_prompt = build_system_prompt(self.registry.describe())
+        registry = registry if registry is not None else self.registry
+        system_prompt = build_system_prompt(registry.describe())
         if prepare_stream:
             system_prompt += (
                 "\n当前仅执行工具决策，不生成回答正文。信息充分时返回 final，"
@@ -173,6 +175,7 @@ class AgentExecutor:
             tool_result = self._invoke_tool(
                 "super_resolve_image",
                 {"image_base64": effective_image, "prompt": user_prompt or "请将图片超分2倍"},
+                registry=registry,
                 step_no=1,
                 trace_id=trace_id,
                 session_id=session_id,
@@ -306,6 +309,7 @@ class AgentExecutor:
             result = self._invoke_tool(
                 action.tool_name or "",
                 tool_arguments,
+                registry=registry,
                 step_no=step_no,
                 trace_id=trace_id,
                 session_id=session_id,
@@ -360,6 +364,7 @@ class AgentExecutor:
         self, user_prompt: str, *, session_id: str,
         image_base64: str | None = None, trace_id: str | None = None,
         context: dict[str, Any] | None = None,
+        registry: ToolRegistry | None = None,
     ) -> Iterator[dict[str, Any]]:
         started = monotonic()
         result = AgentRunResult(finish_reason=FinishReason.ERROR)
@@ -368,7 +373,7 @@ class AgentExecutor:
         try:
             result = self.run(
                 user_prompt, session_id=session_id, image_base64=image_base64,
-                trace_id=trace_id, prepare_stream=True, context=context,
+                trace_id=trace_id, prepare_stream=True, context=context, registry=registry,
             )
             yield {"event": "status", "data": {"stage": "generating"}}
             if result.generation_messages is not None:
@@ -498,6 +503,7 @@ class AgentExecutor:
         name: str,
         arguments: dict[str, Any],
         *,
+        registry: ToolRegistry,
         step_no: int,
         trace_id: str | None,
         session_id: str | None,
@@ -514,7 +520,7 @@ class AgentExecutor:
             argument_keys=sorted(arguments),
             arguments=log_payload(arguments),
         )
-        result = self.registry.invoke(name, arguments)
+        result = registry.invoke(name, arguments)
         emit_event(
             "tool_end",
             **context,

@@ -35,7 +35,7 @@ public class BusinessIdentityDatabaseCheck {
         String url=System.getenv("HXJM_TEST_JDBC_URL");
         if(!"1".equals(System.getenv("HXJM_ISOLATED_TEST"))||url==null||!url.matches("jdbc:postgresql://127\\.0\\.0\\.1:[0-9]+/hxjm_stage2_[a-z0-9_]+")){throw new IllegalArgumentException("Explicit disposable stage-two database required");}
         store=new BusinessStore(new DriverManagerDataSource(url,System.getenv("HXJM_TEST_DB_USER"),System.getenv("HXJM_TEST_DB_PASSWORD")));
-        Path root=Files.createTempDirectory(Paths.get("/data/nfs_storage/hxjm"),".test-identity-");
+        Path root=Files.createTempDirectory(Paths.get(System.getProperty("java.io.tmpdir")),".test-identity-");
         try{
             String source1=id(),source2=id();BusinessSecurityProperties.Grant grant=new BusinessSecurityProperties.Grant();
             grant.setSourceIds(new HashSet<>(Arrays.asList(source1,source2)));grant.setOperations(new HashSet<>(Arrays.asList("results.register","assets.upload","assets.process","identities.query","identities.register","samples.register","samples.query","feature_spaces.register","features.register","identities.associate","activities.close","activities.query","reports.register","reports.query","events.register","queries.process","queries.create","queries.candidates","queries.select","search.execute","tasks.finish")));

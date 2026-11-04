@@ -25,6 +25,7 @@ from llm_agent_service.service.image_assets import SessionImageAssets
 from llm_agent_service.service.clipreid_client import ClipReIDClient
 from llm_agent_service.service.text_reid_client import TextReIDClient
 from llm_agent_service.tools.default_tools import build_default_registry
+from llm_agent_service.tools.capability_bridge import CapabilityBridge, CapabilityDirectoryError
 
 
 SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
@@ -230,7 +231,10 @@ def create_app(*, engine, db_cfg: DbConfig, svc_cfg: ServiceConfig, llm) -> Flas
         max_bytes_per_session=svc_cfg.image_asset_max_bytes_per_session,
         max_total_bytes=svc_cfg.image_asset_max_total_bytes,
     )
+    capability_bridge = CapabilityBridge.from_env()
+    registry_factory = (lambda: capability_bridge.snapshot(tool_registry)) if capability_bridge else None
     agent_service = AgentService(
+        registry_factory=registry_factory,
         gallery_search=gallery_search,
         executor=AgentExecutor(
             llm=llm,
@@ -245,10 +249,14 @@ def create_app(*, engine, db_cfg: DbConfig, svc_cfg: ServiceConfig, llm) -> Flas
     )
     print("[App] Agent 模式：agent")
 
+    @app.errorhandler(CapabilityDirectoryError)
+    def capability_directory_error(_error):
+        return json_response({"error": "能力目录暂不可用", "error_code": "CAPABILITY_DIRECTORY_UNAVAILABLE"},503)
+
     @app.get("/tools")
     def list_tools():
         """列出已注册工具及参数 Schema，不返回处理函数。"""
-        return json_response({"tools": tool_registry.describe()})
+        return json_response({"tools": (registry_factory() if registry_factory else tool_registry).describe()})
 
     @app.post("/chat")
     def chat():
@@ -416,6 +424,8 @@ def create_app(*, engine, db_cfg: DbConfig, svc_cfg: ServiceConfig, llm) -> Flas
                 elapsed_ms=max(0, int((monotonic() - started) * 1000)),
             )
             return json_response(result, trace_id=trace_id)
+        except CapabilityDirectoryError:
+            return capability_directory_error(None)
         except Exception as exc:
             emit_event(
                 "request_end",
@@ -603,6 +613,8 @@ def create_app(*, engine, db_cfg: DbConfig, svc_cfg: ServiceConfig, llm) -> Flas
                         elapsed_ms=max(0, int((monotonic() - started) * 1000)),
                     )
                 raise
+            except CapabilityDirectoryError:
+                yield sse_event("error", {"error": "能力目录暂不可用", "error_code": "CAPABILITY_DIRECTORY_UNAVAILABLE"})
             except Exception as exc:
                 emit_event(
                     "request_end",

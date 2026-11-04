@@ -27,6 +27,7 @@ import static edu.cqupt.hxjm.algdeployment.business.store.BusinessValues.*;
 @ConditionalOnProperty(prefix = "hxjm.business", name = "enabled", havingValue = "true")
 public class CapabilityTaskService {
     private final BusinessStore store;
+    @Autowired(required=false) private CapabilityPlatform platform;
     private final BusinessDataAccess businessData;
     private final ActivityBusinessService activityService;
 
@@ -37,10 +38,11 @@ public class CapabilityTaskService {
     }
 
     public Map<String, Object> capabilities(String code) {
-        List<Map<String, Object>> items = store.jdbc().queryForList("SELECT capability_code,display_name,object_types,input_kinds,contract_json::text,enabled,revision "
+        List<Map<String, Object>> items = store.jdbc().queryForList("SELECT capability_code,display_name,object_types,input_kinds,contract_json::text,agent_json::text,enabled,revision "
                 + "FROM public.capability_definition" + (code == null ? "" : " WHERE capability_code=?") + " ORDER BY capability_code", code == null ? new Object[]{} : new Object[]{code});
         for (Map<String, Object> item : items) {
             item.put("contract", parse(item.remove("contract_json").toString()));
+            item.put("agent", parse(item.remove("agent_json").toString()));
             item.put("object_types", array(item.get("object_types")));
             item.put("input_kinds", array(item.get("input_kinds")));
         }
@@ -48,7 +50,7 @@ public class CapabilityTaskService {
     }
 
     public Map<String, Object> capability(BusinessActor actor, Map<String, Object> body) {
-        fields(body,"request_id","trace_id","capability_code","display_name","object_types","input_kinds","contract");
+        fields(body,"request_id","trace_id","capability_code","display_name","object_types","input_kinds","contract","agent");
         String code = text(body,"capability_code",64);
         String name = text(body,"display_name",128);
         List<String> objects = strings(required(body,"object_types"),128);
@@ -58,12 +60,22 @@ public class CapabilityTaskService {
         BusinessSchemas.check(map(required(contract,"input_schema")));
         BusinessSchemas.check(map(required(contract,"parameters_schema")));
         strings(required(contract,"output_types"),64);
+        Map<String,Object> agent=body.containsKey("agent")?map(body.get("agent")):new LinkedHashMap<>();
+        fields(agent,"enabled","read_only","tool_name","description");
+        if(!agent.isEmpty()){
+            if(!(agent.get("enabled") instanceof Boolean)||!Boolean.TRUE.equals(agent.get("read_only"))||!text(agent,"tool_name",64).matches("[a-zA-Z][a-zA-Z0-9_]{0,63}")){throw BusinessException.invalid("Agent仅允许只读工具，名称须为标识符");}
+            text(agent,"description",2048);
+            if(!kinds.equals(Collections.singletonList("capability_call"))){throw BusinessException.invalid("Agent能力须为capability_call");}
+            Map<String,Object> inputSchema=map(contract.get("input_schema"));
+            BusinessSchemas.check(map(required(map(required(inputSchema,"properties")),"payload")));
+
+        }
         return store.write(actor,"capabilities.register",body,OffsetDateTime.now().plusDays(7),jdbc -> {
             if (!jdbc.queryForList("SELECT capability_code FROM public.capability_definition WHERE capability_code=?",code).isEmpty()) {
                 throw BusinessException.conflict("能力已存在，本接口不隐式修改已发布契约");
             }
-            jdbc.update("INSERT INTO public.capability_definition(capability_code,display_name,object_types,input_kinds,contract_json) VALUES (?,?,?::text[],?::text[],?::jsonb)",
-                    code,name,pgArray(objects),pgArray(kinds),json(contract));
+            jdbc.update("INSERT INTO public.capability_definition(capability_code,display_name,object_types,input_kinds,contract_json,agent_json) VALUES (?,?,?::text[],?::text[],?::jsonb,?::jsonb)",
+                    code,name,pgArray(objects),pgArray(kinds),json(contract),json(agent));
             return values("capability_code",code,"revision",1,"enabled",true);
         });
     }
@@ -106,15 +118,27 @@ public class CapabilityTaskService {
     }
 
     public Map<String, Object> instance(BusinessActor actor, Map<String, Object> body) {
-        fields(body,"request_id","trace_id","instance_id","capability_code","instance_key","implementation_code","implementation_version","source_ids","service_ref","enabled","expected_revision");
+        fields(body,"request_id","trace_id","instance_id","capability_code","instance_key","implementation_code","implementation_version","source_ids","service_ref","enabled","expected_revision","resource_scope","dispatch_mode","execution");
         String id = uuid(body,"instance_id");
         String capability = text(body,"capability_code",64);
         String key = text(body,"instance_key",128);
         String implementation = text(body,"implementation_code",64);
         String version = text(body,"implementation_version",128);
         String service = text(body,"service_ref",256);
-        List<String> sources = uuids(required(body,"source_ids"));
-        if (sources.isEmpty()) { throw BusinessException.invalid("实例必须明确非空来源范围"); }
+        List<String> sources = body.containsKey("source_ids")?uuids(body.get("source_ids")):new ArrayList<>();
+        Map<String,Object> scope=body.containsKey("resource_scope")?map(body.get("resource_scope")):values("scope_type","camera","resource_ids",sources);
+        fields(scope,"scope_type","resource_ids");
+        String scopeType=text(scope,"scope_type",16);List<String> resources=uuids(required(scope,"resource_ids"));
+        if("global".equals(scopeType)){
+            if(!sources.isEmpty()||!resources.isEmpty()){throw BusinessException.invalid("global范围不得声明来源");}
+        }else if("camera".equals(scopeType)){
+            if(resources.isEmpty()||!new LinkedHashSet<>(resources).equals(new LinkedHashSet<>(sources))){throw BusinessException.invalid("摄像头范围与source_ids须一致且非空");}
+        }else{throw BusinessException.invalid("V1范围支持global或camera");}
+        String dispatch=body.containsKey("dispatch_mode")?text(body,"dispatch_mode",32):"runtime_managed";
+        if(!Arrays.asList("runtime_managed","platform_managed").contains(dispatch)){throw BusinessException.invalid("dispatch_mode无效");}
+        Map<String,Object> execution=body.containsKey("execution")?map(body.get("execution")):new LinkedHashMap<>();
+        if("platform_managed".equals(dispatch)){platform.operation(service,execution);if(!key.equals(platform.namespace())){throw BusinessException.invalid("平台实例instance_key须等于执行namespace");}}
+        else if(!execution.isEmpty()){throw BusinessException.invalid("runtime实例不接受HTTP执行配置");}
         for (String source : sources) { actor.requireSource(source); }
         if (body.containsKey("enabled") && !(body.get("enabled") instanceof Boolean)) { throw BusinessException.invalid("enabled须为布尔值"); }
         boolean enabled = !body.containsKey("enabled") || Boolean.TRUE.equals(body.get("enabled"));
@@ -129,15 +153,15 @@ public class CapabilityTaskService {
             if (rows.isEmpty()) {
                 if (UUID.fromString(id).version()!=4) { throw BusinessException.invalid("新实例标识须为UUIDv4"); }
                 if (expected != null) { throw BusinessException.conflict("新实例不接受expected_revision"); }
-                jdbc.update("INSERT INTO public.capability_instance(id,capability_code,instance_key,implementation_code,implementation_version,source_ids,service_ref,enabled) VALUES (?::uuid,?,?,?,?,?::uuid[],?,?)",
-                        id,capability,key,implementation,version,pgArray(sources),service,enabled);
+                jdbc.update("INSERT INTO public.capability_instance(id,capability_code,instance_key,implementation_code,implementation_version,source_ids,service_ref,enabled,resource_scope,dispatch_mode,execution_json) VALUES (?::uuid,?,?,?,?,?::uuid[],?,?,?::jsonb,?,?::jsonb)",
+                        id,capability,key,implementation,version,pgArray(sources),service,enabled,json(scope),dispatch,json(execution));
             } else {
                 for (String source : array(rows.get(0).get("source_ids"))) { actor.requireSource(source); }
                 revision = ((Number) rows.get(0).get("revision")).longValue();
                 if (expected == null || expected != revision) { throw BusinessException.conflict("实例修订号已改变"); }
                 revision++;
-                jdbc.update("UPDATE public.capability_instance SET capability_code=?,instance_key=?,implementation_code=?,implementation_version=?,source_ids=?::uuid[],service_ref=?,enabled=?,revision=?,updated_at=now() WHERE id=?::uuid",
-                        capability,key,implementation,version,pgArray(sources),service,enabled,revision,id);
+                jdbc.update("UPDATE public.capability_instance SET capability_code=?,instance_key=?,implementation_code=?,implementation_version=?,source_ids=?::uuid[],service_ref=?,enabled=?,resource_scope=?::jsonb,dispatch_mode=?,execution_json=?::jsonb,revision=?,updated_at=now() WHERE id=?::uuid",
+                        capability,key,implementation,version,pgArray(sources),service,enabled,json(scope),dispatch,json(execution),revision,id);
             }
             return values("instance_id",id,"revision",revision,"enabled",enabled);
         });
@@ -148,7 +172,7 @@ public class CapabilityTaskService {
         if (capability != null && (capability.trim().isEmpty() || capability.length() > 64)) {
             throw BusinessException.invalid("capability_code无效");
         }
-        StringBuilder sql = new StringBuilder("SELECT id::text,capability_code,instance_key,implementation_code,implementation_version,source_ids,service_ref,enabled,revision,created_at,updated_at FROM public.capability_instance WHERE 1=1");
+        StringBuilder sql = new StringBuilder("SELECT id::text,capability_code,instance_key,implementation_code,implementation_version,source_ids,service_ref,resource_scope::text,dispatch_mode,execution_json::text,enabled,revision,created_at,updated_at FROM public.capability_instance WHERE 1=1");
         List<Object> args = new ArrayList<>();
         if (id != null) { sql.append(" AND id=?::uuid"); args.add(id); }
         if (capability != null) { sql.append(" AND capability_code=?"); args.add(capability); }
@@ -158,6 +182,8 @@ public class CapabilityTaskService {
             List<String> sources = array(item.get("source_ids"));
             for (String source : sources) { actor.requireSource(source); }
             item.put("source_ids",sources);
+            item.put("resource_scope",parse(item.get("resource_scope").toString()));
+            item.put("execution",parse(item.remove("execution_json").toString()));
             item.put("created_at",iso(timestamp(item.get("created_at"))));
             item.put("updated_at",iso(timestamp(item.get("updated_at"))));
             item.put("revision",((Number)item.get("revision")).longValue());
@@ -198,10 +224,28 @@ public class CapabilityTaskService {
             for (String output : outputs) {
                 if (jdbc.queryForList("SELECT type_code FROM public.result_type WHERE type_code=? AND enabled",output).isEmpty()) { throw BusinessException.notFound("成果类型尚未启用"); }
             }
-            selectInstance(jdbc,capability,instance,reference.sources);
+            Map<String,Object> selected=selectInstance(jdbc,capability,instance,reference.sources);
+            String dispatch=selected.get("dispatch_mode").toString();
+            Map<String,Object> executionSnapshot=values("instance_id",selected.get("id").toString(),"instance_revision",selected.get("revision"),
+                "capability_revision",definition.get("revision"),"implementation_code",selected.get("implementation_code"),"implementation_version",selected.get("implementation_version"),
+                "service_ref",selected.get("service_ref"),"input",input,"parameters",parameters,"requested_outputs",outputs);
+            String namespace="legacy";
+            if("platform_managed".equals(dispatch)){
+                if(!"capability_call".equals(input.get("kind"))||!"once".equals(mode)){throw BusinessException.invalid("HTTP能力须使用once capability_call");}
+                if(!array(selected.get("source_ids")).isEmpty()&&reference.sources.isEmpty()){throw BusinessException.invalid("摄像头范围HTTP实例须明确payload.source_ids");}
+                Map<String,Object> execution=parse(selected.get("execution_json").toString());
+                Map<String,Object> operation=platform.operation(selected.get("service_ref").toString(),execution);platform.authorize(actor,operation);
+                executionSnapshot.put("execution",execution);executionSnapshot.put("operation",operation);namespace=platform.namespace();
+                Map<String,Object> outputContracts=new LinkedHashMap<>();
+                for(String type:outputs){for(Map<String,Object> result:jdbc.queryForList("SELECT schema_version,json_schema::text,max_inline_bytes FROM public.result_type WHERE type_code=? AND enabled",type)){
+                    outputContracts.put(type+":"+result.get("schema_version"),values("json_schema",parse(result.get("json_schema").toString()),"max_inline_bytes",result.get("max_inline_bytes")));
+                }}
+                if(!outputContracts.containsKey(execution.get("result_type")+":"+execution.get("schema_version"))){throw BusinessException.invalid("HTTP输出类型或版本未登记");}
+                executionSnapshot.put("output_contracts",outputContracts);
+            }
             if (business != null) {
-                jdbc.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?,0)) IS NULL",Boolean.class,"task:" + kind + ":" + business);
-                List<Map<String,Object>> old = jdbc.queryForList("SELECT task_id::text,actor_key,input_digest,expires_at>now() AS valid FROM public.business_task WHERE task_kind=? AND business_key=? FOR UPDATE",kind,business);
+                jdbc.queryForObject("SELECT pg_advisory_xact_lock(hashtextextended(?,0)) IS NULL",Boolean.class,"task:" + namespace + ":" + kind + ":" + business);
+                List<Map<String,Object>> old = jdbc.queryForList("SELECT task_id::text,actor_key,input_digest,expires_at>now() AS valid FROM public.business_task WHERE task_kind=? AND business_key=? AND execution_namespace=? FOR UPDATE",kind,business,namespace);
                 if (!old.isEmpty()) {
                     Map<String,Object> row = old.get(0);
                     if (!actor.getActorKey().equals(row.get("actor_key"))) { throw BusinessException.forbidden(); }
@@ -211,8 +255,8 @@ public class CapabilityTaskService {
                 }
             }
             String task = UUID.randomUUID().toString();
-            jdbc.update("INSERT INTO public.business_task(task_id,task_kind,business_key,task_mode,actor_key,owner_user_id,capability_code,input_json,input_digest,expires_at) VALUES (?::uuid,?,?,?,?,?,?,?::jsonb,?,?)",
-                    task,kind,business,mode,actor.getActorKey(),actor.getUserId(),capability,json(snapshot),digest,expires);
+            jdbc.update("INSERT INTO public.business_task(task_id,task_kind,business_key,task_mode,actor_key,owner_user_id,capability_code,input_json,input_digest,expires_at,execution_snapshot,dispatch_mode,execution_namespace) VALUES (?::uuid,?,?,?,?,?,?,?::jsonb,?,?,?::jsonb,?,?)",
+                    task,kind,business,mode,actor.getActorKey(),actor.getUserId(),capability,json(snapshot),digest,expires,json(executionSnapshot),dispatch,namespace);
             Map<String,Object> response = summary(jdbc,task);
             store.event(jdbc,"tasks.submitted","business_task",task,1,response,expires);
             return response;
@@ -229,6 +273,7 @@ public class CapabilityTaskService {
         return store.write(actor,"tasks.start",body,expires,jdbc -> {
             Map<String,Object> row = jdbc.queryForMap("SELECT * FROM public.business_task WHERE task_id=?::uuid FOR UPDATE",task);
             if (!actor.getActorKey().equals(row.get("actor_key"))) { throw BusinessException.forbidden(); }
+            if ("platform_managed".equals(row.get("dispatch_mode"))) { throw BusinessException.conflict("平台任务不得由Worker启动"); }
             if (!expires.isAfter(OffsetDateTime.now())) { throw BusinessException.expired("任务已到期"); }
             if (((Number) row.get("revision")).longValue()!=expected || !"pending".equals(row.get("state"))) { throw BusinessException.conflict("任务状态或修订号已改变"); }
             Map<String,Object> snapshot = parse(row.get("input_json").toString());
@@ -236,7 +281,14 @@ public class CapabilityTaskService {
             InputReference reference = resolveInput(jdbc,actor,input,row.get("task_mode").toString(),true);
             String bound = snapshot.get("instance_id") == null ? null : uuid(snapshot,"instance_id");
             if (bound != null && requestedInstance != null && !bound.equals(requestedInstance)) { throw BusinessException.conflict("不能更换任务已指定的实例"); }
-            Map<String,Object> instance = selectInstance(jdbc,row.get("capability_code").toString(),requestedInstance==null?bound:requestedInstance,reference.sources);
+            Map<String,Object> instance;
+            if(row.get("execution_snapshot")!=null){
+                Map<String,Object> fixed=parse(row.get("execution_snapshot").toString());
+                if(requestedInstance!=null&&!requestedInstance.equals(fixed.get("instance_id"))){throw BusinessException.conflict("不能更换快照实例");}
+                definition(jdbc,row.get("capability_code").toString());
+                if(jdbc.queryForList("SELECT id FROM public.capability_instance WHERE id=?::uuid AND enabled",fixed.get("instance_id")).isEmpty()){throw BusinessException.conflict("实例已停用");}
+                instance=values("id",fixed.get("instance_id"),"revision",fixed.get("instance_revision"),"service_ref",fixed.get("service_ref"),"implementation_code",fixed.get("implementation_code"),"implementation_version",fixed.get("implementation_version"));
+            }else{instance=selectInstance(jdbc,row.get("capability_code").toString(),requestedInstance==null?bound:requestedInstance,reference.sources);}
             String run = UUID.randomUUID().toString();
             long generation = ((Number) row.get("generation")).longValue()+1;
             Map<String,Object> attempt = values("instance_id",instance.get("id").toString(),"instance_revision",instance.get("revision"),
@@ -302,6 +354,7 @@ public class CapabilityTaskService {
                 catch(BusinessException unavailable){if(unavailable.getStatus()!=404&&unavailable.getStatus()!=410){throw unavailable;}}
             }
         }
+        response.put("outputs",platform==null?Collections.emptyList():platform.outputs(actor,task,20,null).get("items"));
         response.put("execution",null);
         if(run!=null){
             run=uuid(run,"run_id");
@@ -341,21 +394,26 @@ public class CapabilityTaskService {
     }
 
     private static Map<String,Object> definition(JdbcTemplate jdbc,String code){
-        List<Map<String,Object>> rows=jdbc.queryForList("SELECT input_kinds,contract_json::text FROM public.capability_definition WHERE capability_code=? AND enabled",code);
+        List<Map<String,Object>> rows=jdbc.queryForList("SELECT revision,input_kinds,contract_json::text FROM public.capability_definition WHERE capability_code=? AND enabled",code);
         if(rows.isEmpty()){throw BusinessException.notFound("能力不存在或已停用");}return rows.get(0);
     }
 
-    private static Map<String,Object> selectInstance(JdbcTemplate jdbc,String capability,String id,Set<String> sources){
+    private Map<String,Object> selectInstance(JdbcTemplate jdbc,String capability,String id,Set<String> sources){
         List<Map<String,Object>> rows=jdbc.queryForList("SELECT * FROM public.capability_instance WHERE capability_code=? AND enabled"+(id==null?"":" AND id=?::uuid")+" ORDER BY id",id==null?new Object[]{capability}:new Object[]{capability,id});
         List<Map<String,Object>> eligible=new ArrayList<>();
-        for(Map<String,Object> row:rows){if(array(row.get("source_ids")).containsAll(sources)){eligible.add(row);}}
+        for(Map<String,Object> row:rows){if("platform_managed".equals(row.get("dispatch_mode"))&&!row.get("instance_key").equals(platform.namespace())){continue;}if("global".equals(parse(row.get("resource_scope").toString()).get("scope_type"))||array(row.get("source_ids")).containsAll(sources)){eligible.add(row);}}
         if(eligible.isEmpty()){throw BusinessException.notFound("没有适用于输入来源的启用实例");}
         if(eligible.size()>1){throw BusinessException.conflict("存在多个适用实例，请明确instance_id");}return eligible.get(0);
     }
 
     private InputReference resolveInput(JdbcTemplate jdbc,BusinessActor actor,Map<String,Object> input,String mode,boolean processing){
         String kind=text(input,"kind",64);Set<String> sources=new LinkedHashSet<>();OffsetDateTime expires=null;
-        if("live_video".equals(kind)){
+        if("capability_call".equals(kind)){
+            fields(input,"kind","payload");if(!"once".equals(mode)){throw BusinessException.invalid("capability_call须为once");}
+            Map<String,Object> payload=map(required(input,"payload"));
+            if(payload.containsKey("source_ids")){for(String source:uuids(payload.get("source_ids"))){actor.requireSource(source);sources.add(source);}}
+            expires=OffsetDateTime.now().plusDays(7);
+        }else if("live_video".equals(kind)){
             fields(input,"kind","source_id","stream_session_id");
             if(!"continuous".equals(mode)){throw BusinessException.invalid("直播任务须使用continuous");}
             String source=uuid(input,"source_id");actor.requireSource(source);sources.add(source);String session=uuid(input,"stream_session_id");

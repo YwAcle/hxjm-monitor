@@ -32,6 +32,9 @@ class ToolSpec:
     result_limit: int = 20
     read_only: bool = True
 
+    def describe_schema(self):
+        return self.args_schema.model_json_schema()
+
     def invoke(self, arguments: dict[str, Any]) -> ToolResult:
         """校验参数后调用处理函数，并统一封装异常。"""
         started = monotonic()

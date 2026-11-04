@@ -1,0 +1,15 @@
+hxjm:
+  business:
+    execution:
+      enabled: true
+      namespace: ${INSTANCE_NAMESPACE}
+      services:
+        business:
+          events:
+            url: http://backend:8080/api/v1/business/events/query
+            required-operation: events.query
+            credential-ref: hxjm-pipeline
+          reports:
+            url: http://backend:8080/api/v1/business/reports/search
+            required-operation: reports.query
+            credential-ref: hxjm-pipeline

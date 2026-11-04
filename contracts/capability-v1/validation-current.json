@@ -1,0 +1,55 @@
+{
+  "checked_at": "2026-11-04T06:56:53.371510+00:00",
+  "business": [
+    {
+      "tool": "query_business_events",
+      "task_id": "730398e4-72c6-4c9a-92e0-919b9caf1ec1",
+      "run_id": "3b832970-0f57-4ac5-aede-2695082a12ad",
+      "state": "succeeded",
+      "direct_count": 0,
+      "stored_count": 0,
+      "nonempty_verified": false
+    },
+    {
+      "tool": "query_business_reports",
+      "task_id": "69a64ef3-134d-44cc-b173-06655390aa32",
+      "run_id": "fb4d73e7-ed13-4c7d-a056-6abba86fc53a",
+      "state": "succeeded",
+      "direct_count": 3,
+      "stored_count": 3,
+      "nonempty_verified": true
+    }
+  ],
+  "agent": {
+    "http_status": 200,
+    "task_id": "b411c66a-ef85-40c9-8ab0-dcd557cc65c4",
+    "run_id": "2d2acfcc-e169-43f0-acfc-8423b49a898e",
+    "finish_reason": "final",
+    "answer": "已查询业务事件目录，当前没有返回任何事件记录。",
+    "elapsed_s": 19.4,
+    "source": "current repository Flask /chat + remote HTTP model"
+  },
+  "final_backend_check": {
+    "checked_at": "2026-11-04T07:02:04.624575+00:00",
+    "business": [
+      {
+        "tool": "query_business_events",
+        "task_id": "c320ea08-55bb-4cd9-9283-987b636e2db3",
+        "run_id": "f9e31968-1a62-4041-8937-d0971311cbc3",
+        "state": "succeeded",
+        "direct_count": 0,
+        "stored_count": 0,
+        "nonempty_verified": false
+      },
+      {
+        "tool": "query_business_reports",
+        "task_id": "c14da403-49de-47b3-b265-27bb3b555740",
+        "run_id": "b0b41e5a-8258-4de6-a7a9-16df72029431",
+        "state": "succeeded",
+        "direct_count": 3,
+        "stored_count": 3,
+        "nonempty_verified": true
+      }
+    ]
+  }
+}

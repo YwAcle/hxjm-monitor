@@ -33,9 +33,10 @@ class ToolRegistry:
         """供 /tools 和 Agent 提示词使用；参数的 Field 描述随 JSON Schema 一并传递。"""
         return [{
             "name": tool.name,
+            "capability_managed": getattr(tool, "capability_managed", False),
             "description": tool.description,
             "read_only": tool.read_only,
-            "args_schema": tool.args_schema.model_json_schema(),
+            "args_schema": tool.describe_schema(),
         } for tool in self.list()]
 
     def invoke(self, name: str, arguments: dict[str, Any] | None = None) -> ToolResult:

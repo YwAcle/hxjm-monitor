@@ -315,7 +315,16 @@ def build_system_prompt(tool_descriptions: list[dict[str, Any]]) -> str:
     """把当前北京时间和工具公开描述附加到系统提示词中。"""
     time_context = build_current_time_context()
     tools_json = json.dumps(tool_descriptions, ensure_ascii=False)
-    return f"{AGENT_SYSTEM_PROMPT}\n{time_context}\n可用工具：{tools_json}"
+    prompt = AGENT_SYSTEM_PROMPT
+    if any(tool.get("capability_managed") for tool in tool_descriptions):
+        # Static routing examples must not override a request's newly discovered tools.
+        start = prompt.index("# 工具选择规则")
+        end = prompt.index("# 主动行人检索", start)
+        prompt = prompt[:start] + prompt[end:]
+    return f"""{prompt}\n{time_context}\n工具选择以本轮可用工具的描述和参数 Schema 为准。capability_managed=true 表示统一能力目录工具；
+当它能满足用户请求时优先使用，旧静态工具选择示例仅适用于没有匹配目录能力的情况。
+任务尚未完成时告知 task_id，不把 pending 解释为空结果；failed 解释为执行失败。
+可用工具：{tools_json}"""
 
 
 __all__ = ["AGENT_SYSTEM_PROMPT", "build_current_time_context", "build_system_prompt", "extract_action"]

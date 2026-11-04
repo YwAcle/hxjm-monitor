@@ -1,0 +1,156 @@
+{
+  "capability": {
+    "capability_code": "business.events.query",
+    "display_name": "events查询",
+    "object_types": [
+      "business"
+    ],
+    "input_kinds": [
+      "capability_call"
+    ],
+    "contract": {
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "capability_call"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "source_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 36,
+                  "maxLength": 36
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              "start_at": {
+                "type": "string"
+              },
+              "end_at": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "cursor": {
+                "type": "string"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "latest",
+                  "range"
+                ]
+              }
+            },
+            "required": [
+              "mode"
+            ],
+            "additionalProperties": false,
+            "oneOf": [
+              {
+                "properties": {
+                  "mode": {
+                    "const": "latest"
+                  }
+                },
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "start_at"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "end_at"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "properties": {
+                  "mode": {
+                    "const": "range"
+                  }
+                },
+                "required": [
+                  "start_at",
+                  "end_at"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "payload"
+        ],
+        "additionalProperties": false
+      },
+      "parameters_schema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "output_types": [
+        "business.events.page"
+      ]
+    },
+    "agent": {
+      "enabled": true,
+      "read_only": true,
+      "tool_name": "query_business_events",
+      "description": "查询真实业务事件。最近事件使用 mode=latest；指定时间段使用 mode=range 并提供 start_at/end_at，时间使用带时区的 ISO8601。返回分页结果。"
+    }
+  },
+  "result_type": {
+    "type_code": "business.events.page",
+    "schema_version": "1",
+    "json_schema": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "max_inline_bytes": 1048576
+  },
+  "instance": {
+    "implementation_code": "business.http",
+    "implementation_version": "1",
+    "source_ids": [],
+    "resource_scope": {
+      "scope_type": "global",
+      "resource_ids": []
+    },
+    "dispatch_mode": "platform_managed",
+    "service_ref": "business",
+    "execution": {
+      "adapter": "http",
+      "operation": "events",
+      "result_type": "business.events.page",
+      "schema_version": "1"
+    }
+  }
+}
