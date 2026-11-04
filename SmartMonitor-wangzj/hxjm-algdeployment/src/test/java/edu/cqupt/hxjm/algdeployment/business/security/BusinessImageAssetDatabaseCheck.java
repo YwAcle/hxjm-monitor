@@ -28,7 +28,7 @@ public class BusinessImageAssetDatabaseCheck {
             throw new IllegalArgumentException("An explicitly opted-in disposable database is required");
         }
         BusinessStore store = new BusinessStore(new DriverManagerDataSource(url, System.getenv("HXJM_TEST_DB_USER"), System.getenv("HXJM_TEST_DB_PASSWORD")));
-        Path fixture = Files.createTempDirectory(Paths.get("/data/nfs_storage/hxjm"), ".test-images-");
+        Path fixture = Files.createTempDirectory(Paths.get(System.getProperty("java.io.tmpdir")), ".test-images-");
         try {
             ImageAssetService images = new ImageAssetService(store, fixture.toString());
             RecordingService recordings = new RecordingService(store, fixture.toString());

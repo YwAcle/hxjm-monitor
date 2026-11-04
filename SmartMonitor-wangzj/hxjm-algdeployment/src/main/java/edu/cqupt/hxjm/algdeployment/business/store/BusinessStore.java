@@ -32,6 +32,8 @@ public class BusinessStore {
 
     public JdbcTemplate jdbc() { return jdbc; }
 
+    public <T> T transaction(Function<JdbcTemplate,T> work) { return transaction.execute(status -> work.apply(jdbc)); }
+
     public Map<String, Object> write(BusinessActor actor, String operation, Map<String, Object> body,
                                       OffsetDateTime expiresAt,
                                       Function<JdbcTemplate, Map<String, Object>> work) {

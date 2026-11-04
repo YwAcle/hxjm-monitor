@@ -185,3 +185,6 @@ mtx/mediamtx/mediamtx
 /python/tracker/BoT-SORT/assets/*.mov
 *.ipynb
 /python/reid/yolov7/paper/yolov7.pdf
+
+# Local capability test dependencies
+Agent/.capability-deps/

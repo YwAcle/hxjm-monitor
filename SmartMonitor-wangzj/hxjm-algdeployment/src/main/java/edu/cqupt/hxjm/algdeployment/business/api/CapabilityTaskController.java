@@ -18,6 +18,8 @@ import edu.cqupt.hxjm.algdeployment.business.store.BusinessValues;
 @RequestMapping("/api/v1/business")
 @ConditionalOnProperty(prefix = "hxjm.business", name = "enabled", havingValue = "true")
 public class CapabilityTaskController {
+    @org.springframework.beans.factory.annotation.Autowired
+    private edu.cqupt.hxjm.algdeployment.business.service.CapabilityPlatform platform;
     private final BusinessAuthentication authentication;
     private final CapabilityTaskService service;
 
@@ -100,6 +102,28 @@ public class CapabilityTaskController {
     public Map<String,Object> finish(HttpServletRequest request,@RequestBody String raw) {
         BusinessActor actor=authentication.requireService(request,"tasks.finish");
         return BusinessResponses.success(service.finish(actor,body(request,raw)),request,null);
+    }
+
+    @GetMapping("/capabilities/tools")
+    public Map<String,Object> tools(HttpServletRequest request){
+        return BusinessResponses.success(platform.catalog(authentication.authenticate(request,"capabilities.describe")),request,null);
+    }
+    @GetMapping("/tasks/outputs")
+    public Map<String,Object> outputs(HttpServletRequest request,@RequestParam("task_id") String task,
+            @RequestParam(value="limit",defaultValue="20") int limit,@RequestParam(value="after",required=false) String after){
+        return BusinessResponses.success(platform.outputs(authentication.authenticate(request,"tasks.get"),task,limit,after),request,null);
+    }
+    @PostMapping("/tasks/heartbeat")
+    public Map<String,Object> heartbeat(HttpServletRequest request,@RequestBody String raw){
+        return BusinessResponses.success(platform.heartbeat(authentication.requireService(request,"tasks.heartbeat"),body(request,raw)),request,null);
+    }
+    @PostMapping("/tasks/complete")
+    public Map<String,Object> complete(HttpServletRequest request,@RequestBody String raw){
+        return BusinessResponses.success(platform.terminal(authentication.requireService(request,"tasks.complete"),body(request,raw),true),request,null);
+    }
+    @PostMapping("/tasks/fail")
+    public Map<String,Object> fail(HttpServletRequest request,@RequestBody String raw){
+        return BusinessResponses.success(platform.terminal(authentication.requireService(request,"tasks.fail"),body(request,raw),false),request,null);
     }
 
     private static Map<String,Object> body(HttpServletRequest request,String raw) {

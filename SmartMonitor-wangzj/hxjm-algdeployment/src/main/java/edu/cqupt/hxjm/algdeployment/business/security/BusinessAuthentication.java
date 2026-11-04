@@ -82,6 +82,21 @@ public class BusinessAuthentication implements InitializingBean {
         }
     }
 
+    /** Background execution rechecks the existing service grant, without storing credentials in tasks. */
+    public BusinessActor serviceActor(String serviceId, String operation) {
+        BusinessSecurityProperties.ServiceIdentity identity = properties.getServices().get(serviceId);
+        if (identity == null) { throw BusinessException.forbidden(); }
+        BusinessActor actor = new BusinessActor("service:" + serviceId, null, serviceId, identity);
+        actor.requireOperation(operation);
+        return actor;
+    }
+
+    public String serviceToken(String serviceId) {
+        BusinessSecurityProperties.ServiceIdentity identity = properties.getServices().get(serviceId);
+        if (identity == null) { throw BusinessException.forbidden(); }
+        return identity.getToken();
+    }
+
     public BusinessActor authenticate(HttpServletRequest request, String operation) {
         String serviceId = request.getHeader(SERVICE_ID_HEADER);
         String token = request.getHeader(SERVICE_TOKEN_HEADER);

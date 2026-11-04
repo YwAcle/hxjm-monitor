@@ -12,8 +12,9 @@ from llm_agent_service.service.reid_selection import ReIDSelections, selection_t
 class AgentService:
     """将 API 请求转换为 Agent 执行结果，显式续接用户的截图选择。"""
 
-    def __init__(self, *, executor: AgentExecutor, gallery_search=None) -> None:
+    def __init__(self, *, executor: AgentExecutor, gallery_search=None, registry_factory=None) -> None:
         self.executor = executor
+        self.registry_factory = registry_factory
         self.selections = ReIDSelections(gallery_search) if gallery_search is not None else None
 
     def process(
@@ -30,6 +31,7 @@ class AgentService:
             self._save_exchange(session_id, prompt, text)
             return {"type": "agent", "text": text, "data": resumed,
                     "agent": {"mode": "agent", "steps": 1, "finish_reason": "final"}}
+        registry_kwargs = {"registry": self.registry_factory()} if self.registry_factory else {}
         context: dict[str, Any] = {}
         result = self.executor.run(
             prompt,
@@ -37,6 +39,7 @@ class AgentService:
             image_base64=image_base64,
             trace_id=trace_id,
             context=context,
+            **registry_kwargs,
         )
         if self.selections:
             # 截图可能来自上一轮回注而非本次上传，用执行器确认的实际图片保存待选择状态。
@@ -78,6 +81,7 @@ class AgentService:
             yield {"event": "result", "data": resumed}
             yield {"event": "done", "data": {"session_id": session_id, "finish_reason": "final", "steps": 1}}
             return
+        registry_kwargs = {"registry": self.registry_factory()} if self.registry_factory else {}
         context: dict[str, Any] = {}
         for item in self.executor.stream_run(
             prompt,
@@ -85,6 +89,7 @@ class AgentService:
             image_base64=image_base64,
             trace_id=trace_id,
             context=context,
+            **registry_kwargs,
         ):
             if item.get("event") == "result" and self.selections:
                 self.selections.remember(

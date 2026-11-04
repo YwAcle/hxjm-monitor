@@ -38,6 +38,14 @@ public final class BusinessValues {
         catch (Exception exception) { throw BusinessException.invalid("JSON格式不正确或含重复字段"); }
     }
 
+    public static Object parseValue(String raw) {
+        try {
+            Object value=normalizeNumbers(JSON.readValue(raw,Object.class));
+            BusinessCanonical.canonical(value);
+            return value;
+        }catch(Exception invalid){throw BusinessException.invalid("JSON格式不正确");}
+    }
+
     private static Object normalizeNumbers(Object value) {
         if (value instanceof Map) {
             Map<String, Object> object = map(value);
