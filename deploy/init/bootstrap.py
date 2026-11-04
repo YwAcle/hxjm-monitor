@@ -55,6 +55,9 @@ def render(cameras):
     private('backend.yml',yaml.safe_dump(backend,sort_keys=False))
     # RTSP source credentials are private deployment configuration, never printed.
     media={'logDestinations':['stdout'],'api':True,'apiAddress':':'+os.getenv('MEDIA_API_PORT','10497'),'rtspAddress':':'+os.getenv('RTSP_PORT','19554'),'webrtcAddress':':'+os.getenv('MEDIA_HTTP_PORT','19389'),'authInternalUsers':[{'user':'any','pass':'','ips':[],'permissions':[{'action':'read'},{'action':'publish'},{'action':'api'}]}],'rtspTransports':['tcp'],'rtmp':False,'hls':False,'srt':False,'playback':False,'webrtcLocalUDPAddress':':'+os.getenv('MEDIA_ICE_PORT','19390'),'webrtcAdditionalHosts':[os.getenv('PUBLIC_HOST','127.0.0.1')],'pathDefaults':{'record':False},'paths':{'live/'+c['code']:{'source':c['url'],'rtspTransport':'tcp','sourceOnDemand':True} for c in cameras}}
+    if os.getenv('MEDIA_RECORD_ENABLED','false').lower()=='true':
+        media['pathDefaults'].update(record=True,recordPath='/recordings/%path/%Y-%m-%d/%H-%M-%S-%f',recordFormat='fmp4',recordSegmentDuration='1h',recordDeleteAfter='168h')
+        for path in media['paths'].values():path['sourceOnDemand']=False
     if any(c['url'].rstrip('/').endswith('/test-input') for c in cameras):
         media['paths']['test-input']={'source':'publisher'}
     private('mediamtx.yml',yaml.safe_dump(media,sort_keys=False))

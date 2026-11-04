@@ -248,6 +248,7 @@ services:
     - media
     volumes:
     - ${RUNTIME_ROOT}/config/mediamtx.yml:/mediamtx.yml:ro
+    - ${DATA_ROOT}/recordings:/recordings
     environment:
       MTX_WEBRTCLOCALUDPADDRESS: :${MEDIA_ICE_PORT:-19390}
       MTX_WEBRTCADDITIONALHOSTS: ${PUBLIC_HOST:-127.0.0.1}
@@ -405,6 +406,7 @@ services:
       PIPELINE_BACKEND_URL: ${PIPELINE_BACKEND_URL:-http://backend:8080}
       PIPELINE_REID_URL: ${PIPELINE_REID_URL:-http://reid:8020}
       MEDIA_RTSP_URL: ${MEDIA_RTSP_URL:-rtsp://mediamtx:8554/live}
+      MEDIA_RECORD_ENABLED: ${MEDIA_RECORD_ENABLED:-false}
       INSTANCE_NAMESPACE: ${INSTANCE_NAMESPACE:-hxjm}
       CAPABILITY_EXECUTOR_ENABLED: ${CAPABILITY_EXECUTOR_ENABLED:-false}
       PUBLIC_HOST: ${PUBLIC_HOST:-127.0.0.1}
