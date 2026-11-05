@@ -3,7 +3,8 @@
 .agents
 .codex
 .vscode
-Agent
+apps/llm
+references
 **/node_modules
 **/target
 **/build
@@ -28,3 +29,8 @@ deploy/hosts
 **/*.mp4
 **/*.avi
 **/*.mkv
+
+**/.venv*
+**/.runtime-cache
+**/.capability-deps
+**/.node

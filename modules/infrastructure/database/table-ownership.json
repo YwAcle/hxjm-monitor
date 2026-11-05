@@ -1,0 +1,774 @@
+{
+  "mysql": {
+    "alg_bk_machine_fr": {
+      "owner": "Business",
+      "domain": "devices-sources",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/AlgDeploymentManagementMapper.xml"
+      ]
+    },
+    "alg_bk_management": {
+      "owner": "Business",
+      "domain": "devices-sources",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/AlgDeploymentManagementMapper.xml"
+      ]
+    },
+    "ba_algmodel": {
+      "owner": "Business",
+      "domain": "devices-sources",
+      "code_references": [
+        "modules/business/java/hxjm-basedata/src/main/resources/mapper/basedata/BaAlgtypeMapper.xml",
+        "modules/business/java/hxjm-basedata/src/main/resources/mapper/basedata/BaAlgmodelMapper.xml",
+        "modules/business/java/hxjm-basedata/src/main/java/edu/cqupt/hxjm/basedata/domain/BaAlgmodel.java"
+      ]
+    },
+    "ba_algtype": {
+      "owner": "Business",
+      "domain": "devices-sources",
+      "code_references": [
+        "modules/business/java/hxjm-basedata/src/main/resources/mapper/basedata/BaAlgtypeMapper.xml",
+        "modules/business/java/hxjm-basedata/src/main/resources/mapper/basedata/BaAlgmodelMapper.xml",
+        "modules/business/java/hxjm-basedata/src/main/java/edu/cqupt/hxjm/basedata/domain/BaAlgtype.java"
+      ]
+    },
+    "ba_machine": {
+      "owner": "Business",
+      "domain": "devices-sources",
+      "code_references": [
+        "modules/business/java/hxjm-basedata/src/main/resources/mapper/basedata/BaMachineMapper.xml",
+        "modules/business/java/hxjm-basedata/src/main/java/edu/cqupt/hxjm/basedata/domain/BaMachine.java",
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/AlgDeploymentManagementMapper.xml",
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/FaceRecognitionEventMapper.xml",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/mapper/FaceRecognitionEventMapper.java"
+      ]
+    },
+    "face_database": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/FaceRecognitionEventMapper.xml",
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/FaceDatabaseMapper.xml",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/domain/FaceDatabase.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/controller/FaceDatabaseController.java"
+      ]
+    },
+    "face_person": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/FaceRecognitionEventMapper.xml",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/mapper/FaceRecognitionEventMapper.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/domain/VO/TodayFaceEventVO.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/domain/VO/FaceEventIdentityDetailVO.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/service/impl/FaceRecognitionEventServiceImpl.java"
+      ]
+    },
+    "face_recognition_events": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/FaceRecognitionEventMapper.xml",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/domain/FaceRecognitionEvent.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/controller/FaceRecognitionEventController.java"
+      ]
+    },
+    "face_recognition_events_v1": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/FaceRecognitionEventMapper.xml",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/mapper/FaceRecognitionEventMapper.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/service/IFaceRecognitionEventService.java"
+      ]
+    },
+    "face_stranger": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/FaceRecognitionEventMapper.xml",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/mapper/FaceRecognitionEventMapper.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/domain/VO/TodayFaceEventVO.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/domain/VO/FaceEventIdentityDetailVO.java"
+      ]
+    },
+    "gen_table": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-generator/src/main/resources/mapper/generator/GenTableMapper.xml",
+        "modules/infrastructure/java/hxjm-generator/src/main/java/edu/cqupt/hxjm/generator/domain/GenTable.java"
+      ]
+    },
+    "gen_table_column": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-generator/src/main/resources/mapper/generator/GenTableMapper.xml",
+        "modules/infrastructure/java/hxjm-generator/src/main/resources/mapper/generator/GenTableColumnMapper.xml",
+        "modules/infrastructure/java/hxjm-generator/src/main/java/edu/cqupt/hxjm/generator/domain/GenTableColumn.java"
+      ]
+    },
+    "sys_config": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-common/src/main/java/edu/cqupt/hxjm/common/constant/CacheConstants.java",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysConfigMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/java/edu/cqupt/hxjm/system/domain/SysConfig.java"
+      ]
+    },
+    "sys_dept": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-common/src/main/java/edu/cqupt/hxjm/common/core/domain/entity/SysDept.java",
+        "modules/infrastructure/java/hxjm-framework/src/main/java/edu/cqupt/hxjm/framework/aspectj/DataScopeAspect.java",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysRoleMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysDeptMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysUserMapper.xml"
+      ]
+    },
+    "sys_dict_data": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-common/src/main/java/edu/cqupt/hxjm/common/core/domain/entity/SysDictData.java",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysDictDataMapper.xml"
+      ]
+    },
+    "sys_dict_type": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-common/src/main/java/edu/cqupt/hxjm/common/core/domain/entity/SysDictType.java",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysDictTypeMapper.xml"
+      ]
+    },
+    "sys_job": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-quartz/src/main/resources/mapper/quartz/SysJobMapper.xml",
+        "modules/infrastructure/java/hxjm-quartz/src/main/java/edu/cqupt/hxjm/quartz/domain/SysJob.java"
+      ]
+    },
+    "sys_job_log": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-quartz/src/main/resources/mapper/quartz/SysJobLogMapper.xml",
+        "modules/infrastructure/java/hxjm-quartz/src/main/java/edu/cqupt/hxjm/quartz/domain/SysJobLog.java"
+      ]
+    },
+    "sys_logininfor": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysLogininforMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/java/edu/cqupt/hxjm/system/domain/SysLogininfor.java"
+      ]
+    },
+    "sys_menu": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-common/src/main/java/edu/cqupt/hxjm/common/core/domain/entity/SysMenu.java",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysMenuMapper.xml"
+      ]
+    },
+    "sys_notice": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysNoticeMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/java/edu/cqupt/hxjm/system/domain/SysNotice.java"
+      ]
+    },
+    "sys_oper_log": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysOperLogMapper.xml"
+      ]
+    },
+    "sys_post": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysPostMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/java/edu/cqupt/hxjm/system/domain/SysPost.java"
+      ]
+    },
+    "sys_role": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-common/src/main/java/edu/cqupt/hxjm/common/core/domain/entity/SysRole.java",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysRoleMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysMenuMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysUserMapper.xml"
+      ]
+    },
+    "sys_role_dept": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-framework/src/main/java/edu/cqupt/hxjm/framework/aspectj/DataScopeAspect.java",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysRoleDeptMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysDeptMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/java/edu/cqupt/hxjm/system/domain/SysRoleDept.java"
+      ]
+    },
+    "sys_role_menu": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysRoleMenuMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysMenuMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/java/edu/cqupt/hxjm/system/domain/SysRoleMenu.java"
+      ]
+    },
+    "sys_user": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-common/src/main/java/edu/cqupt/hxjm/common/core/domain/entity/SysUser.java",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysPostMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysRoleMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysDeptMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysMenuMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysUserMapper.xml"
+      ]
+    },
+    "sys_user_post": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysPostMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysUserPostMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/java/edu/cqupt/hxjm/system/domain/SysUserPost.java"
+      ]
+    },
+    "sys_user_role": {
+      "owner": "Infrastructure",
+      "domain": "platform-configuration",
+      "code_references": [
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysUserRoleMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysRoleMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysMenuMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/resources/mapper/system/SysUserMapper.xml",
+        "modules/infrastructure/java/hxjm-system/src/main/java/edu/cqupt/hxjm/system/domain/SysUserRole.java"
+      ]
+    },
+    "hxjm_schema_history": {
+      "owner": "Infrastructure",
+      "domain": "schema-versions",
+      "code_references": [
+        "modules/infrastructure/database/bootstrap/schema.py"
+      ]
+    }
+  },
+  "postgres": {
+    "algorithm_result": {
+      "owner": "Business",
+      "domain": "analysis-results",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ActivityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/HistoryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java"
+      ]
+    },
+    "analysis_frame": {
+      "owner": "Business",
+      "domain": "analysis-results",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/SampleFeatureService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/HistoryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/TrackingLifecycleService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/LocalActivityReportService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java"
+      ]
+    },
+    "asset_reference": {
+      "owner": "Business",
+      "domain": "events-evidence",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/IdentityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ActivityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessSearchService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/SampleFeatureService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/LocalActivityReportService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java"
+      ]
+    },
+    "business_event": {
+      "owner": "Business",
+      "domain": "events-evidence",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ActivityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDiscoveryService.java"
+      ]
+    },
+    "business_task": {
+      "owner": "Capability",
+      "domain": "capabilities-tasks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/HistoryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/TrackingLifecycleService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDataAccess.java",
+        "modules/capability/java/hxjm-capability/src/main/java/edu/cqupt/hxjm/algdeployment/capability/service/CapabilityTaskService.java",
+        "modules/capability/java/hxjm-capability/src/main/java/edu/cqupt/hxjm/algdeployment/capability/service/CapabilityPlatform.java"
+      ]
+    },
+    "camera": {
+      "owner": "Business",
+      "domain": "devices-sources",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/ScreenMapper.xml",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/security/BusinessAuthentication.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDiscoveryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/SourceStreamService.java",
+        "modules/business/python/llm_report_service/service/episode_builder.py",
+        "modules/capability/java/hxjm-capability/src/main/java/edu/cqupt/hxjm/algdeployment/capability/service/CapabilityTaskService.java"
+      ]
+    },
+    "camera_stream": {
+      "owner": "Business",
+      "domain": "devices-sources",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/ScreenMapper.xml",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/RecordingService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/SourceStreamService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ImageAssetService.java"
+      ]
+    },
+    "capability_definition": {
+      "owner": "Capability",
+      "domain": "capabilities-tasks",
+      "code_references": [
+        "modules/capability/java/hxjm-capability/src/main/java/edu/cqupt/hxjm/algdeployment/capability/service/CapabilityTaskService.java",
+        "modules/capability/java/hxjm-capability/src/main/java/edu/cqupt/hxjm/algdeployment/capability/service/CapabilityPlatform.java"
+      ]
+    },
+    "capability_instance": {
+      "owner": "Capability",
+      "domain": "capabilities-tasks",
+      "code_references": [
+        "modules/capability/java/hxjm-capability/src/main/java/edu/cqupt/hxjm/algdeployment/capability/service/CapabilityTaskService.java",
+        "modules/capability/java/hxjm-capability/src/main/java/edu/cqupt/hxjm/algdeployment/capability/service/CapabilityPlatform.java"
+      ]
+    },
+    "detection_observation": {
+      "owner": "Business",
+      "domain": "analysis-results",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/SampleFeatureService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/HistoryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/LocalActivityReportService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java"
+      ]
+    },
+    "device_registry": {
+      "owner": "Business",
+      "domain": "devices-sources",
+      "code_references": []
+    },
+    "device_state_observation": {
+      "owner": "Business",
+      "domain": "devices-sources",
+      "code_references": []
+    },
+    "device_task_binding": {
+      "owner": "Business",
+      "domain": "devices-sources",
+      "code_references": []
+    },
+    "device_task_feedback": {
+      "owner": "Business",
+      "domain": "devices-sources",
+      "code_references": []
+    },
+    "episode": {
+      "owner": "Business",
+      "domain": "events-evidence",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/ScreenMapper.xml",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/IdentityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ActivityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDiscoveryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/LocalActivityReportService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java",
+        "modules/business/python/llm_report_service/main.py",
+        "modules/business/python/llm_report_service/db/episode_repo.py",
+        "modules/business/python/llm_report_service/service/episode_builder.py"
+      ]
+    },
+    "episode_media_link": {
+      "owner": "Business",
+      "domain": "events-evidence",
+      "code_references": [
+        "modules/business/python/llm_report_service/db/media_repo.py"
+      ]
+    },
+    "episode_tracklet_link": {
+      "owner": "Business",
+      "domain": "events-evidence",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/ScreenMapper.xml",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/IdentityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ActivityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDiscoveryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/LocalActivityReportService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java",
+        "modules/business/python/llm_report_service/db/episode_repo.py"
+      ]
+    },
+    "event_object_link": {
+      "owner": "Business",
+      "domain": "events-evidence",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ActivityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDiscoveryService.java"
+      ]
+    },
+    "evidence_reference": {
+      "owner": "Business",
+      "domain": "events-evidence",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ActivityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDiscoveryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/LocalActivityReportService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessTaskInputs.java"
+      ]
+    },
+    "feature": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/api/IdentityBusinessController.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/IdentityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessSearchService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/SampleFeatureService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDataAccess.java",
+        "modules/business/python/business_api/clipreid_client.py",
+        "modules/business/python/business_api/gallery_search.py",
+        "modules/capability/java/hxjm-capability/src/main/java/edu/cqupt/hxjm/algdeployment/capability/service/CapabilityTaskService.java",
+        "modules/infrastructure/python/base/server_base.py"
+      ]
+    },
+    "feature_contribution": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/IdentityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessSearchService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/SampleFeatureService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDataAccess.java"
+      ]
+    },
+    "feature_space": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/IdentityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessSearchService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/SampleFeatureService.java"
+      ]
+    },
+    "identity": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/api/IdentityBusinessController.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/security/BusinessAuthentication.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/IdentityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ActivityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessSearchService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/SampleFeatureService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDiscoveryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/TrackingLifecycleService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDataAccess.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/domain/VO/FaceEventIdentityDetailVO.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/websocket/AlarmWebSocketHandler.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/service/impl/ScreenServiceImpl.java",
+        "modules/business/python/business_api/routes.py",
+        "modules/capability/java/hxjm-capability/src/main/java/edu/cqupt/hxjm/algdeployment/capability/service/CapabilityTaskService.java",
+        "modules/infrastructure/java/hxjm-generator/src/main/java/edu/cqupt/hxjm/generator/service/GenTableServiceImpl.java",
+        "modules/infrastructure/python/base/server_base.py"
+      ]
+    },
+    "identity_link": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/IdentityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ActivityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDiscoveryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java"
+      ]
+    },
+    "input_frame": {
+      "owner": "Business",
+      "domain": "analysis-results",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/RecordingService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/SampleFeatureService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/HistoryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/TrackingLifecycleService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/LocalActivityReportService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ImageAssetService.java"
+      ]
+    },
+    "llm_report": {
+      "owner": "Business",
+      "domain": "reports-apps",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/ScreenMapper.xml",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ActivityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDiscoveryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/LocalActivityReportService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/websocket/LlmReportWebSocketHandler.java",
+        "modules/business/python/llm_report_service/main.py",
+        "modules/business/python/llm_report_service/db/episode_repo.py",
+        "modules/business/python/llm_report_service/db/vad_repo.py",
+        "modules/business/python/llm_report_service/db/report_repo.py"
+      ]
+    },
+    "media_asset": {
+      "owner": "Business",
+      "domain": "events-evidence",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/MediaAssetMapper.xml",
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/ScreenMapper.xml",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/RecordingService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/SampleFeatureService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/HistoryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDiscoveryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/LocalActivityReportService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessTaskInputs.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ImageAssetService.java",
+        "modules/business/python/llm_report_service/main.py",
+        "modules/business/python/llm_report_service/db/media_repo.py",
+        "modules/business/python/llm_report_service/service/episode_builder.py"
+      ]
+    },
+    "outbox_event": {
+      "owner": "Business",
+      "domain": "platform-delivery",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/store/BusinessStore.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/TrackingLifecycleService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java"
+      ]
+    },
+    "processing_coverage": {
+      "owner": "Business",
+      "domain": "analysis-results",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/RecordingService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/HistoryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/TrackingLifecycleService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/LocalActivityReportService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java",
+        "modules/capability/java/hxjm-capability/src/main/java/edu/cqupt/hxjm/algdeployment/capability/service/CapabilityTaskService.java"
+      ]
+    },
+    "query_candidate": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessSearchService.java"
+      ]
+    },
+    "query_request": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ActivityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessSearchService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/SampleFeatureService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDiscoveryService.java"
+      ]
+    },
+    "reid_match": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/ScreenMapper.xml"
+      ]
+    },
+    "reid_target": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/ScreenMapper.xml",
+        "modules/business/python/business_api/gallery_repo.py"
+      ]
+    },
+    "report_evidence_link": {
+      "owner": "Business",
+      "domain": "reports-apps",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ActivityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDiscoveryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/LocalActivityReportService.java"
+      ]
+    },
+    "request_deduplication": {
+      "owner": "Business",
+      "domain": "platform-delivery",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/store/BusinessStore.java"
+      ]
+    },
+    "result_selection": {
+      "owner": "Business",
+      "domain": "analysis-results",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/HistoryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java"
+      ]
+    },
+    "result_set": {
+      "owner": "Business",
+      "domain": "analysis-results",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ActivityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/HistoryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/TrackingLifecycleService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java",
+        "modules/capability/java/hxjm-capability/src/main/java/edu/cqupt/hxjm/algdeployment/capability/service/CapabilityTaskService.java"
+      ]
+    },
+    "result_type": {
+      "owner": "Capability",
+      "domain": "capabilities-tasks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultContext.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ActivityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/HistoryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java",
+        "modules/capability/java/hxjm-capability/src/main/java/edu/cqupt/hxjm/algdeployment/capability/service/CapabilityTaskService.java",
+        "modules/capability/java/hxjm-capability/src/main/java/edu/cqupt/hxjm/algdeployment/capability/service/CapabilityPlatform.java"
+      ]
+    },
+    "sample": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/api/IdentityBusinessController.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/IdentityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ActivityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessSearchService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/SampleFeatureService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDiscoveryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDataAccess.java"
+      ]
+    },
+    "search_hit": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessSearchService.java"
+      ]
+    },
+    "stranger_target": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/python/llm_report_service/db/stranger_repo.py"
+      ]
+    },
+    "stream_session": {
+      "owner": "Business",
+      "domain": "devices-sources",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/RecordingService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/TrackingLifecycleService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessTaskInputs.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/SourceStreamService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ImageAssetService.java"
+      ]
+    },
+    "task_attempt": {
+      "owner": "Capability",
+      "domain": "capabilities-tasks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/HistoryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/TrackingLifecycleService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDataAccess.java",
+        "modules/capability/java/hxjm-capability/src/main/java/edu/cqupt/hxjm/algdeployment/capability/service/CapabilityTaskService.java",
+        "modules/capability/java/hxjm-capability/src/main/java/edu/cqupt/hxjm/algdeployment/capability/service/CapabilityPlatform.java"
+      ]
+    },
+    "track_identity_assignment": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/IdentityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessSearchService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDiscoveryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDataAccess.java"
+      ]
+    },
+    "tracking_context": {
+      "owner": "Business",
+      "domain": "analysis-results",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/TrackingLifecycleService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java"
+      ]
+    },
+    "tracklet": {
+      "owner": "Business",
+      "domain": "people-tracks",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/ScreenMapper.xml",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/IdentityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ActivityBusinessService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessSearchService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDiscoveryService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/TrackingLifecycleService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/LocalActivityReportService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ResultRegistrationService.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/BusinessDataAccess.java",
+        "modules/business/java/hxjm-algdeployment/src/main/java/edu/cqupt/hxjm/algdeployment/business/service/ImageAssetService.java",
+        "modules/business/python/llm_report_service/main.py",
+        "modules/business/python/llm_report_service/db/episode_repo.py"
+      ]
+    },
+    "vad": {
+      "owner": "Business",
+      "domain": "events-evidence",
+      "code_references": [
+        "modules/business/java/hxjm-algdeployment/src/main/resources/mapper/algdeployment/ScreenMapper.xml",
+        "modules/business/python/llm_report_service/main.py",
+        "modules/business/python/llm_report_service/db/vad_repo.py",
+        "modules/business/python/llm_report_service/service/episode_builder.py"
+      ]
+    },
+    "task_output": {
+      "owner": "Capability",
+      "domain": "capabilities-tasks",
+      "code_references": [
+        "modules/capability/java/hxjm-capability/src/main/java/edu/cqupt/hxjm/algdeployment/capability/service/CapabilityPlatform.java"
+      ]
+    },
+    "hxjm_schema_history": {
+      "owner": "Infrastructure",
+      "domain": "schema-versions",
+      "code_references": [
+        "modules/infrastructure/database/bootstrap/schema.py"
+      ]
+    }
+  }
+}

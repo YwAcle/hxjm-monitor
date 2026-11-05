@@ -1,0 +1,6 @@
+langchain-core>=1.0
+httpx>=0.27
+pydantic>=2
+Pillow>=10
+numpy>=1.24
+decord>=0.6

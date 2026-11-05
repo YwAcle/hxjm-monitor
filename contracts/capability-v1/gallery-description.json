@@ -1,0 +1,97 @@
+{
+  "capability": {
+    "capability_code": "business.gallery.description",
+    "display_name": "登记图库description",
+    "object_types": [
+      "business"
+    ],
+    "input_kinds": [
+      "capability_call"
+    ],
+    "contract": {
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "capability_call"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "top_k": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10,
+                "default": 5
+              }
+            },
+            "required": [
+              "description"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "kind",
+          "payload"
+        ],
+        "additionalProperties": false
+      },
+      "parameters_schema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "output_types": [
+        "business.gallery.result"
+      ]
+    },
+    "agent": {
+      "enabled": true,
+      "read_only": true,
+      "tool_name": "search_pedestrians_by_description",
+      "description": "按用户明确给出的衣着等外观短语检索登记照片。仅使用原文外观条件，不扩写，不把相似度当作身份概率。Chinese-CLIP 服务未就绪时如实说明未执行。"
+    }
+  },
+  "result_type": {
+    "type_code": "business.gallery.result",
+    "schema_version": "1",
+    "json_schema": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "status"
+      ]
+    },
+    "max_inline_bytes": 10485760
+  },
+  "instance": {
+    "implementation_code": "business.http",
+    "implementation_version": "1",
+    "source_ids": [],
+    "resource_scope": {
+      "scope_type": "global",
+      "resource_ids": []
+    },
+    "dispatch_mode": "platform_managed",
+    "service_ref": "gallery-business",
+    "execution": {
+      "adapter": "http",
+      "operation": "description",
+      "result_type": "business.gallery.result",
+      "schema_version": "1"
+    }
+  }
+}

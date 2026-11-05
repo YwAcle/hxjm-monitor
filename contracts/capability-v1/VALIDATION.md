@@ -13,7 +13,7 @@
 
 ## 未通过或未覆盖
 
-- 旧 test_vllm_service.test_launch_arguments_and_quoted_env 引用上一任务已删除的 Agent/llm_report_service/start_vllm.sh，FileNotFoundError。本轮未恢复废弃入口。
+- 旧 test_vllm_service.test_launch_arguments_and_quoted_env 引用上一任务已删除的 modules/business/python/llm_report_service/start_vllm.sh，FileNotFoundError。本轮未恢复废弃入口。
 - video_analysis 全量测试在当前 Python 环境运行失败：缺少 torch/PyAV 等算法依赖，另有旧 Worker/录制测试与上游运行时接口不一致；本轮仅确认相关 ResultSpool/ResultDispatcher 回归及现有分析容器健康，未宣称全部视频测试通过。
 - 真实事件库无数据，非空事件结果验收未完成。当前库有真实报告，通过第二能力验证非空成果。
 - “监控事件”同时可能匹配旧视频异常工具；本次模型验收使用“业务事件目录最新3条，非视频异常检测”的自然语言，未指定工具名。动态能力优先提示不保证模型对含混问题总选择相同能力。

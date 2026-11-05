@@ -1,0 +1,99 @@
+{
+  "capability": {
+    "capability_code": "business.gallery.screenshot",
+    "display_name": "登记图库screenshot",
+    "object_types": [
+      "business"
+    ],
+    "input_kinds": [
+      "capability_call"
+    ],
+    "contract": {
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "capability_call"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "image_base64": {
+                "type": "string",
+                "minLength": 1
+              },
+              "top_k": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10,
+                "default": 5
+              }
+            },
+            "required": [
+              "image_base64"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "kind",
+          "payload"
+        ],
+        "additionalProperties": false
+      },
+      "parameters_schema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "output_types": [
+        "business.gallery.result"
+      ]
+    },
+    "agent": {
+      "enabled": true,
+      "read_only": true,
+      "tool_name": "search_pedestrians_in_screenshot",
+      "description": "用监控截图找登记行人；多人返回 source_asset_id 和候选编号，必须等待用户明确选择，再调用 select_gallery_candidate，不得自行选框。图片由服务器注入。",
+      "context_inputs": {
+        "image_base64": "image_base64"
+      }
+    }
+  },
+  "result_type": {
+    "type_code": "business.gallery.result",
+    "schema_version": "1",
+    "json_schema": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "status"
+      ]
+    },
+    "max_inline_bytes": 10485760
+  },
+  "instance": {
+    "implementation_code": "business.http",
+    "implementation_version": "1",
+    "source_ids": [],
+    "resource_scope": {
+      "scope_type": "global",
+      "resource_ids": []
+    },
+    "dispatch_mode": "platform_managed",
+    "service_ref": "gallery-business",
+    "execution": {
+      "adapter": "http",
+      "operation": "screenshot",
+      "result_type": "business.gallery.result",
+      "schema_version": "1"
+    }
+  }
+}

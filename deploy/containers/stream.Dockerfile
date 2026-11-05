@@ -27,10 +27,10 @@ RUN apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install cppzmq (header only)
-COPY mtx/3rd/cppzmq/*.hpp /usr/local/include/
+COPY modules/perception-devices/stream/3rd/cppzmq/*.hpp /usr/local/include/
 
 WORKDIR /src
-COPY mtx /src
+COPY modules/perception-devices/stream /src
 
 WORKDIR /src/build
 RUN cmake .. -DCMAKE_BUILD_TYPE=Release \
@@ -61,7 +61,7 @@ RUN apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY --from=build /src/build/ai_stream /app/ai_stream
-COPY mtx/config.yaml /app/config.yaml
+COPY modules/perception-devices/stream/config.yaml /app/config.yaml
 
 # 默认环境变量
 ENV REID_ZMQ_ADDR=tcp://ai-reid:5556

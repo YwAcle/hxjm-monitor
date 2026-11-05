@@ -1,0 +1,123 @@
+{
+  "capability": {
+    "capability_code": "garbage.cleanup",
+    "display_name": "垃圾清理（外部机器狗路线）",
+    "object_types": [
+      "garbage"
+    ],
+    "input_kinds": [
+      "capability_call"
+    ],
+    "contract": {
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "capability_call"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "event_id",
+              "source_ids",
+              "route"
+            ],
+            "properties": {
+              "event_id": {
+                "type": "string",
+                "minLength": 36,
+                "maxLength": 36
+              },
+              "source_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 36,
+                  "maxLength": 36
+                }
+              },
+              "route": {
+                "type": "string",
+                "enum": [
+                  "route1",
+                  "route2",
+                  "route3",
+                  "route4"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "payload"
+        ],
+        "additionalProperties": false
+      },
+      "parameters_schema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "output_types": [
+        "device.cleanup"
+      ]
+    }
+  },
+  "result_type": {
+    "type_code": "device.cleanup",
+    "schema_version": "1",
+    "json_schema": {
+      "type": "object",
+      "required": [
+        "state",
+        "simulated",
+        "external_task_id",
+        "protocol_request_id",
+        "route"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "succeeded"
+          ]
+        },
+        "simulated": {
+          "type": "boolean"
+        },
+        "external_task_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "protocol_request_id": {
+          "type": "string"
+        },
+        "route": {
+          "type": "string"
+        }
+      }
+    },
+    "max_inline_bytes": 65536
+  },
+  "instance": {
+    "implementation_code": "m20.route",
+    "implementation_version": "1",
+    "source_ids": [],
+    "resource_scope": {
+      "scope_type": "global",
+      "resource_ids": []
+    },
+    "dispatch_mode": "platform_managed",
+    "service_ref": "robot-dog",
+    "execution": {
+      "adapter": "m20_route",
+      "operation": "cleanup",
+      "result_type": "device.cleanup",
+      "schema_version": "1"
+    }
+  }
+}

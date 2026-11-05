@@ -1,0 +1,104 @@
+{
+  "type": "object",
+  "properties": {
+    "contract_version": {
+      "const": "1"
+    },
+    "result_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capability_code": {
+      "type": "string",
+      "minLength": 1
+    },
+    "producer_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "result_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "producer_result_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "registered_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "production_mode": {
+      "enum": [
+        "once",
+        "continuous"
+      ]
+    },
+    "source_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "occurred_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "asset",
+              "evidence"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "contract_version",
+    "result_id",
+    "capability_code",
+    "producer_id",
+    "task_id",
+    "run_id",
+    "result_type",
+    "schema_version",
+    "producer_result_key",
+    "registered_at",
+    "production_mode",
+    "source_ids",
+    "occurred_at",
+    "evidence_refs"
+  ],
+  "additionalProperties": false
+}

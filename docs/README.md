@@ -1,3 +1,9 @@
+# 当前实现入口
+
+当前代码目录、公开接口、数据库权威定义分别见 [模块布局](refactor/module-layout.md)、[接口说明](refactor/interfaces.md)、[数据库规范](refactor/database.md)。构建部署见 [根说明](../README.md) 和 [部署入口](../deploy/README.md)；垃圾清理见 [阶段四](refactor/stage-4.md) 与 [机器狗接手说明](refactor/robot-dog-integration.md)。
+
+以下 v0.2 文档保留为早期需求与设计参考；其中历史路径、旧表和兼容方案不作为当前初始化或实现权威，交付程度以阶段记录为准。
+
 # HXJM 开发文档
 
 **版本：v0.2 · 开发设计基线 · 2026-10-26**

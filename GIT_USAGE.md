@@ -1,3 +1,5 @@
+> 历史协作参考：本文的服务器路径、main 分支及旧远程地址不代表当前部署。本次重构发布到 GitHub 的 `refactor/modular-platform-v1`，不合并原主分支；当前入口以根 README 为准。
+
 # HXJM Git Worktree 协同开发使用手册1
 
 本手册适用于当前协作方式：每个人在自己的 worktree 目录和开发分支中开发，由集成人员在 `/home/guest/hxjm` 的 `main` 分支合并、验证，并将 `main` 推送到远程仓库。
@@ -964,7 +966,7 @@ git check-ignore -v path/to/file
 
 ### 16.3 现有目录管理方式
 
-项目由根仓库统一管理。初始化前，`lanhu`、`SmartMonitor-wangzj`、`mtx` 各有独立 Git 元数据，原元数据备份于 `.git-root/nested-repositories/<目录名>/`，备份不上传。三个子目录由根仓库直接跟踪，日常按当前 worktree 根仓库提交，不在子目录重新 git init。
+项目由根仓库统一管理。初始化前，`lanhu`、`apps/backend`、`mtx` 各有独立 Git 元数据，原元数据备份于 `.git-root/nested-repositories/<目录名>/`，备份不上传。三个子目录由根仓库直接跟踪，日常按当前 worktree 根仓库提交，不在子目录重新 git init。
 
 本机 `.vscode/settings.json` 含本地环境设置，按现有忽略规则保留本地，新工作树是否需配置由实际编辑器设置决定。
 

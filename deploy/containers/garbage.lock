@@ -1,0 +1,2 @@
+-r reid.lock
+transformers==4.57.3

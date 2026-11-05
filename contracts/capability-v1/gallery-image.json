@@ -1,0 +1,99 @@
+{
+  "capability": {
+    "capability_code": "business.gallery.image",
+    "display_name": "登记图库image",
+    "object_types": [
+      "business"
+    ],
+    "input_kinds": [
+      "capability_call"
+    ],
+    "contract": {
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "capability_call"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "image_base64": {
+                "type": "string",
+                "minLength": 1
+              },
+              "top_k": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10,
+                "default": 5
+              }
+            },
+            "required": [
+              "image_base64"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "kind",
+          "payload"
+        ],
+        "additionalProperties": false
+      },
+      "parameters_schema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "output_types": [
+        "business.gallery.result"
+      ]
+    },
+    "agent": {
+      "enabled": true,
+      "read_only": true,
+      "tool_name": "search_pedestrians_by_image",
+      "description": "按上传单人裁剪图检索登记照片的外观相似候选；不确认身份或在场。图片由服务器注入，不得编造Base64。",
+      "context_inputs": {
+        "image_base64": "image_base64"
+      }
+    }
+  },
+  "result_type": {
+    "type_code": "business.gallery.result",
+    "schema_version": "1",
+    "json_schema": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "status"
+      ]
+    },
+    "max_inline_bytes": 10485760
+  },
+  "instance": {
+    "implementation_code": "business.http",
+    "implementation_version": "1",
+    "source_ids": [],
+    "resource_scope": {
+      "scope_type": "global",
+      "resource_ids": []
+    },
+    "dispatch_mode": "platform_managed",
+    "service_ref": "gallery-business",
+    "execution": {
+      "adapter": "http",
+      "operation": "image",
+      "result_type": "business.gallery.result",
+      "schema_version": "1"
+    }
+  }
+}

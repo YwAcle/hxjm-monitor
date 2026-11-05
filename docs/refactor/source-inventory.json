@@ -1,0 +1,35 @@
+{
+  "baseline_commit": "f9a4628390104673b5768ecaeb1940eccd5d3642",
+  "algorithm_sources": [
+    {
+      "path": "modules/perception-devices/vendor/botsort",
+      "previous_path": "python/tracker/BoT-SORT",
+      "origin": "BoT-SORT; paper arXiv:2206.14651; bundled FastReID/YOLOX retained",
+      "upstream_commit": "unknown; not invented",
+      "source_count": 681,
+      "source_tree_sha256": "408fc16835a07c60fd6ba5af7dcdd4b0fe1db8b3c223a8441a84465d777d3fce",
+      "local_changes": "Existing HXJM fork preserved; no model rewrite during directory migration"
+    },
+    {
+      "path": "modules/perception-devices/vendor/reid/CLIP-ReID",
+      "previous_path": "python/reid/CLIP-ReID",
+      "origin": "CLIP-ReID; paper arXiv:2211.13977",
+      "upstream_commit": "unknown; not invented",
+      "source_count": 71,
+      "source_tree_sha256": "4c6aa080e69ba727993a8a4e60e56422ecc32c6e2183c3a24b2aee65e60f7489",
+      "local_changes": "Existing HXJM fork preserved; no model rewrite during directory migration"
+    },
+    {
+      "path": "modules/perception-devices/stream/3rd/cppzmq",
+      "previous_path": "mtx/3rd/cppzmq",
+      "origin": "cppzmq; upstream README/LICENSE retained",
+      "upstream_commit": "unknown; not invented",
+      "source_count": 32,
+      "source_tree_sha256": "f4c01a447a37c8530192f8869a3a9f45ddeec6e8dacd9f88b145933fa731e491",
+      "local_changes": "Existing HXJM fork preserved; no model rewrite during directory migration"
+    }
+  ],
+  "removed_identical_mtx_files": 775,
+  "retained_mtx_variant_files": 32,
+  "removed_identical_m20_files": 9
+}

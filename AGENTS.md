@@ -5,7 +5,8 @@
 ## 项目说明
 
 - 以仓库现有 README、依赖文件、配置和相关文档为依据，确认当前任务所需的入口与环境，不默认全仓探索。
-- 在本节补充项目目标、关键入口、数据与输出位置，以及只读参考项目等操作边界。详细目录布局和实现约定留在项目文档中，不在多处重复维护。
+- HXJM 六层源码位于 `modules/`；入口为 `apps/backend/pom.xml`、`apps/llm/scripts/`、`apps/python.sh` 和 `scripts/start.sh`。公开接口维护于 `contracts/`，数据库只维护于 `modules/infrastructure/database/migrations/`，详见根 README 与 `docs/refactor/`。
+- `references/` 是实验或历史源码参考，不作为正式运行依赖。`.run/`、私有配置、模型及录像不提交；不访问其他部署目录，不向真实设备发送控制命令。
 
 ## 协作方式
 

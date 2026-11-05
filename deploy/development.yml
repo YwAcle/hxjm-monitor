@@ -13,8 +13,8 @@ services:
         REVISION: ${REVISION:-unknown}
       target: development
     volumes:
-    - ${SOURCE_ROOT}/lanhu:/app/lanhu
-    - ${RUNTIME_ROOT}/frontend/node_modules:/app/lanhu/node_modules
+    - ${SOURCE_ROOT}/modules/access/web:/app/frontend
+    - ${RUNTIME_ROOT}/frontend/node_modules:/app/frontend/node_modules
     command:
     - npm
     - run
@@ -36,7 +36,7 @@ services:
         REVISION: ${REVISION:-unknown}
       target: development
     volumes:
-    - ${SOURCE_ROOT}/SmartMonitor-wangzj:/source:ro
+    - ${SOURCE_ROOT}:/source:ro
     - ${RUNTIME_ROOT}/backend:/runtime
     working_dir: /runtime
     environment:
@@ -46,13 +46,14 @@ services:
     command:
     - sh
     - -ec
-    - mkdir -p /runtime/work && cp -a /source/. /runtime/work/ && cd /runtime/work && mvn -Dmaven.repo.local=/runtime/maven -pl hxjm-admin -am package -DskipTests
+    - mkdir -p /runtime/work && cp -a /source/apps /source/modules /runtime/work/ && cd /runtime/work/apps/backend && mvn -Dmaven.repo.local=/runtime/maven -pl hxjm-admin -am package -DskipTests
       -q && exec java -jar hxjm-admin/target/hxjm-admin.jar
   analysis:
     network_mode: host
     ports: !reset []
     volumes:
-    - ${SOURCE_ROOT}/python:/app/python:ro
+    - ${SOURCE_ROOT}/modules/perception-devices/python:/app/python:ro
+    - ${SOURCE_ROOT}/modules/infrastructure/python:/app/infrastructure:ro
     environment:
       HXJM_REVISION: ${REVISION:-unknown}
     command:
@@ -80,7 +81,8 @@ services:
     network_mode: host
     ports: !reset []
     volumes:
-    - ${SOURCE_ROOT}/python:/app/python:ro
+    - ${SOURCE_ROOT}/modules/perception-devices/python:/app/python:ro
+    - ${SOURCE_ROOT}/modules/infrastructure/python:/app/infrastructure:ro
     environment:
       HXJM_REVISION: ${REVISION:-unknown}
     command:

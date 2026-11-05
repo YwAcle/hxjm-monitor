@@ -12,6 +12,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base-url',default=os.getenv('CAPABILITY_BUSINESS_URL'))
     parser.add_argument('--namespace',required=True)
+    parser.add_argument('--simulate-device',action='store_true',help='Explicitly register m20_mock for local simulation only')
     parser.add_argument('configs',nargs='+',type=Path)
     args=parser.parse_args()
     service=os.environ['CAPABILITY_SERVICE_ID'];token=os.environ['CAPABILITY_SERVICE_TOKEN']
@@ -22,6 +23,9 @@ def main():
         with urllib.request.urlopen(req,timeout=15) as response:return json.load(response)
     for path in args.configs:
         config=json.loads(path.read_text())
+        if args.simulate_device and config['instance'].get('execution',{}).get('adapter')=='m20_route':
+            config['instance']['execution']['adapter']='m20_mock'
+            config['instance']['implementation_code']='m20.mock'
         for endpoint,definition,query,key in [('/result-types',config['result_type'],'?type_code='+config['result_type']['type_code']+'&schema_version='+config['result_type']['schema_version'],'type_code'),('/capabilities',config['capability'],'?capability_code='+config['capability']['capability_code'],'capability_code')]:
             existing=request(endpoint+query)['items']
             if existing:

@@ -1,0 +1,3 @@
+-r ../../modules/agent/python/llm_agent_service/requirements.txt
+-r ../../modules/business/python/business_api/requirements.txt
+-r ../../modules/business/python/llm_report_service/requirements.txt

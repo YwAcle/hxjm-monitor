@@ -1,43 +1,45 @@
-## 本副本启停
+# HXJM 视频监控平台
 
-在当前仓库根目录执行 `bash scripts/start.sh`、`bash scripts/stop.sh`；状态用 `bash scripts/start.sh --status`。默认启动本副本前后端、推流、分析和 ReID，配置自动读取 `deploy/config/deployment.local.env`。Agent 单独使用 `Agent/scripts/`。完整说明见 [部署说明](deploy/README.md)。
+正式源码按六层职责组织，部署进程继续复用现有 React、Spring Boot、Python 和媒体服务。目录与依赖映射见 [模块说明](docs/refactor/module-layout.md)，公共接口见 [接口说明](docs/refactor/interfaces.md)，数据库维护见 [数据库规范](docs/refactor/database.md)，已接入流程和限制见 [第四阶段记录](docs/refactor/stage-4.md)。
 
-# HXJM 视频监控系统（v0.2）
+| 位置 | 维护内容 |
+| --- | --- |
+| modules/access | 主 React 前端（含 `/garbage-cleanup`）、原独立图片检测页面 |
+| modules/agent | Agent 决策循环、上下文和 Capability Tool Bridge |
+| modules/capability | Java 能力目录、HTTP/设备 Adapter 协调、任务与执行器 |
+| modules/business | Java 业务服务、Python 图库和报告生成 |
+| modules/perception-devices | FrameHub、视频运行时、算法、设备适配、C++ 推流 |
+| modules/infrastructure | 通用 Java/Python 基础组件、数据库初始化与迁移 |
+| modules/ai-infra | 公共模型配置、LLM/VLM 客户端 |
+| apps | 后端 Maven reactor、LLM 进程装配和 Python 模块运行入口 |
+| contracts | 跨模块契约的权威来源 |
+| references | 非正式部署的实验、演示、外部机器人和历史实现参考 |
 
-稳定运行源码位于 `/data/nfs_storage/hxjm`，录像、图片、待投递成果和模型位于 `/data/nfs_storage/hxjm_datas`。
-当前交付本机业务端：前端、Java 后端、MediaMTX、视频输入与录像、BoT-SORT 检测和 ReID 特征服务。
-远端 Agent 源码位于 `Agent/`，由 Agent 服务器单独启动，不纳入本机业务端启动入口。
-
-## 开发与部署
-
-个人账号默认只启动前端，连接公共业务与模型服务，不重复加载 GPU 模型：
+在仓库根目录执行现有业务端入口：
 
 ```bash
-cp deploy/config/development.env.example deploy/config/development.local.env
-bash scripts/start.sh --config deploy/config/development.local.env --check
-bash scripts/start.sh --config deploy/config/development.local.env --build --frontend-port 3104
-bash scripts/start.sh --config deploy/config/development.local.env --status
-bash scripts/stop.sh --config deploy/config/development.local.env
+bash scripts/start.sh --help
+bash scripts/start.sh --config deploy/config/deployment.local.env --status
+bash scripts/start.sh --config deploy/config/deployment.local.env
+bash scripts/stop.sh --config deploy/config/deployment.local.env
 ```
 
-`scripts` 仅有两个入口；环境、公共服务与个人联调由 Docker Compose 管理。
-完整部署、GPU 选择、首次空库初始化、远程服务、迁移和回退见 [部署手册](deploy/README.md)。
-稳定运行目录 `/data/nfs_storage/hxjm` 保持原部署，本仓库新部署使用独立端口和状态目录。
-当前验收状态见 [部署验收记录](deploy/VERIFICATION.md)。
+首次部署、配置生成与数据库初始化以 [部署说明](deploy/README.md) 为准。Agent/报告服务仍单独管理，入口为 `apps/llm/scripts/start.sh`、`apps/llm/scripts/stop.sh`，见 [LLM 应用说明](apps/llm/README.md)。模块移动后须重新构建相关镜像再部署，旧镜像不能证明新源码生效。
 
-## 模块与设计文档
+Python 模块使用 `HXJM_PYTHON=/path/to/project/python bash apps/python.sh -m <package>`；Maven 入口为 `apps/backend/pom.xml`，后端仍只有一个 Spring Boot 应用。不将 references 加入正式 PYTHONPATH 或 Compose，不启动或修改其他工作区的服务。
 
-| 目录 | 内容 |
-| --- | --- |
-| `Agent` | 远端 Agent 稳定源码与模型；在 Agent 服务器单独启动，见 [Agent 部署说明](Agent/DEPLOYMENT.md) |
-| `lanhu` | 监控前端 |
-| `SmartMonitor-wangzj` | 管理与监控业务后端 |
-| `mtx` | 媒体服务与 C++ 流处理 |
-| `python/frame_hub`、`python/video_analysis` | 统一输入、录像、实时检测和可靠成果投递 |
-| `python/reid_feature_service` | ReID 特征服务 |
-| `deploy`、`scripts` | Compose、镜像、配置、数据初始化与两个启停入口 |
-| `docs` | v0.2 需求、架构、数据和接口规格 |
 
-开发规格见 [文档导航](docs/README.md)。其他算法、设备示例及大模型目录保留源码，本次入口不自动启动这些组件。
-原 `/home/guest/hxjm-yh` 保留用于代码回退，当前业务端不再依赖其中的项目文件。
-其他工作区使用的原公共媒体服务独立维护，本次不切换公共服务或修改其录像路径。
+新增同类型能力时维护自己的服务/Adapter 和 `contracts/capability-v1/` 定义，通过现有注册入口接入；不要修改 Agent 决策循环或复制任务平台。垃圾清理复用主系统事件和 Capability，真实机器狗协议及剩余对接工作见 [接手说明](docs/refactor/robot-dog-integration.md)。模拟运行不表示真实设备集成完成。
+
+基本构建命令（使用本项目对应环境）：
+
+```bash
+mvn -f apps/backend/pom.xml -pl :hxjm-admin -am package -DskipTests
+npm --prefix modules/access/web ci
+npm --prefix modules/access/web run build
+```
+
+数据库新环境使用现有 `--init-db`（仅空库），已采用版本记录的开发库使用 `--upgrade-db`；两者均执行唯一的 `modules/infrastructure/database/migrations/`。历史数据库快照不随此分支发布，不使用旧快照替代当前迁移。
+
+
+当前检查范围：前端测试与生产构建、Java 库编译和应用装配检查、Python 当前接口检查已通过；本机完整 Maven package 仍受离线缓存缺少构建插件限制。真实模型、摄像头和机器狗需在配置完成后另行联调，详见阶段记录。

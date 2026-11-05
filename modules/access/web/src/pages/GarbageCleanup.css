@@ -1,0 +1,15 @@
+.garbage-cleanup { min-height:100vh; padding:32px; background:#f3f6fa; color:#172b43; font:16px/1.6 system-ui,sans-serif; }
+.garbage-cleanup header { display:flex; justify-content:space-between; align-items:center; }
+.garbage-cleanup h1 { font-size:28px; margin:8px 0; }
+.garbage-cleanup section { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:20px; }
+.garbage-cleanup article { background:white; border:1px solid #d7e0ea; border-radius:12px; padding:24px; }
+.garbage-cleanup h2 { font-size:20px; }
+.garbage-cleanup small { color:#54718e; font-size:14px; }
+.garbage-cleanup dl { display:grid; grid-template-columns:110px minmax(0,1fr); gap:8px; }
+.garbage-cleanup dd { margin:0; overflow-wrap:anywhere; }
+.garbage-cleanup dt { color:#52677c; }
+.garbage-cleanup pre { white-space:pre-wrap; }
+.garbage-cleanup button { padding:10px 18px; border:0; border-radius:6px; color:white; background:#1761b7; cursor:pointer; }
+.garbage-cleanup button:disabled { background:#8392a3; cursor:default; }
+.garbage-cleanup .cleanup-error { color:#a02323; }
+.garbage-cleanup a { color:#145cae; }

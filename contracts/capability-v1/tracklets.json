@@ -1,0 +1,128 @@
+{
+  "capability": {
+    "capability_code": "business.tracklets.query",
+    "display_name": "tracklets查询",
+    "object_types": [
+      "business"
+    ],
+    "input_kinds": [
+      "capability_call"
+    ],
+    "contract": {
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "capability_call"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "source_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 36,
+                  "maxLength": 36
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              "start_at": {
+                "type": "string"
+              },
+              "end_at": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "cursor": {
+                "type": "string"
+              },
+              "identity_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 36,
+                  "maxLength": 36
+                },
+                "minItems": 1,
+                "maxItems": 100,
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "identity_ids",
+              "start_at",
+              "end_at"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "kind",
+          "payload"
+        ],
+        "additionalProperties": false
+      },
+      "parameters_schema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "output_types": [
+        "business.tracklets.page"
+      ]
+    },
+    "agent": {
+      "enabled": true,
+      "read_only": true,
+      "tool_name": "query_business_tracklets",
+      "description": "查询 identity_ids 指定人员的历史轨迹；先按完整姓名查询身份取得 UUID。必须提供带时区的 start_at/end_at。"
+    }
+  },
+  "result_type": {
+    "type_code": "business.tracklets.page",
+    "schema_version": "1",
+    "json_schema": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "max_inline_bytes": 1048576
+  },
+  "instance": {
+    "implementation_code": "business.http",
+    "implementation_version": "1",
+    "source_ids": [],
+    "resource_scope": {
+      "scope_type": "global",
+      "resource_ids": []
+    },
+    "dispatch_mode": "platform_managed",
+    "service_ref": "business",
+    "execution": {
+      "adapter": "http",
+      "operation": "tracklets",
+      "result_type": "business.tracklets.page",
+      "schema_version": "1"
+    }
+  }
+}

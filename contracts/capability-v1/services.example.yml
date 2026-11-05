@@ -13,3 +13,37 @@ hxjm:
             url: http://backend:8080/api/v1/business/reports/search
             required-operation: reports.query
             credential-ref: hxjm-pipeline
+          identities:
+            url: http://backend:8080/api/v1/business/identities/query
+            required-operation: identities.query
+            credential-ref: hxjm-pipeline
+          tracklets:
+            url: http://backend:8080/api/v1/business/tracklets/query
+            required-operation: tracklets.query
+            credential-ref: hxjm-pipeline
+        # Existing Flask access process also hosts this Business module; no new process.
+        gallery-business:
+          image:
+            url: ${GALLERY_BUSINESS_URL}/api/v1/business/gallery/image
+            required-operation: identities.query
+            credential-ref: hxjm-pipeline
+            response-timeout-ms: 30000
+            max-response-bytes: 10485760
+          screenshot:
+            url: ${GALLERY_BUSINESS_URL}/api/v1/business/gallery/screenshot
+            required-operation: identities.query
+            credential-ref: hxjm-pipeline
+            response-timeout-ms: 30000
+            max-response-bytes: 10485760
+          description:
+            url: ${GALLERY_BUSINESS_URL}/api/v1/business/gallery/description
+            required-operation: identities.query
+            credential-ref: hxjm-pipeline
+            response-timeout-ms: 30000
+            max-response-bytes: 10485760
+          select:
+            url: ${GALLERY_BUSINESS_URL}/api/v1/business/gallery/select
+            required-operation: identities.query
+            credential-ref: hxjm-pipeline
+            response-timeout-ms: 30000
+            max-response-bytes: 10485760

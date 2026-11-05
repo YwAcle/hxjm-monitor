@@ -81,7 +81,6 @@ services:
       SPRING_REDIS_HOST: ${REDIS_HOST:-redis}
       SPRING_REDIS_PORT: ${REDIS_PORT:-6379}
       SPRING_REDIS_DATABASE: ${REDIS_DATABASE:-0}
-      SMARTMONITOR_AI_LAUNCH_MODE: external
       RUOYI_PROFILE: /data/uploads
       SMARTMONITOR_LOG_DIR: /tmp/log
       SPRING_DATASOURCE_DRUID_FILTER_STAT_MERGE_SQL: 'false'
@@ -113,7 +112,7 @@ services:
       dockerfile: deploy/containers/python.Dockerfile
       args:
         REVISION: ${REVISION:-unknown}
-        RUNTIME: analysis
+        RUNTIME: ${ANALYSIS_RUNTIME:-analysis}
         PIP_INDEX_URL: ${PYTHON_PACKAGE_INDEX:-https://pypi.org/simple}
       network: ${BUILD_NETWORK:-default}
     shm_size: 512m
@@ -122,9 +121,13 @@ services:
     - ${RUNTIME_ROOT}/analysis:/runtime
     - ${RUNTIME_ROOT}/config:/config:ro
     - ${DATA_ROOT}:/data
-    - ${SOURCE_ROOT}/python:/app/python:ro
+    - ${SOURCE_ROOT}/modules/perception-devices/python:/app/python:ro
+    - ${SOURCE_ROOT}/modules/perception-devices/vendor:/app/vendor:ro
+    - ${SOURCE_ROOT}/modules/infrastructure/python:/app/infrastructure:ro
     environment:
-      VIDEO_ANALYSIS_ALGORITHM: botsort
+      VIDEO_ANALYSIS_ALGORITHM: ${VIDEO_ANALYSIS_ALGORITHM:-botsort}
+      GARBAGE_MODEL_PATH: ${GARBAGE_MODEL_PATH:-}
+      GARBAGE_DEVICE: ${GARBAGE_DEVICE:-cuda}
       VIDEO_ANALYSIS_WORKERS: '1'
       VIDEO_ANALYSIS_GPU: '0'
       VIDEO_ANALYSIS_CAMERAS: ${ANALYSIS_CAMERAS:-}
@@ -137,17 +140,17 @@ services:
       BOTSORT_ROOT: /models/botsort
       VIDEO_ANALYSIS_SYNC_FPS: ${ANALYSIS_SYNC_FPS:-4}
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
-      PYTHONPATH: /app/python:/app/python/tracker/BoT-SORT
+      PYTHONPATH: /app/python:/app/vendor/botsort:/app/infrastructure
       HOME: /runtime
       TORCH_HOME: /runtime/torch
       VIDEO_RESULTS_PERSIST_ENABLED: 'true'
       VIDEO_RESULTS_BUSINESS_BASE_URL: http://backend:8080/api/v1/business
       VIDEO_RESULTS_SERVICE_ID: hxjm-pipeline
       VIDEO_RESULTS_SERVICE_TOKEN: ${PIPELINE_TOKEN}
-      VIDEO_RESULTS_SOURCE_MAP_FILE: /config/tracking-sources.json
+      VIDEO_RESULTS_SOURCE_MAP_FILE: /config/${VIDEO_RESULTS_SOURCE_MAP:-tracking-sources.json}
       VIDEO_RESULTS_SPOOL_DIR: /runtime/tracking-results
-      VIDEO_RESULTS_CAPABILITY_CODE: person.tracking
-      VIDEO_RESULTS_IMPLEMENTATION_CODE: botsort
+      VIDEO_RESULTS_CAPABILITY_CODE: ${VIDEO_RESULTS_CAPABILITY_CODE:-person.tracking}
+      VIDEO_RESULTS_IMPLEMENTATION_CODE: ${VIDEO_ANALYSIS_ALGORITHM:-botsort}
       VIDEO_RESULTS_IMPLEMENTATION_VERSION: configured
     command:
     - python
@@ -197,7 +200,9 @@ services:
     volumes:
     - ${MODEL_ROOT}:/models:ro
     - ${RUNTIME_ROOT}/reid:/runtime
-    - ${SOURCE_ROOT}/python:/app/python:ro
+    - ${SOURCE_ROOT}/modules/perception-devices/python:/app/python:ro
+    - ${SOURCE_ROOT}/modules/perception-devices/vendor:/app/vendor:ro
+    - ${SOURCE_ROOT}/modules/infrastructure/python:/app/infrastructure:ro
     environment:
       REID_FEATURE_WEIGHTS: /models/reid/MSMT17_clipreid_RN50_120.pth
       REID_FEATURE_YOLO_WEIGHTS: /models/reid/yolov8n.pt
@@ -207,7 +212,7 @@ services:
       REID_FEATURE_SAMPLE_FRAMES: ${REID_SAMPLE_FRAMES:-8}
       REID_FEATURE_MAX_PIXELS: ${REID_MAX_PIXELS:-4194304}
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
-      PYTHONPATH: /app/python:/app/python/tracker/BoT-SORT
+      PYTHONPATH: /app/python:/app/vendor/botsort:/app/infrastructure
       BOTSORT_ROOT: /models/botsort
       HOME: /runtime
       TORCH_HOME: /runtime/torch
@@ -387,6 +392,9 @@ services:
     - init
     user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
     volumes:
+    - ${SOURCE_ROOT}/modules/infrastructure/database/bootstrap:/opt/init:ro
+    - ${SOURCE_ROOT}/modules/infrastructure/database/migrations:/opt/migrations:ro
+    - ${SOURCE_ROOT}/contracts/capability-v1:/opt/contracts:ro
     - ${RUNTIME_ROOT}/config:/config
     - ${CAMERAS_FILE:-./config/cameras.example.json}:/input/cameras.json:ro
     environment:
@@ -400,6 +408,7 @@ services:
       POSTGRES_DATABASE: ${POSTGRES_DATABASE:-hxjm}
       POSTGRES_USER: ${POSTGRES_USER:-root}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      HXJM_DATABASE_ENV: ${HXJM_DATABASE_ENV:-}
       INIT_ADMIN_PASSWORD: ${INIT_ADMIN_PASSWORD:-}
       PIPELINE_TOKEN: ${PIPELINE_TOKEN:-}
       STREAM_TOKEN: ${STREAM_TOKEN:-}
@@ -408,7 +417,12 @@ services:
       MEDIA_RTSP_URL: ${MEDIA_RTSP_URL:-rtsp://mediamtx:8554/live}
       MEDIA_RECORD_ENABLED: ${MEDIA_RECORD_ENABLED:-false}
       INSTANCE_NAMESPACE: ${INSTANCE_NAMESPACE:-hxjm}
+      CLEANUP_MODE: ${CLEANUP_MODE:-disabled}
+      CLEANUP_SOURCE_ROUTES: ${CLEANUP_SOURCE_ROUTES:-{}}
+      M20_CONTROL_URL: ${M20_CONTROL_URL:-}
+      VIDEO_ANALYSIS_ALGORITHM: ${VIDEO_ANALYSIS_ALGORITHM:-botsort}
       CAPABILITY_EXECUTOR_ENABLED: ${CAPABILITY_EXECUTOR_ENABLED:-false}
+      GALLERY_BUSINESS_URL: ${GALLERY_BUSINESS_URL:-}
       PUBLIC_HOST: ${PUBLIC_HOST:-127.0.0.1}
       MEDIA_HTTP_PORT: ${MEDIA_HTTP_PORT:-19389}
       MEDIA_ICE_PORT: ${MEDIA_ICE_PORT:-19390}

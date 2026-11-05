@@ -7,10 +7,10 @@ configure() {
     local -a overrides=()
     while (($#)); do
         case "$1" in
-          --help|-h) printf '%s\n' 'start.sh [--scope local|dev|shared|isolated] [--config FILE] [--only frontend,backend,analysis,reid,mediamtx,stream]' '--build --check --status --render --init-db --register --infra new|external' '--frontend-port N --backend-port N --analysis-port N --reid-port N --analysis-gpu GPU-UUID --reid-gpu GPU-UUID'; exit 0;;
+          --help|-h) printf '%s\n' 'start.sh [--scope local|dev|shared|isolated] [--config FILE] [--only frontend,backend,analysis,reid,mediamtx,stream]' '--build --check --status --render --init-db --upgrade-db --plan-db --register --infra new|external' '--frontend-port N --backend-port N --analysis-port N --reid-port N --analysis-gpu GPU-UUID --reid-gpu GPU-UUID'; exit 0;;
           --build-only) ACTION=build; shift;;
           --build) BUILD=true; shift;; --check) CHECK=true; shift;; --status) STATUS=true; shift;;
-          --render) ACTION=render; shift;; --init-db) ACTION=initialize; shift;; --register) ACTION=register; shift;; --check-db) ACTION=check; shift;;
+          --render) ACTION=render; shift;; --init-db) ACTION=initialize; shift;; --register) ACTION=register; shift;; --check-db) ACTION=check; shift;; --upgrade-db) ACTION=upgrade; shift;; --plan-db) ACTION=plan; shift;;
           --config|--scope|--only|--infra|--frontend-port|--backend-port|--analysis-port|--reid-port|--analysis-gpu|--reid-gpu)
             [[ $# -ge 2 && -n "$2" ]] || { echo "Missing value: $1" >&2; return 2; }
             case "$1" in
@@ -135,8 +135,11 @@ main() {
         if [[ "$n" == analysis ]]; then uuid=${ANALYSIS_GPU_UUID:-}; else uuid=${REID_GPU_UUID:-}; fi
         [[ "$uuid" == GPU-* ]] || { echo "$n requires explicit GPU UUID" >&2; return 2; }
         nvidia-smi --query-gpu=uuid --format=csv,noheader | rg -Fx "$uuid" >/dev/null || { echo 'GPU unavailable' >&2; return 2; }
-        [[ "$n" != analysis || -f "$MODEL_ROOT/botsort/pretrained/bytetrack_x_mot17.pth.tar" && -f "$MODEL_ROOT/botsort/pretrained/mot17_sbs_S50.pth" ]] || { echo 'Missing BoT-SORT weights' >&2; return 2; }
+        [[ "$n" != analysis || "${VIDEO_ANALYSIS_ALGORITHM:-botsort}" != botsort || -f "$MODEL_ROOT/botsort/pretrained/bytetrack_x_mot17.pth.tar" && -f "$MODEL_ROOT/botsort/pretrained/mot17_sbs_S50.pth" ]] || { echo 'Missing BoT-SORT weights' >&2; return 2; }
         [[ "$n" != reid || -f "$MODEL_ROOT/reid/MSMT17_clipreid_RN50_120.pth" && -f "$MODEL_ROOT/reid/yolov8n.pt" ]] || { echo 'Missing ReID weights' >&2; return 2; }
+        if [[ "$n" == analysis && "${VIDEO_ANALYSIS_ALGORITHM:-botsort}" == garbage ]]; then
+            [[ "${GARBAGE_MODEL_PATH:-}" == /models/* && -d "$MODEL_ROOT/${GARBAGE_MODEL_PATH#/models/}" ]] || { echo 'Missing configured local garbage model directory' >&2; return 2; }
+        fi
         local available
         available=$(nvidia-smi -i "$uuid" --query-gpu=memory.free --format=csv,noheader,nounits)
         [[ "$available" -ge "${MIN_GPU_FREE_MIB:-4096}" ]] || { echo "$n: insufficient free GPU memory" >&2; return 2; }

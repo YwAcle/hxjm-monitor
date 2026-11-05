@@ -20,4 +20,4 @@ container=json.loads(subprocess.check_output(['docker','inspect',args.postgres_c
 pg=dict(x.split('=',1) for x in container['Config']['Env'])
 port=container['NetworkSettings']['Ports']['5432/tcp'][0]['HostPort']
 env=dict(os.environ,CAPABILITY_BRIDGE_ENABLED='true',CAPABILITY_BUSINESS_URL=args.business_url,CAPABILITY_SERVICE_ID='hxjm-pipeline',CAPABILITY_SERVICE_TOKEN=c['security']['services']['hxjm-pipeline']['token'],PGHOST='127.0.0.1',PGPORT=port,PGUSER=pg['POSTGRES_USER'],PGPASSWORD=pg['POSTGRES_PASSWORD'],PGDATABASE=pg['POSTGRES_DB'])
-subprocess.run([args.python,'Agent/tests/live_capability_v1.py','--model-base-url',args.model_base_url,'--evidence',args.evidence],env=env,check=True)
+subprocess.run([args.python,'tests/agent/live_capability_v1.py','--model-base-url',args.model_base_url,'--evidence',args.evidence],env=env,check=True)

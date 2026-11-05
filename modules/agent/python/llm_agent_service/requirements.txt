@@ -1,0 +1,6 @@
+-r ../../../ai-infra/python/requirements.txt
+flask>=3.0
+flask-cors>=4.0
+werkzeug>=3.0
+dateparser>=1.4
+jsonschema>=4.18,<5

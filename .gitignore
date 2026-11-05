@@ -32,8 +32,8 @@ hs_err_pid*.log
 **/dist/
 **/build/
 # This frontend source directory is named "build"; keep its source files.
-!SmartMonitor-wangzj/ruoyi-ui/src/views/tool/build/
-!SmartMonitor-wangzj/ruoyi-ui/src/views/tool/build/**
+!references/legacy-admin-ui/src/views/tool/build/
+!references/legacy-admin-ui/src/views/tool/build/**
 **/target/
 **/out/
 **/.idea/
@@ -115,8 +115,8 @@ Thumbs.db
 **/recordings/
 **/output_videos/
 **/runs/
-mtx/build/
-mtx/mediamtx/recordings/
+modules/perception-devices/stream/build/
+modules/perception-devices/stream/mediamtx/recordings/
 llm-service/garden/
 python/vad/output/
 python/vad/demo/runs/
@@ -125,12 +125,12 @@ python/deep_sort-master/MOTSChallenge/
 python/deep_sort-master/output_videos/
 python/deep_sort-master/tools/detections/
 python/garden/data/
-python/reid/query/
-python/reid/person_db.json
-python/reid/demo/output/
-python/reid/demo/frame/
-python/reid/demo/tracklet_vis/
-python/reid/demo/tracklet_vis_redraw/
+modules/perception-devices/python/reid/query/
+modules/perception-devices/python/reid/person_db.json
+modules/perception-devices/python/reid/demo/output/
+modules/perception-devices/python/reid/demo/frame/
+modules/perception-devices/python/reid/demo/tracklet_vis/
+modules/perception-devices/python/reid/demo/tracklet_vis_redraw/
 *.npy
 *.ppm
 
@@ -156,7 +156,7 @@ python/reid/demo/tracklet_vis_redraw/
 **/.nuxt/
 **/.parcel-cache/
 *.tsbuildinfo
-mtx/mediamtx/mediamtx
+modules/perception-devices/stream/mediamtx/mediamtx
 
 # Git metadata and backups of the original nested repositories.
 # Keep .gitignore, .gitattributes, and .github files under version control.
@@ -187,4 +187,30 @@ mtx/mediamtx/mediamtx
 /python/reid/yolov7/paper/yolov7.pdf
 
 # Local capability test dependencies
-Agent/.capability-deps/
+apps/llm/.capability-deps/
+
+# Modular layout local assets
+/apps/llm/models/
+/apps/llm/.runtime-cache/
+/apps/llm/.capability-deps/
+/modules/perception-devices/python/garden/data
+/modules/perception-devices/python/reid/save
+/references/stream-variants/**/save/
+
+# References are source snapshots, not runtime output
+/references/legacy-algorithms/**/output/
+/references/legacy-algorithms/**/save/
+/references/legacy-algorithms/**/query/
+/references/legacy-algorithms/**/data/
+/references/legacy-algorithms/reid/person_db.json
+/references/legacy-algorithms/reid/demo/frame/
+/references/legacy-algorithms/reid/demo/tracklet_vis*/
+
+# Private deployment details, personal documents and unrelated experiment outputs
+/local-video.env
+/deploy/hosts/
+/outputs/
+/apps/backend/doc/简历/*.pdf
+# Historical database snapshots may contain old business data; retain locally only.
+/references/database-snapshots/
+/references/stream-variants/base/postgresql/public.sql

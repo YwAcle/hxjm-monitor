@@ -1,0 +1,151 @@
+{
+  "capability": {
+    "capability_code": "business.identities.query",
+    "display_name": "identities查询",
+    "object_types": [
+      "business"
+    ],
+    "input_kinds": [
+      "capability_call"
+    ],
+    "contract": {
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "capability_call"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "source_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 36,
+                  "maxLength": 36
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              "start_at": {
+                "type": "string"
+              },
+              "end_at": {
+                "type": "string"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "cursor": {
+                "type": "string"
+              },
+              "identity_kind": {
+                "enum": [
+                  "registered",
+                  "temporary"
+                ]
+              },
+              "object_type": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "display_name": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "required": [],
+            "additionalProperties": false,
+            "anyOf": [
+              {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "start_at"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "end_at"
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "start_at",
+                  "end_at"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "payload"
+        ],
+        "additionalProperties": false
+      },
+      "parameters_schema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "output_types": [
+        "business.identities.page"
+      ]
+    },
+    "agent": {
+      "enabled": true,
+      "read_only": true,
+      "tool_name": "query_business_identities",
+      "description": "按完整 display_name 查询或分页列出已登记人员；不代表当前在场，不做图片身份识别。"
+    }
+  },
+  "result_type": {
+    "type_code": "business.identities.page",
+    "schema_version": "1",
+    "json_schema": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "max_inline_bytes": 1048576
+  },
+  "instance": {
+    "implementation_code": "business.http",
+    "implementation_version": "1",
+    "source_ids": [],
+    "resource_scope": {
+      "scope_type": "global",
+      "resource_ids": []
+    },
+    "dispatch_mode": "platform_managed",
+    "service_ref": "business",
+    "execution": {
+      "adapter": "http",
+      "operation": "identities",
+      "result_type": "business.identities.page",
+      "schema_version": "1"
+    }
+  }
+}

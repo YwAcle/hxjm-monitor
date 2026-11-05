@@ -1,0 +1,62 @@
+{
+  "type": "object",
+  "properties": {
+    "capability_code": {
+      "type": "string",
+      "minLength": 1
+    },
+    "implementation_code": {
+      "type": "string",
+      "minLength": 1
+    },
+    "implementation_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "execution_mode": {
+      "enum": [
+        "once",
+        "continuous"
+      ]
+    },
+    "input_kinds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "output_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tracking": {
+      "type": "boolean"
+    },
+    "feature_space_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "capability_code",
+    "implementation_code",
+    "implementation_version",
+    "execution_mode",
+    "input_kinds",
+    "output_types",
+    "schema_version"
+  ],
+  "additionalProperties": false
+}
