@@ -23,6 +23,8 @@ START_VIDEO_ANALYSIS="${START_VIDEO_ANALYSIS:-yes}"
 [[ "$VIDEO_ANALYSIS_MODE" != shared ]] || START_VIDEO_ANALYSIS=no
 export VIDEO_ANALYSIS_ALGORITHM="${VIDEO_ANALYSIS_ALGORITHM:-botsort}"
 MAVEN_BIN="${MAVEN_BIN:-mvn}"
+# 业务录像和图片写在数据目录；不指定时业务端会回落到源码目录 /data/nfs_storage/hxjm。
+BUSINESS_STORAGE_ROOT="${BUSINESS_STORAGE_ROOT:-/data/nfs_storage/hxjm_datas}"
 # Interactive startup asks which algorithm services to run. Set
 # START_ALGORITHMS=no for non-algorithm raw-camera-only startup.
 START_ALGORITHMS="${START_ALGORITHMS:-no}"
@@ -508,6 +510,7 @@ start_service backend "$ROOT_DIR/SmartMonitor-wangzj" env SERVER_PORT="$BACKEND_
     "$JAVA_BIN" -jar hxjm-admin/target/hxjm-admin.jar \
     "--logging.config=$RUN_DIR/logback.xml" "--spring.redis.database=$REDIS_DATABASE" \
     "--server.port=$BACKEND_PORT" "--ruoyi.profile=$ROOT_DIR/.run/uploads" \
+    "--hxjm.business.storage-root=$BUSINESS_STORAGE_ROOT" \
     "--smartmonitor.ai.mtx-home=$MTX_DIR" \
     "--smartmonitor.ai.public-host=$PUBLIC_HOST" \
     "--smartmonitor.ai.live-port=$MTX_WEBRTC_PORT"

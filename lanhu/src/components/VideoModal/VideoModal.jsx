@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
+import AssetVideoPlayback from './AssetVideoPlayback';
 import styles from './VideoModal.module.css';
 import {
   MAX_PLAYBACK_RETRIES,
@@ -376,8 +377,11 @@ function VideoPlayback({ url }) {
 }
 
 // 统一的视频弹窗组件
-function VideoModal({ visible, url, title, time, onClose }) {
+// 传 playback（含 asset_id/offset_ms）时按录像资产换票播放并叠加历史检测框；
+// 只传 url 时沿用原有的直链播放。
+function VideoModal({ visible, url, playback = null, title, time, onClose }) {
   if (!visible) return null;
+  const hasAsset = Boolean(playback && typeof playback.asset_id === 'string' && playback.asset_id);
 
   // 使用 Portal 渲染到 body，避免受父容器样式影响
   return ReactDOM.createPortal(
@@ -395,7 +399,7 @@ function VideoModal({ visible, url, title, time, onClose }) {
         </div>
         {/* 视频播放器 */}
         <div className={styles.videoModalBody}>
-          <VideoPlayback url={url} />
+          {hasAsset ? <AssetVideoPlayback asset={playback} /> : <VideoPlayback url={url} />}
         </div>
       </div>
     </div>,

@@ -9,10 +9,11 @@ from unittest.mock import MagicMock, patch
 from PIL import Image
 from llm_agent_service.app import create_app
 from llm_agent_service.config import DbConfig, ServiceConfig
+from llm_agent_service.db.identity_repo import FeatureSpaceInfo, IdentityCandidate
 from llm_agent_service.service.clipreid_client import ClipReIDClient
 from llm_agent_service.service.gallery_search import GallerySearchService
 from llm_agent_service.service.reid_selection import ReIDSelections
-from tests.test_gallery_search import image_data, target
+from tests.test_gallery_search import image_data
 from tests import test_clipreid_client as clip_tests
 
 
@@ -33,15 +34,15 @@ class ScreenshotTests(unittest.TestCase):
 
     def test_multiple_and_no_person_do_not_search_database(self):
         service = self.service()
-        with patch("llm_agent_service.service.gallery_search.list_gallery") as rows:
+        with patch("llm_agent_service.service.gallery_search.get_feature_space") as space:
             result = service.search_screenshot(image_data(), 3)
             self.assertEqual(result["type"], "pedestrian_selection")
             self.assertTrue(result["candidates"][0]["image_base64"].startswith("data:image/"))
-            service.feature_client.query_gallery.assert_not_called()
-            rows.assert_not_called()
+            service.feature_client.query_feature.assert_not_called()
+            space.assert_not_called()
             service.feature_client.detect.return_value = {"status": "no_person"}
             self.assertEqual(service.search_screenshot(image_data(), 3)["status"], "no_person")
-            rows.assert_not_called()
+            space.assert_not_called()
 
     def test_invalid_bbox_rejected(self):
         service = self.service()
@@ -138,11 +139,16 @@ class ScreenshotProtocolTests(unittest.TestCase):
         service = GallerySearchService(engine=MagicMock(), schema="public", feature_client=ClipReIDClient("http://reid.test"),
                                        text_feature_client=MagicMock())
         with patch("llm_agent_service.service.clipreid_client.httpx.Client", self.client), \
-             patch("llm_agent_service.service.gallery_search.list_gallery", return_value=[target("A")]):
+             patch("llm_agent_service.service.gallery_search.get_feature_space",
+                   return_value=FeatureSpaceInfo(self.space, "person", 3072, "cosine", True)), \
+             patch("llm_agent_service.service.gallery_search.count_searchable_features", return_value=1), \
+             patch("llm_agent_service.service.gallery_search.search_identities",
+                   return_value=[IdentityCandidate("A", "temporary", 1, None, None, 1.0, None, None, 1)]), \
+             patch("llm_agent_service.service.gallery_search.list_occurrences", return_value=[]):
             result = service.search_screenshot(image_data(), 3)
             self.assertEqual(result["candidates"][0]["person_id"], "A")
-            # detect + health + gallery encode，单人已返回的特征不重复提取
-            self.assertEqual(len(self.calls), 3)
+            # detect + health；单人已返回的特征不重复提取，也不逐张编码历史图
+            self.assertEqual(len(self.calls), 2)
             service.search_selected(image_data(), [8, 0, 16, 32], 3)
             post = self.calls[-1]
             self.assertIn(b'name="bbox"', post.content)

@@ -7,6 +7,7 @@ import httpx
 
 from llm_agent_service.app import create_app
 from llm_agent_service.config import DbConfig, ServiceConfig
+from llm_agent_service.db.identity_repo import FeatureSpaceInfo, IdentityCandidate
 from llm_agent_service.service.clipreid_client import ClipReIDClient
 from llm_agent_service.service.gallery_search import GallerySearchService
 from llm_report_service.llm.vision import decode_base64_image
@@ -75,11 +76,23 @@ class ClipReIDTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "配置不一致"):
                 ClipReIDClient("http://reid.test", feature_space_id="pinned").health()
 
-    def test_ranks_reencoded_gallery_photos(self):
+    def test_query_feature_returns_normalized_vector_and_space(self):
+        client = ClipReIDClient("http://reid.test")
+        with patch("llm_agent_service.service.clipreid_client.httpx.Client", self.client):
+            vector, space = client.query_feature(decode_base64_image(image_data()))
+        self.assertEqual(vector, self.vector)
+        self.assertEqual(space, self.space)
+
+    def test_searches_new_feature_table_with_clipreid_query(self):
         service = GallerySearchService(engine=MagicMock(), schema="public", feature_client=ClipReIDClient("http://reid.test"),
                                        text_feature_client=MagicMock())
+        candidate = IdentityCandidate("A", "temporary", 1, None, None, 1.0, None, None, 1)
         with patch("llm_agent_service.service.clipreid_client.httpx.Client", self.client), \
-             patch("llm_agent_service.service.gallery_search.list_gallery", return_value=[target("A")]):
+             patch("llm_agent_service.service.gallery_search.get_feature_space",
+                   return_value=FeatureSpaceInfo(self.space, "person", 3072, "cosine", True)), \
+             patch("llm_agent_service.service.gallery_search.count_searchable_features", return_value=1), \
+             patch("llm_agent_service.service.gallery_search.search_identities", return_value=[candidate]), \
+             patch("llm_agent_service.service.gallery_search.list_occurrences", return_value=[]):
             result = service.search_image(image_data(), 3)
         self.assertEqual(result["method"], "remote_clipreid")
         self.assertEqual(result["feature_dimension"], 3072)
@@ -96,7 +109,12 @@ class ClipReIDTests(unittest.TestCase):
             llm.stream.return_value = iter([SimpleNamespace(content="候选A")])
             with patch("llm_agent_service.app.ReidService"), \
                  patch("llm_agent_service.service.clipreid_client.httpx.Client", self.client), \
-                 patch("llm_agent_service.service.gallery_search.list_gallery", return_value=[target("A")]):
+                 patch("llm_agent_service.service.gallery_search.get_feature_space",
+                       return_value=FeatureSpaceInfo(self.space, "person", 3072, "cosine", True)), \
+                 patch("llm_agent_service.service.gallery_search.count_searchable_features", return_value=1), \
+                 patch("llm_agent_service.service.gallery_search.search_identities",
+                       return_value=[IdentityCandidate("A", "temporary", 1, None, None, 1.0, None, None, 1)]), \
+                 patch("llm_agent_service.service.gallery_search.list_occurrences", return_value=[]):
                 app = create_app(engine=MagicMock(), db_cfg=DbConfig("localhost", 5432, "u", "p", "db"),
                                  svc_cfg=ServiceConfig(reid_feature_base_url="http://reid.test"), llm=llm)
                 response = app.test_client().post("/chat/stream" if streaming else "/chat", json={

@@ -222,6 +222,8 @@ def create_app(*, engine, db_cfg: DbConfig, svc_cfg: ServiceConfig, llm) -> Flas
             svc_cfg.reid_text_max_chars,
         ),
         text_max_chars=svc_cfg.reid_text_max_chars,
+        timezone=reid_service.timezone,
+        media_root=svc_cfg.media_root,
     )
     tool_registry = build_default_registry(reid_service, gallery_search)
     image_assets = SessionImageAssets(

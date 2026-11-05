@@ -78,6 +78,74 @@
   min-width: 0;
 }
 
+.occurrenceSection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toggleButton {
+  align-self: flex-start;
+  padding: 3px 10px;
+  border: 1px solid rgba(65, 177, 255, 0.45);
+  border-radius: 4px;
+  background: transparent;
+  color: #9fd8ff;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.toggleButton:hover,
+.toggleButton:focus-visible {
+  background: rgba(30, 125, 185, 0.35);
+}
+
+.toggleButton:focus-visible {
+  outline: 2px solid #7ed4ff;
+  outline-offset: 2px;
+}
+
+.occurrences {
+  margin: 2px 0 0;
+  padding-left: 16px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+}
+
+.videoButton {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid rgba(65, 177, 255, 0.45);
+  border-radius: 4px;
+  background: transparent;
+  color: #9fd8ff;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.videoButton:hover:not(:disabled),
+.videoButton:focus-visible {
+  background: rgba(30, 125, 185, 0.35);
+}
+
+.videoButton:focus-visible {
+  outline: 2px solid #7ed4ff;
+  outline-offset: 2px;
+}
+
+.videoButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.videoError {
+  margin: 2px 0 0;
+  color: #ffb4b4;
+  font-size: 12px;
+}
+
 .selectionButton {
   align-self: flex-start;
   padding: 6px 12px;

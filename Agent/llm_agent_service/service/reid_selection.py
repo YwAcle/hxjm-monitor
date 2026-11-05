@@ -67,7 +67,14 @@ class ReIDSelections:
 
 def selection_text(data):
     if data.get("type") == "pedestrian_search" and data.get("status") == "ok":
-        return "找到以下外观相似候选，分数不是身份确认概率：\n" + "\n".join(
-            f"{index}. {candidate.get('name', '')}，相似度 {candidate['similarity']:.4f}"
-            for index, candidate in enumerate(data["candidates"], 1))
-    return data.get("message", "未找到可用的登记候选。")
+        lines = []
+        for index, candidate in enumerate(data["candidates"], 1):
+            label = candidate.get("name") or candidate.get("label") or "临时身份"
+            line = f"{index}. {label}，相似度 {candidate['similarity']:.4f}"
+            occurrences = candidate.get("occurrences")
+            if occurrences:
+                latest = occurrences[0]
+                line += f"，最近出现：{latest.get('start_at')}，{latest.get('camera') or '未知摄像头'}"
+            lines.append(line)
+        return "找到以下外观相似候选，分数不是身份确认概率：\n" + "\n".join(lines)
+    return data.get("message", "未找到可用的候选。")
