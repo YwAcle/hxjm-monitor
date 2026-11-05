@@ -23,10 +23,18 @@ public class CapabilityTaskController {
     private edu.cqupt.hxjm.algdeployment.capability.service.CapabilityPlatform platform;
     private final BusinessAuthentication authentication;
     private final CapabilityTaskService service;
+    @org.springframework.beans.factory.annotation.Autowired
+    private edu.cqupt.hxjm.algdeployment.capability.service.CapabilityExecutionProperties executionProperties;
 
     public CapabilityTaskController(BusinessAuthentication authentication, CapabilityTaskService service) {
         this.authentication = authentication;
         this.service = service;
+    }
+
+    @GetMapping("/execution/status")
+    public Map<String,Object> executionStatus(HttpServletRequest request) {
+        authentication.authenticate(request,"capabilities.describe");
+        return BusinessResponses.success(BusinessValues.values("enabled",executionProperties.isEnabled()),request,null);
     }
 
     @GetMapping("/capabilities")

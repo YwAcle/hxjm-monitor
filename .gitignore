@@ -216,3 +216,7 @@ apps/llm/.capability-deps/
 /references/stream-variants/base/postgresql/public.sql
 
 !/scripts/joyai-tool.sh
+
+!/scripts/agent.sh
+!/scripts/main.sh
+!/scripts/robot-dog.sh

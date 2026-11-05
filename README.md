@@ -17,6 +17,8 @@
 
 在仓库根目录执行现有业务端入口：
 
+日常分组启停见 [启停说明](docs/refactor/service-control.md)：`bash scripts/main.sh start|stop|status`（主监控）、`bash scripts/agent.sh start|stop`（Agent）、`bash scripts/robot-dog.sh start|stop|status`（独立垃圾/机械狗业务）。
+
 ```bash
 bash scripts/start.sh --help
 bash scripts/start.sh --config deploy/config/deployment.local.env --status

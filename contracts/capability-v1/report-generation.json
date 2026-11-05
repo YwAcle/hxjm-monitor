@@ -1,0 +1,86 @@
+{
+  "capability": {
+    "capability_code": "business.report.generate",
+    "display_name": "本地模型业务报告生成",
+    "object_types": [
+      "business"
+    ],
+    "input_kinds": [
+      "activity",
+      "event"
+    ],
+    "contract": {
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "activity",
+              "event"
+            ]
+          },
+          "activity_id": {
+            "type": "string"
+          },
+          "event_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": false
+      },
+      "parameters_schema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "output_types": [
+        "business.report.reference"
+      ]
+    }
+  },
+  "result_type": {
+    "type_code": "business.report.reference",
+    "schema_version": "1",
+    "json_schema": {
+      "type": "object",
+      "properties": {
+        "report_id": {
+          "type": "string"
+        },
+        "subject_kind": {
+          "type": "string",
+          "enum": [
+            "activity",
+            "event"
+          ]
+        },
+        "subject_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "report_id",
+        "subject_kind",
+        "subject_id"
+      ],
+      "additionalProperties": false
+    },
+    "max_inline_bytes": 4096
+  },
+  "instance": {
+    "implementation_code": "llm-report",
+    "implementation_version": "business-report-v1",
+    "source_ids": [],
+    "resource_scope": {
+      "scope_type": "global",
+      "resource_ids": []
+    },
+    "service_ref": "llm-report",
+    "dispatch_mode": "runtime_managed",
+    "enabled": true
+  }
+}

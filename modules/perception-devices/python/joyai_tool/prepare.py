@@ -7,6 +7,7 @@ import secrets
 import uuid
 from urllib.request import urlopen
 import yaml
+from shared_files import write_text
 from .contracts import OPERATIONS
 
 
@@ -24,7 +25,11 @@ def prepare(root):
             name = source['camera_code']
             if name not in {f'camera_{i}' for i in range(1, 5)}:
                 continue
-            raw = next(stream for stream in source['streams'] if stream['stream_name'] == name and stream['task_type'] == 'raw')
+            streams = [stream for stream in source['streams']
+                       if stream['task_type'] == 'raw' and stream['is_active']]
+            if len(streams) != 1:
+                raise ValueError(f'{name} requires exactly one active raw stream')
+            raw = streams[0]
             label = name.replace('camera_', '') + '号摄像头'
             cameras[name] = {'source_id': source['source_id'], 'camera_stream_id': raw['stream_id'],
                              'name': label, 'location': label,
@@ -39,15 +44,13 @@ def prepare(root):
                   'storage_root': os.environ['DATA_ROOT'], 'cameras': cameras}
         if len(cameras) != 4:
             raise ValueError('Four public camera/stream mappings are required')
-        path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + '\n')
-        path.chmod(0o600)
+        write_text(path, json.dumps(config, ensure_ascii=False, indent=2) + '\n')
     grant = {'token': config['token'], 'operations': OPERATIONS,
              'source-ids': [camera['source_id'] for camera in config['cameras'].values()]}
     profile = Path(os.environ['RUNTIME_ROOT']) / 'config/joyai-backend.yml'
     profile.parent.mkdir(parents=True, exist_ok=True)
-    profile.write_text(yaml.safe_dump({'hxjm': {'business': {'behavior': {'url': os.environ['JOYAI_BACKEND_TOOL_URL'], 'token': config['token']},
+    write_text(profile, yaml.safe_dump({'hxjm': {'business': {'behavior': {'url': os.environ['JOYAI_BACKEND_TOOL_URL'], 'token': config['token']},
         'security': {'services': {'joyai-producer': grant}}}}}, allow_unicode=True))
-    profile.chmod(0o600)
     print('JoyAI private config and four-source backend grant prepared; credentials were not printed.')
 
 

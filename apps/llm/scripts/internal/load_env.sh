@@ -23,7 +23,7 @@ load_env_defaults() {
     fi
     local env_root path_key
     env_root="$(cd -- "$(dirname -- "${env_file}")" && pwd)"
-    for path_key in VLLM_ENV_ROOT SGLANG_ENV_ROOT VLLM_PYTHON_BIN SGLANG_PYTHON_BIN AGENT_PYTHON_BIN REPORT_PYTHON_BIN; do
+    for path_key in VLLM_ENV_ROOT SGLANG_ENV_ROOT VLLM_PYTHON_BIN SGLANG_PYTHON_BIN AGENT_PYTHON_BIN REPORT_PYTHON_BIN REPORT_RUNTIME_DIR; do
         value="${!path_key:-}"
         if [[ "${value}" == ./* || "${value}" == ../* ]]; then
             export "${path_key}=${env_root}/${value}"

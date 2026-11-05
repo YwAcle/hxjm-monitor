@@ -239,6 +239,11 @@ public class CapabilityTaskService {
             Map<String,Object> executionSnapshot=values("instance_id",selected.get("id").toString(),"instance_revision",selected.get("revision"),
                 "capability_revision",definition.get("revision"),"implementation_code",selected.get("implementation_code"),"implementation_version",selected.get("implementation_version"),
                 "service_ref",selected.get("service_ref"),"input",input,"parameters",parameters,"requested_outputs",outputs);
+            Map<String,Object> outputContracts=new LinkedHashMap<>();
+            for(String type:outputs){for(Map<String,Object> result:jdbc.queryForList("SELECT schema_version,json_schema::text,max_inline_bytes FROM public.result_type WHERE type_code=? AND enabled",type)){
+                outputContracts.put(type+":"+result.get("schema_version"),values("json_schema",parse(result.get("json_schema").toString()),"max_inline_bytes",result.get("max_inline_bytes")));
+            }}
+            executionSnapshot.put("output_contracts",outputContracts);
             String namespace="runtime";
             if("platform_managed".equals(dispatch)){
                 if(!"capability_call".equals(input.get("kind"))||!"once".equals(mode)){throw BusinessException.invalid("HTTP能力须使用once capability_call");}
@@ -246,10 +251,6 @@ public class CapabilityTaskService {
                 Map<String,Object> execution=parse(selected.get("execution_json").toString());
                 Map<String,Object> operation=platform.operation(selected.get("service_ref").toString(),execution);platform.authorize(actor,operation);
                 executionSnapshot.put("execution",execution);executionSnapshot.put("operation",operation);namespace=platform.namespace();
-                Map<String,Object> outputContracts=new LinkedHashMap<>();
-                for(String type:outputs){for(Map<String,Object> result:jdbc.queryForList("SELECT schema_version,json_schema::text,max_inline_bytes FROM public.result_type WHERE type_code=? AND enabled",type)){
-                    outputContracts.put(type+":"+result.get("schema_version"),values("json_schema",parse(result.get("json_schema").toString()),"max_inline_bytes",result.get("max_inline_bytes")));
-                }}
                 if(!outputContracts.containsKey(execution.get("result_type")+":"+execution.get("schema_version"))){throw BusinessException.invalid("HTTP输出类型或版本未登记");}
                 executionSnapshot.put("output_contracts",outputContracts);
             }
@@ -317,11 +318,13 @@ public class CapabilityTaskService {
 
     /** Runtime producers finish already registered results; platform tasks retain their execution-token API. */
     public Map<String,Object> endRuntime(BusinessActor actor,Map<String,Object> body) {
-        fields(body,"request_id","trace_id","task_id","run_id","expected_revision","state","result_ids","error_code");
+        fields(body,"request_id","trace_id","task_id","run_id","expected_revision","state","result_ids","outputs","error_code");
         if(!actor.isService()){throw BusinessException.forbidden();}
         String task=uuid(body,"task_id"),run=uuid(body,"run_id"),state=text(body,"state",16);
         if(!Arrays.asList("succeeded","failed","cancelled").contains(state)){throw BusinessException.invalid("运行时终态无效");}
         List<String> results=uuids(body.getOrDefault("result_ids",Collections.emptyList()));
+        List<Object> inline=body.containsKey("outputs")?list(body.get("outputs")):Collections.emptyList();
+        if(!"succeeded".equals(state)&&!inline.isEmpty()){throw BusinessException.invalid("失败或取消不能提交成功成果");}
         String error="failed".equals(state)?text(body,"error_code",64):null;
         long expected=integer(body,"expected_revision",1,Long.MAX_VALUE);
         Map<String,Object> prior=owned(actor,task);OffsetDateTime expires=timestamp(prior.get("expires_at"));
@@ -332,10 +335,22 @@ public class CapabilityTaskService {
             if(((Number)row.get("revision")).longValue()!=expected||!"running".equals(row.get("state"))||!run.equals(String.valueOf(row.get("current_run_id")))){throw BusinessException.conflict("任务状态、当前执行或修订号已改变");}
             if(!expires.isAfter(OffsetDateTime.now())){throw BusinessException.expired("任务到期");}
             List<String> outputs=strings(required(parse(row.get("input_json").toString()),"requested_outputs"),64);
-            if("succeeded".equals(state)&&"once".equals(row.get("task_mode"))&&results.isEmpty()){throw BusinessException.invalid("一次性成功任务须引用已登记成果");}
+            if("succeeded".equals(state)&&"once".equals(row.get("task_mode"))&&results.isEmpty()&&inline.isEmpty()){throw BusinessException.invalid("一次性成功任务须引用或提交成果");}
             for(String id:results){
                 List<Map<String,Object>> refs=jdbc.queryForList("SELECT r.result_type FROM public.algorithm_result r JOIN public.result_set s ON s.id=r.result_set_id WHERE r.id=?::uuid AND s.run_id=?::uuid AND r.expires_at>now()",id,run);
                 if(refs.isEmpty()||!outputs.contains(refs.get(0).get("result_type"))){throw BusinessException.invalid("成果不属于本次执行或输出契约");}
+            }
+            Map<String,Object> snapshot=parse(row.get("execution_snapshot").toString());
+            Set<String> keys=new LinkedHashSet<>();
+            for(Object value:inline){
+                Map<String,Object> output=map(value);fields(output,"result_type","schema_version","payload","producer_result_key");
+                String type=text(output,"result_type",64),version=text(output,"schema_version",32),key=text(output,"producer_result_key",128);
+                if(!outputs.contains(type)||!keys.add(key)){throw BusinessException.invalid("未请求的输出类型或重复成果键");}
+                Map<String,Object> contracts=map(required(snapshot,"output_contracts"));
+                Map<String,Object> contract=map(required(contracts,type+":"+version));
+                Object payload=required(output,"payload");BusinessSchemas.validate(map(contract.get("json_schema")),payload);
+                if(json(payload).getBytes(java.nio.charset.StandardCharsets.UTF_8).length>((Number)contract.get("max_inline_bytes")).intValue()){throw BusinessException.invalid("成果过大");}
+                jdbc.update("INSERT INTO public.task_output(task_id,run_id,result_type,schema_version,payload_json,producer_result_key,payload_digest) VALUES(?::uuid,?::uuid,?,?,?::jsonb,?,?)",task,run,type,version,json(payload),key,BusinessCanonical.digest(output));
             }
             int changed=jdbc.update("UPDATE public.task_attempt SET state=?,error_code=?,finished_at=now(),lease_until=NULL,updated_at=now() WHERE run_id=?::uuid AND task_id=?::uuid AND lease_owner=? AND state='running'",state,error,run,task,actor.getActorKey());
             if(changed!=1){throw BusinessException.conflict("执行身份或状态无效");}

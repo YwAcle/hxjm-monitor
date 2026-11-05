@@ -272,60 +272,48 @@ class MediaRepoTests(unittest.TestCase):
 
 
 class ReportRepoTests(unittest.TestCase):
-    def test_report_identity_requires_exactly_one_source(self):
-        for kwargs in ({}, {'episode_id': 'e', 'vad_id': 1}):
-            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
-                report_repo.has_llm_report(FakeEngine(), 'public', prompt_type='p', **kwargs)
-            with self.subTest(save_kwargs=kwargs), self.assertRaises(ValueError):
-                report_repo.save_llm_report(
-                    FakeEngine(), 'public', prompt_type='p', report_json={}, report_text=None, **kwargs
-                )
+    def test_report_uses_public_registration_and_runtime_outputs(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            client = MagicMock()
+            client.post.side_effect = [
+                {'task_id': 'task', 'revision': 1},
+                {'task_id': 'task', 'run_id': 'run', 'revision': 2},
+                {'report_id': 'report'}, {'state': 'succeeded'}]
+            publisher = report_repo.ReportPublisher(client, directory, 'local-model')
+            report_id = publisher.publish('activity', 'subject', {'summary': '真实模型结果'}, '正文', ['evidence'])
+            calls = client.post.call_args_list
+            self.assertEqual([c.args[0] for c in calls], ['/tasks', '/tasks/start', '/reports/register', '/tasks/end'])
+            report = calls[2].args[1]
+            self.assertEqual(report['subject_kind'], 'activity')
+            self.assertEqual(report['subject_id'], 'subject')
+            self.assertEqual(report['model_version'], 'local-model')
+            self.assertEqual(report['evidence_ids'], ['evidence'])
+            self.assertNotIn('expires_at', report)  # Business derives it from the subject.
+            self.assertEqual(calls[3].args[1]['state'], 'succeeded')
+            self.assertEqual(calls[3].args[1]['outputs'][0]['payload']['report_id'], report_id)
+            publisher.publish('activity', 'subject', None, None, [])
+            self.assertEqual(client.post.call_count, 4)
 
-    def test_has_llm_report_selects_episode_or_vad(self):
-        episode_engine = FakeEngine(FakeResult(scalar=1))
-        vad_engine = FakeEngine(FakeResult(scalar=None))
-
-        self.assertTrue(report_repo.has_llm_report(episode_engine, 'public', prompt_type='p', episode_id='e'))
-        self.assertFalse(report_repo.has_llm_report(vad_engine, 'public', prompt_type='p', vad_id=5))
-        self.assertIn('episode_id = :episode_id', episode_engine.calls[0][0])
-        self.assertEqual(episode_engine.calls[0][1], {'episode_id': 'e', 'prompt_type': 'p'})
-        self.assertIn('vad_id = :vad_id', vad_engine.calls[0][0])
-
-    def test_save_llm_report_returns_existing_id_without_insert(self):
-        engine = FakeEngine(FakeResult(scalar=99))
-        report_id = report_repo.save_llm_report(
-            engine,
-            'public',
-            prompt_type='episode-summary',
-            episode_id='e-1',
-            report_json={'ok': True},
-            report_text='summary',
-        )
-
-        self.assertEqual(report_id, '99')
-        self.assertEqual(engine.begin_count, 0)
-
-    @patch('llm_report_service.db.report_repo.uuid4', return_value='new-report-id')
-    def test_save_llm_report_inserts_json_in_transaction(self, _uuid4):
-        engine = FakeEngine(FakeResult(scalar=None), FakeResult())
-        report_id = report_repo.save_llm_report(
-            engine,
-            'tenant',
-            prompt_type='vad-analysis',
-            vad_id=41,
-            report_json={'message': '异常'},
-            report_text=None,
-        )
-
-        self.assertEqual(report_id, 'new-report-id')
-        self.assertEqual(engine.begin_count, 1)
-        insert_sql, payload = engine.calls[1]
-        self.assertIn('insert into tenant.llm_report', insert_sql)
-        self.assertIsNone(payload['episode_id'])
-        self.assertEqual(payload['vad_id'], 41)
-        self.assertEqual(json.loads(payload['report_json']), {'message': '异常'})
-        self.assertIsInstance(payload['created_at'], datetime)
-        self.assertIsNotNone(payload['created_at'].tzinfo)
+    def test_lost_completion_acknowledgement_retries_identical_request(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            client = MagicMock()
+            client.post.side_effect = [
+                {'task_id': 'task', 'revision': 1},
+                {'task_id': 'task', 'run_id': 'run', 'revision': 2},
+                {}, TimeoutError('lost acknowledgement')]
+            publisher = report_repo.ReportPublisher(client, directory, 'original-model')
+            with self.assertRaises(TimeoutError):
+                publisher.publish('event', 'subject', {'summary': '原结果'}, '正文', [])
+            sent = client.post.call_args.args[1]
+            self.assertFalse(publisher.load('event', 'subject').get('done', False))
+            client.post.side_effect = None
+            client.post.return_value = {'state': 'succeeded'}
+            restarted = report_repo.ReportPublisher(client, directory, 'different-model')
+            restarted.publish('event', 'subject', None, None, [])
+            self.assertEqual(client.post.call_args.args[1], sent)
+            self.assertEqual(client.post.call_count, 5)
 
 
 class SessionTests(unittest.TestCase):

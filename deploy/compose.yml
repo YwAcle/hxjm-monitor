@@ -132,6 +132,8 @@ services:
       GARBAGE_DEVICE: ${GARBAGE_DEVICE:-cuda}
       VIDEO_ANALYSIS_WORKERS: '1'
       VIDEO_ANALYSIS_GPU: '0'
+      VIDEO_ANALYSIS_MEMORY_RESERVE_GIB: ${VIDEO_ANALYSIS_MEMORY_RESERVE_GIB:-8}
+      VIDEO_ANALYSIS_MODEL_HEADROOM_GIB: ${VIDEO_ANALYSIS_MODEL_HEADROOM_GIB:-4}
       VIDEO_ANALYSIS_CAMERAS: ${ANALYSIS_CAMERAS:-}
       VIDEO_ANALYSIS_SOURCE_IDS: ${SOURCE_IDS:-}
       VIDEO_ANALYSIS_RECORDING_ENABLED: ${RECORDING_ENABLED:-no}
@@ -395,11 +397,13 @@ services:
     user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
     volumes:
     - ${SOURCE_ROOT}/modules/infrastructure/database/bootstrap:/opt/init:ro
+    - ${SOURCE_ROOT}/modules/infrastructure/python:/opt/infrastructure:ro
     - ${SOURCE_ROOT}/modules/infrastructure/database/migrations:/opt/migrations:ro
     - ${SOURCE_ROOT}/contracts/capability-v1:/opt/contracts:ro
     - ${RUNTIME_ROOT}/config:/config
     - ${CAMERAS_FILE:-./config/cameras.example.json}:/input/cameras.json:ro
     environment:
+      PYTHONPATH: /opt/infrastructure
       MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-hxjm_sm}
@@ -425,6 +429,7 @@ services:
       VIDEO_ANALYSIS_ALGORITHM: botsort
       GARBAGE_ENABLED: ${GARBAGE_ENABLED:-false}
       CAPABILITY_EXECUTOR_ENABLED: ${CAPABILITY_EXECUTOR_ENABLED:-false}
+      HXJM_SHARED_UIDS: ${HXJM_SHARED_UIDS:-}
       GALLERY_BUSINESS_URL: ${GALLERY_BUSINESS_URL:-}
       PUBLIC_HOST: ${PUBLIC_HOST:-127.0.0.1}
       MEDIA_HTTP_PORT: ${MEDIA_HTTP_PORT:-19389}

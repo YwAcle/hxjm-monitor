@@ -63,3 +63,15 @@ modules/ai-infra/python/ai_infra 提供共享 ModelConfig、settings、build_cha
 ## 第四阶段业务接通
 
 正式垃圾链路及真实协议限制以 `stage-4.md` 和 `robot-dog-integration.md` 为准。能力定义新增 `garbage-cleanup.json`，标准检测类型仍为既有 garbage.detection/1。公共入口为 GET `/api/v1/business/garbage/events`、POST `/api/v1/business/garbage/cleanup`；后者只接收 event_id/request_id，路线和设备地址只来自可信配置。设备异步执行复用现有 Java Capability tick/Task Attempt，不再限于同步 HTTP；真实反馈按同一 run 会话关联，不具备稳定外部 ID时如实返回 null，失联未知不重发。前述第一阶段的设备占位说明由此增量实现替代，Python公共协议保留用于其他设备接入。
+
+## 本地报告 Worker 与运行时成果
+
+正式报告 Worker 仅扫描未过期、已结束且具有权威身份的活动，以及 Business 中正式的 fire/behavior.fire 事件，保留已有模型提示词与生成实现。旧 VAD 数字 ID 不冒充 Business 事件 UUID；只有旧 VAD 行、尚无正式事件的火灾不会自动生成新版报告，须先由对应成果生产链登记正式事件。
+
+报告依次调用 `/tasks` → `/tasks/start` → `/reports/register` → `/tasks/end`；能力定义为 `report-generation.json`。报告主体、执行引用、模型标识和证据引用通过 Business 校验，有效期由主体推导。报告标记 partial，不把抽样或缺失媒体声称为完整覆盖。`task_output` 保存 `business.report.reference/1`，正文仍由 Business 报告 API 查询。
+
+`POST /tasks/end` 在原 `result_ids` 外支持 `outputs`，每项为 `result_type,schema_version,producer_result_key,payload`。Runtime 与任务归属、当前 run、revision 和过期检查保持不变；按提交任务时冻结的输出契约校验内容与大小。一次性成功必须引用已登记算法成果或提交有效内联成果。失败/取消不得提交内联成功成果。原 request_id 重试保持幂等，不修改 platform_managed 的完成入口。
+
+本地报告投递状态保存于 REPORT_RUNTIME_DIR；请求发送前保存原始请求，回执丢失重发同一请求；不会重跑模型并覆盖原报告。该状态不是第二套业务报告库。
+
+`GET /execution/status` 以 capabilities.describe 权限返回后端实际加载的 enabled 标志，不返回服务地址或令牌。Agent 启动前检查该接口、八项业务/图库能力、报告能力实例、图库数据库和 ReID 健康接口；失败直接退出。`/ready` 仍是模型/目录就绪检查，业务启动检查也不替代真实任务验收。

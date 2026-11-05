@@ -22,12 +22,12 @@ export default defineConfig({
     proxy: {
       ...videoProxies(),
       '/api/chat': {
-        target: process.env.AGENT_ORIGIN || 'http://127.0.0.1:9',
+        target: process.env.AGENT_ORIGIN || 'http://127.0.0.1:8012',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/api/sessions': {
-        target: process.env.AGENT_ORIGIN || 'http://127.0.0.1:9',
+        target: process.env.AGENT_ORIGIN || 'http://127.0.0.1:8012',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },

@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from io import BytesIO
 from unittest.mock import patch
 import yaml
 
@@ -12,6 +13,26 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class MonitorIntegrationTest(unittest.TestCase):
+    def test_prepare_uses_active_raw_stream_without_assuming_its_name(self):
+        from joyai_tool.prepare import prepare
+        sources = [dict(camera_code=f'camera_{i}', source_id=f'source-{i}', streams=[
+            dict(stream_name=f'live/camera_{i}', task_type='raw', is_active=True, stream_id=f'raw-{i}'),
+            dict(stream_name=f'camera_{i}', task_type='raw', is_active=False, stream_id='retired')])
+            for i in range(1, 5)]
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            path = root/'private/config.json'
+            env = dict(JOYAI_CONFIG=str(path), RUNTIME_ROOT=str(root/'runtime'), DATA_ROOT=str(root/'data'),
+                BACKEND_PORT='18580', RTSP_PORT='19554', JOYAI_MODEL_PORT='34301',
+                JOYAI_OBSERVER_PORT='34302', JOYAI_REVIEW_PORT='34303', JOYAI_TOOL_PORT='34304',
+                JOYAI_BACKEND_TOOL_URL='http://host.docker.internal:34304')
+            with patch.dict(os.environ, env), patch('joyai_tool.prepare.urlopen',
+                return_value=BytesIO(json.dumps({'items': sources}).encode())):
+                prepare(root)
+            cameras = json.loads(path.read_text())['cameras']
+            self.assertEqual(['raw-1', 'raw-2', 'raw-3', 'raw-4'],
+                             [camera['camera_stream_id'] for camera in cameras.values()])
+
     def test_main_and_garbage_cannot_replace_each_other(self):
         result = subprocess.run(['bash', '-c',
             'source scripts/start.sh; configure --scope local --only analysis,garbage-analysis; '
