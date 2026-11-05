@@ -70,6 +70,18 @@ class RuntimeTest(unittest.TestCase):
         self.assertIsNone(runtime.process(pid))
         self.assertIsNone(self.peer.poll())
 
+    def test_model_stop_preserves_backend_and_stop_all_includes_models(self):
+        for name in ('backend', 'joyai_model', 'joyai_qwen'):
+            self.call('start', name, str(self.root), str(self.root / (name + '.log')),
+                      sys.executable, '-c', 'import time; time.sleep(120)')
+        self.call('stop', 'joyai_model')
+        self.assertNotEqual(0, self.call('status', 'joyai_model', check=False).returncode)
+        self.call('status', 'backend')
+        self.call('status', 'joyai_qwen')
+        self.call('stop-all')
+        self.assertNotEqual(0, self.call('status', 'joyai_qwen', check=False).returncode)
+        self.assertIsNone(self.peer.poll())
+
     def test_stopping_one_worktree_preserves_managed_and_legacy_peer(self):
         other = self.root / 'other'
         other_state = other / 'state'
@@ -294,6 +306,18 @@ class PortConfigurationTest(unittest.TestCase):
                     'UNEXPECTED=1', 'FRONTEND_PORT=3001'):
             self.config.write_text(content + '\n' + bad + '\n')
             self.assertNotEqual(0, self.shell(check=False).returncode, bad)
+
+    def test_rtp_requires_even_port_and_consecutive_rtcp(self):
+        content = self.config.read_text()
+        ports = dict(line.split('=', 1) for line in content.splitlines()
+                     if line and not line.startswith('#'))
+        for key, port, message in [('MTX_RTP_PORT', '34113', 'MTX_RTP_PORT must be even'),
+                                   ('MTX_RTCP_PORT', ports['MTX_RTP_PORT'], 'MTX_RTCP_PORT must equal MTX_RTP_PORT + 1')]:
+            with self.subTest(key=key):
+                self.config.write_text(content.replace(f'{key}={ports[key]}', f'{key}={port}'))
+                result = self.shell(check=False)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn(message, result.stderr)
 
     def video_settings(self, primary=None, **overrides):
         payload = ('import json,os; print(json.dumps({key:os.getenv(key) for key in '

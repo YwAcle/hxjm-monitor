@@ -94,6 +94,12 @@
   position: relative;
 }
 
+.withReport { overflow: hidden; }
+.withReport .videoModalHeader { flex-shrink: 0; }
+.withReport .videoModalBody { min-height: 0; flex: none; padding: 12px 20px; }
+.withReport .webrtcPlayerContainer { min-height: 0; max-height: 45vh; }
+.withReport .videoPlayer { max-height: 45vh; }
+
 .videoPlayer {
   width: 100%;
   height: auto;

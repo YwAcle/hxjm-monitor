@@ -32,7 +32,8 @@ stop_shared_service() {
 PORT_KEYS=(FRONTEND_PORT BACKEND_PORT MTX_RTMP_PORT MTX_RTSP_PORT MTX_RTP_PORT
     MTX_RTCP_PORT MTX_HLS_PORT MTX_WEBRTC_PORT MTX_WEBRTC_ICE_PORT MTX_SRT_PORT
     MTX_PLAYBACK_PORT MTX_API_PORT AI_STREAM_PORT REDIS_DATABASE)
-OPTIONAL_PORT_KEYS=(VIDEO_ANALYSIS_PORT VAD_PORT VAD_QWEN_PORT VAD_JOY_MODEL_PORT VAD_JOY_PORT VAD_DEEP_PORT)
+OPTIONAL_PORT_KEYS=(VIDEO_ANALYSIS_PORT VAD_PORT VAD_QWEN_PORT VAD_JOY_MODEL_PORT VAD_JOY_PORT VAD_DEEP_PORT
+    JOYAI_MODEL_PORT JOYAI_OBSERVER_PORT JOYAI_REVIEW_PORT JOYAI_TOOL_PORT)
 load_port_config() {
     [[ -f "$PORT_CONFIG" ]] || { echo "Missing $PORT_CONFIG; run the launcher installer to create it." >&2; exit 1; }
     local line key value valid candidate
@@ -58,6 +59,8 @@ load_port_config() {
     for key in "${PORT_KEYS[@]}"; do
         [[ -v "seen[$key]" ]] || { echo "Missing $key in $PORT_CONFIG" >&2; exit 1; }
     done
+    (( MTX_RTP_PORT % 2 == 0 )) || { echo 'MTX_RTP_PORT must be even (MediaMTX requirement).' >&2; exit 1; }
+    (( MTX_RTCP_PORT == MTX_RTP_PORT + 1 )) || { echo 'MTX_RTCP_PORT must equal MTX_RTP_PORT + 1 (MediaMTX requirement).' >&2; exit 1; }
 }
 load_video_config() {
     if is_analysis_owner; then

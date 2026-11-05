@@ -125,12 +125,19 @@ public class CapabilityTaskService {
                 if (jdbc.queryForList("SELECT id FROM public.camera WHERE id=?::uuid",source).isEmpty()) { throw BusinessException.notFound("实例来源不存在"); }
             }
             List<Map<String,Object>> rows = jdbc.queryForList("SELECT revision,source_ids FROM public.capability_instance WHERE id=?::uuid FOR UPDATE",id);
+            boolean scoped=Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='capability_instance' AND column_name='resource_scope')",Boolean.class));
             long revision = 1;
             if (rows.isEmpty()) {
                 if (UUID.fromString(id).version()!=4) { throw BusinessException.invalid("新实例标识须为UUIDv4"); }
                 if (expected != null) { throw BusinessException.conflict("新实例不接受expected_revision"); }
-                jdbc.update("INSERT INTO public.capability_instance(id,capability_code,instance_key,implementation_code,implementation_version,source_ids,service_ref,enabled) VALUES (?::uuid,?,?,?,?,?::uuid[],?,?)",
-                        id,capability,key,implementation,version,pgArray(sources),service,enabled);
+                // New shared schemas require the explicit camera resource scope.
+                if(scoped){
+                    jdbc.update("INSERT INTO public.capability_instance(id,capability_code,instance_key,implementation_code,implementation_version,source_ids,service_ref,enabled,resource_scope) VALUES (?::uuid,?,?,?,?,?::uuid[],?,?,?::jsonb)",
+                            id,capability,key,implementation,version,pgArray(sources),service,enabled,json(values("scope_type","resources","resource_type","camera","resource_ids",sources)));
+                }else{
+                    jdbc.update("INSERT INTO public.capability_instance(id,capability_code,instance_key,implementation_code,implementation_version,source_ids,service_ref,enabled) VALUES (?::uuid,?,?,?,?,?::uuid[],?,?)",
+                            id,capability,key,implementation,version,pgArray(sources),service,enabled);
+                }
             } else {
                 for (String source : array(rows.get(0).get("source_ids"))) { actor.requireSource(source); }
                 revision = ((Number) rows.get(0).get("revision")).longValue();
@@ -138,6 +145,10 @@ public class CapabilityTaskService {
                 revision++;
                 jdbc.update("UPDATE public.capability_instance SET capability_code=?,instance_key=?,implementation_code=?,implementation_version=?,source_ids=?::uuid[],service_ref=?,enabled=?,revision=?,updated_at=now() WHERE id=?::uuid",
                         capability,key,implementation,version,pgArray(sources),service,enabled,revision,id);
+                if(scoped){
+                    jdbc.update("UPDATE public.capability_instance SET resource_scope=?::jsonb WHERE id=?::uuid",
+                            json(values("scope_type","resources","resource_type","camera","resource_ids",sources)),id);
+                }
             }
             return values("instance_id",id,"revision",revision,"enabled",enabled);
         });
@@ -249,6 +260,26 @@ public class CapabilityTaskService {
             jdbc.update("UPDATE public.business_task SET current_run_id=?::uuid,generation=?,state='running',revision=revision+1,updated_at=now() WHERE task_id=?::uuid",run,generation,task);
             Map<String,Object> response = summary(jdbc,task);
             store.event(jdbc,"tasks.started","business_task",task,expected+1,response,expires);
+            return response;
+        });
+    }
+
+    public Map<String,Object> cancel(BusinessActor actor,Map<String,Object> body) {
+        fields(body,"request_id","trace_id","task_id","expected_revision","reason");
+        String task=uuid(body,"task_id");
+        long expected=integer(body,"expected_revision",1,Long.MAX_VALUE);
+        String reason=text(body,"reason",1000);
+        Map<String,Object> prior=owned(actor,task);
+        OffsetDateTime expires=timestamp(prior.get("expires_at"));
+        return store.write(actor,"tasks.cancel",body,expires,jdbc->{
+            Map<String,Object> row=jdbc.queryForMap("SELECT * FROM public.business_task WHERE task_id=?::uuid FOR UPDATE",task);
+            if(!actor.getActorKey().equals(row.get("actor_key")) && (actor.getUserId()==null||!actor.getUserId().equals(row.get("owner_user_id")))){throw BusinessException.forbidden();}
+            if(Arrays.asList("succeeded","partial","failed","cancelled","expired").contains(row.get("state"))){return summary(jdbc,task);}
+            if(((Number)row.get("revision")).longValue()!=expected){throw BusinessException.conflict("任务修订号已改变");}
+            jdbc.update("UPDATE public.task_attempt SET state='cancelled',finished_at=now(),lease_until=NULL,updated_at=now() WHERE task_id=?::uuid AND state IN ('running','waiting_input','pending')",task);
+            jdbc.update("UPDATE public.business_task SET state='cancelled',revision=revision+1,updated_at=now() WHERE task_id=?::uuid",task);
+            Map<String,Object> response=summary(jdbc,task);
+            store.event(jdbc,"tasks.cancelled","business_task",task,expected+1,values("task_id",task,"reason",reason),expires);
             return response;
         });
     }

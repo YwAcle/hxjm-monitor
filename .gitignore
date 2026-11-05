@@ -165,6 +165,7 @@ mtx/mediamtx/mediamtx
 !/scripts/local-runtime.py
 !/scripts/local-infra.compose.yml
 !/scripts/test_local_runtime.py
+!/scripts/joyai-tool.sh
 
 # Local backups of dependencies and build output
 **/node_modules.backup*/

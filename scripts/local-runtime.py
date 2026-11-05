@@ -12,6 +12,9 @@ import subprocess
 import time
 import uuid
 
+SERVICE_NAMES = ('joyai_tool', 'joyai_observer', 'joyai_model', 'joyai_qwen', 'frontend',
+                 'video_analysis', 'backend', 'ai_stream', 'deepsort', 'vad', 'reid', 'mediamtx')
+
 
 def process(pid, strict=False):
     try:
@@ -178,7 +181,8 @@ def legacy_service(item, roots):
         if cwd == str(root / 'mtx/build') and exe == 'ai_stream':
             return True
         if cwd == str(root / 'SmartMonitor-wangzj') and exe == 'java' and any(
-                a in ('hxjm-admin/target/hxjm-admin.jar', str(root / 'SmartMonitor-wangzj/hxjm-admin/target/hxjm-admin.jar')) for a in args):
+                a in ('hxjm-admin/target/hxjm-admin.jar', str(root / 'SmartMonitor-wangzj/hxjm-admin/target/hxjm-admin.jar'),
+                      str(root / '.run/local-runtime/backend.jar')) for a in args):
             return True
         if cwd == str(root / 'lanhu') and (exe in ('npm', 'npm run dev', 'vite') or
                 (exe == 'node' and any('node_modules/vite/' in a or
@@ -193,8 +197,7 @@ def legacy_service(item, roots):
 
 def service_group(state, root):
     """Find the group needed to inspect this project's existing processes."""
-    records = [read_json(state / f'{name}.json') for name in
-               ('frontend', 'backend', 'ai_stream', 'mediamtx', 'video_analysis', 'reid', 'vad', 'deepsort')]
+    records = [read_json(state / f'{name}.json') for name in SERVICE_NAMES]
     shared = read_json(root / '.run/shared-botsort/service.json')
     records.append(shared)
     if shared.get('root') == str(root):
@@ -227,7 +230,7 @@ def service_group(state, root):
 
 
 def stop_all(state, root):
-    for name in ('frontend', 'video_analysis', 'backend', 'ai_stream', 'deepsort', 'vad', 'reid', 'mediamtx'):
+    for name in SERVICE_NAMES:
         stop_record(state / f'{name}.json', root)
     roots = [root]
     old = [p for p in processes() if legacy_service(p, roots)]
@@ -244,7 +247,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--state', required=True, type=Path)
     parser.add_argument('--root', required=True, type=Path)
-    parser.add_argument('action', choices=('start', 'status', 'stop-all', 'mark-active', 'prepare-assets', 'service-group', 'check-ports'))
+    parser.add_argument('action', choices=('start', 'status', 'stop', 'stop-all', 'mark-active', 'prepare-assets', 'service-group', 'check-ports'))
     parser.add_argument('args', nargs=argparse.REMAINDER)
     ns = parser.parse_args()
     state, root = ns.state, ns.root.resolve()
@@ -284,12 +287,15 @@ def main():
                                                     if (k.endswith('_PORT') or k == 'REDIS_DATABASE') and v.isdigit()}))
         return 0
     name = ns.args[0]
-    if name not in ('frontend', 'video_analysis', 'backend', 'ai_stream', 'deepsort', 'vad', 'reid', 'mediamtx'):
+    if name not in SERVICE_NAMES:
         parser.error('Unknown service')
     path = state / f'{name}.json'
     record = read_json(path)
     if ns.action == 'status':
         return 0 if record and record.get('root') == str(root) and matches(process(record['pid']), record) else 1
+    if ns.action == 'stop':
+        stop_record(path, root)
+        return 0
     _, cwd, log, *command = ns.args
     stop_record(path, root)
     token = uuid.uuid4().hex

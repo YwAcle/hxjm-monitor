@@ -504,8 +504,15 @@ export SMARTMONITOR_AI_STREAM_MTX_CONTROL_URL="http://127.0.0.1:$MTX_API_PORT/v3
 export SMARTMONITOR_AI_LIVE_PORT="$MTX_WEBRTC_PORT"
 export SPRING_REDIS_DATABASE="$REDIS_DATABASE"
 export SMARTMONITOR_LOG_DIR="$ROOT_DIR/log/backend"
+joyai_backend_args=()
+if [[ -f "$ROOT_DIR/.run/joyai/backend.yml" ]]; then
+    joyai_backend_args+=("--spring.config.additional-location=file:$ROOT_DIR/.run/joyai/backend.yml")
+fi
+# Running a target/*.jar on NFS prevents the next Maven clean from deleting it.
+cp "$ROOT_DIR/SmartMonitor-wangzj/hxjm-admin/target/hxjm-admin.jar" "$RUN_DIR/backend.jar"
 start_service backend "$ROOT_DIR/SmartMonitor-wangzj" env SERVER_PORT="$BACKEND_PORT" \
-    "$JAVA_BIN" -jar hxjm-admin/target/hxjm-admin.jar \
+    "$JAVA_BIN" -jar "$RUN_DIR/backend.jar" \
+    "${joyai_backend_args[@]}" \
     "--logging.config=$RUN_DIR/logback.xml" "--spring.redis.database=$REDIS_DATABASE" \
     "--server.port=$BACKEND_PORT" "--ruoyi.profile=$ROOT_DIR/.run/uploads" \
     "--smartmonitor.ai.mtx-home=$MTX_DIR" \
@@ -559,9 +566,11 @@ else
     export VITE_ENABLE_DEEPSORT=false
 fi
 export VITE_MEDIA_PORT="$MTX_WEBRTC_PORT"
+export JOYAI_TOOL_ORIGIN="http://127.0.0.1:${JOYAI_TOOL_PORT:-34204}"
 export VITE_BACKEND_ORIGIN="http://127.0.0.1:$BACKEND_PORT"
 export VITE_MEDIA_BASE_URL="http://$PUBLIC_HOST:$MTX_WEBRTC_PORT/live"
 export BROWSER=none
+export VITE_CACHE_DIR="$RUN_DIR/vite-cache"
 start_service frontend "$ROOT_DIR/lanhu" npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT" --strictPort
 wait_for_port "$FRONTEND_PORT" frontend 20 || fail "frontend did not start; inspect $LOG_DIR/frontend.log."
 

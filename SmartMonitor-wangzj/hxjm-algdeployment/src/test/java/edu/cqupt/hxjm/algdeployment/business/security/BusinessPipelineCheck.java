@@ -78,6 +78,13 @@ public final class BusinessPipelineCheck {
         Map<String,Object> execution=map(tasks.get(actor,taskId,(String)running.get("run_id")).get("execution"));
         check(instance.equals(execution.get("instance_id")),"fixed instance snapshot");
         check(actor.getActorKey().equals(store.jdbc().queryForObject("SELECT lease_owner FROM public.task_attempt WHERE run_id=?::uuid",String.class,running.get("run_id"))),"execution bound to actor");
+        Map<String,Object> cancel=values("request_id","cancel-"+suffix,"task_id",taskId,"expected_revision",1,"reason","fixture stop");
+        fails(409,()->tasks.cancel(actor,cancel));
+        cancel.put("expected_revision",running.get("revision"));
+        Map<String,Object> cancelled=tasks.cancel(actor,cancel);
+        check("cancelled".equals(cancelled.get("state")),"continuous task cancellation");
+        check(Boolean.TRUE.equals(tasks.cancel(actor,cancel).get("duplicate")),"cancellation replay");
+        check(store.jdbc().queryForObject("SELECT lease_until IS NULL AND state='cancelled' FROM public.task_attempt WHERE run_id=?::uuid",Boolean.class,running.get("run_id")),"cancelled attempt releases its lease");
         Map<String,Object> close=values("request_id","close-"+suffix,"stream_session_id",session,"expected_state","open","state","closed","occurred_at",iso(now.plusSeconds(10)),"ended_at",iso(now.plusSeconds(10)));
         streams.close(actor,close);
         check(Boolean.TRUE.equals(streams.close(actor,close).get("duplicate")),"close retry");
@@ -98,7 +105,7 @@ public final class BusinessPipelineCheck {
     private static BusinessActor actor(String source) {
         BusinessSecurityProperties properties=new BusinessSecurityProperties();
         BusinessSecurityProperties.ServiceIdentity identity=new BusinessSecurityProperties.ServiceIdentity();identity.setToken("fixture-only");
-        identity.setOperations(new LinkedHashSet<>(Arrays.asList("sources.register","sources.query","streams.open","streams.close","capabilities.register","result_types.register","instances.configure","tasks.submit","tasks.start","tasks.get")));
+        identity.setOperations(new LinkedHashSet<>(Arrays.asList("sources.register","sources.query","streams.open","streams.close","capabilities.register","result_types.register","instances.configure","tasks.submit","tasks.start","tasks.get","tasks.cancel")));
         identity.setSourceIds(Collections.singleton(source));properties.getServices().put("fixture",identity);
         BusinessAuthentication authentication=new BusinessAuthentication(properties);authentication.afterPropertiesSet();
         HttpServletRequest request=(HttpServletRequest)Proxy.newProxyInstance(BusinessPipelineCheck.class.getClassLoader(),new Class<?>[]{HttpServletRequest.class},(proxy,method,args)->{

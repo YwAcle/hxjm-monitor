@@ -96,6 +96,12 @@ public class CapabilityTaskController {
         return BusinessResponses.success(service.get(authentication.authenticate(request,"tasks.get"),task,run),request,null);
     }
 
+    @PostMapping("/tasks/cancel")
+    public Map<String,Object> cancel(HttpServletRequest request,@RequestBody String raw) {
+        BusinessActor actor=authentication.authenticate(request,"tasks.cancel");
+        return BusinessResponses.success(service.cancel(actor,body(request,raw)),request,null);
+    }
+
     @PostMapping("/tasks/finish")
     public Map<String,Object> finish(HttpServletRequest request,@RequestBody String raw) {
         BusinessActor actor=authentication.requireService(request,"tasks.finish");
