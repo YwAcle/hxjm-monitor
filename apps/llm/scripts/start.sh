@@ -18,4 +18,5 @@ case "${1:-}" in
 esac
 source "${SCRIPT_DIR}/internal/load_env.sh"
 load_env_defaults "${ROOT_DIR}/.env"
+"${AGENT_PYTHON_BIN:-${ROOT_DIR}/.venv/bin/python}" "${SCRIPT_DIR}/internal/check_business.py"
 exec "${CONFIG_PYTHON_BIN:-python3}" "${SCRIPT_DIR}/internal/manage.py" start

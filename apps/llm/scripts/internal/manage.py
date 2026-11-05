@@ -5,6 +5,7 @@ import hashlib
 import os
 from pathlib import Path
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -23,6 +24,8 @@ def running():
 
 
 def main():
+    if shutil.which('tmux') is None:
+        raise SystemExit('缺少 tmux，Agent 尚未启动。请在本机终端执行 sudo apt-get install -y tmux 后重试。')
     RUNTIME.mkdir(parents=True, exist_ok=True)
     # Start/stop serialize within this checkout; separate checkouts have separate sockets.
     with (RUNTIME / 'lock').open('a') as lock:

@@ -62,6 +62,13 @@ public class GarbageFlowCheck {
                     Map<String,Object> end=values("request_id",id(),"task_id",started.get("task_id"),"run_id",started.get("run_id"),"expected_revision",started.get("revision"),"state","succeeded","result_ids",Arrays.asList(result));
                     expect("succeeded".equals(tasks.endRuntime(actor,end).get("state")),"runtime end must succeed, never cancelled");
                     expect("succeeded".equals(tasks.endRuntime(actor,end).get("state")),"runtime end acknowledgement must be idempotent");
+                    Map<String,Object> inlineTask=tasks.submit(actor,values("request_id",id(),"task_kind","runtime-inline-check","task_mode","continuous","capability_code","garbage.detection","instance_id",detectorInstance,"input",values("kind","live_video","source_id",source,"stream_session_id",session),"requested_outputs",Arrays.asList("garbage.detection")));
+                    Map<String,Object> inlineRun=tasks.start(actor,values("request_id",id(),"task_id",inlineTask.get("task_id"),"expected_revision",inlineTask.get("revision")));
+                    Map<String,Object> inlineEnd=values("request_id",id(),"task_id",inlineRun.get("task_id"),"run_id",inlineRun.get("run_id"),"expected_revision",inlineRun.get("revision"),"state","succeeded","outputs",Arrays.asList(values("result_type","garbage.detection","schema_version","1","producer_result_key","inline-check","payload",values("has_target",false,"targets",Collections.emptyList()))));
+                    expect("succeeded".equals(tasks.endRuntime(actor,inlineEnd).get("state")),"runtime inline output must succeed");
+                    expect("succeeded".equals(tasks.endRuntime(actor,inlineEnd).get("state")),"runtime inline output retry must be idempotent");
+                    expect(jdbc.queryForObject("SELECT count(*) FROM public.task_output WHERE task_id=?::uuid",Integer.class,inlineTask.get("task_id"))==1,"runtime output must persist exactly once");
+
                     String event=jdbc.queryForObject("SELECT id::text FROM public.business_event WHERE event_type='garbage.detected'",String.class);
                     expect(jdbc.queryForObject("SELECT count(*) FROM public.business_event WHERE event_type='garbage.detected'",Integer.class)==1,"dedup event");
                     GarbageBusinessService garbage=new GarbageBusinessService(store);CleanupProperties config=new CleanupProperties();config.setEnabled(true);config.getRoutes().put(source,"route1");

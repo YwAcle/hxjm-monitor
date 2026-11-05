@@ -11,6 +11,7 @@ export JOYAI_CONFIG
 JOY_DIR="$(dirname -- "$JOYAI_CONFIG")"
 LOG_DIR="$JOY_DIR/logs"
 JOY_PYTHON="${JOYAI_PYTHON:-$JOY_DIR/venv/bin/python}"
+export PATH="$(dirname -- "$JOY_PYTHON"):$PATH"
 JOY_MODEL_DIR="${JOYAI_MODEL_PATH:-$JOY_DIR/models/JoyAI-VL-Interaction-INT4}"
 export PYTHONPATH="$ROOT_DIR/modules/perception-devices/python:$ROOT_DIR/modules/infrastructure/python:$ROOT_DIR/modules/ai-infra/python:$ROOT_DIR"
 export HF_HOME="$JOY_DIR/cache/huggingface" UV_CACHE_DIR="$JOY_DIR/cache/uv"
@@ -18,6 +19,8 @@ export XDG_CACHE_HOME="$JOY_DIR/cache" VLLM_CACHE_ROOT="$JOY_DIR/cache/vllm"
 export CUDA_CACHE_PATH="$JOY_DIR/cache/cuda" TRITON_CACHE_DIR="$JOY_DIR/cache/triton"
 export TMPDIR="$JOY_DIR/tmp" HF_HUB_DISABLE_XET=1 VLLM_WORKER_MULTIPROC_METHOD=spawn
 export VLLM_USE_FLASHINFER_SAMPLER=0
+# vLLM 0.22's NVML inspection requires numeric CUDA_VISIBLE_DEVICES.
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
 mkdir -p "$TMPDIR" "$LOG_DIR"
 if [[ "$action" != setup && "$action" != prepare ]]; then
     mapfile -t joy_ports < <(python3 - "$JOYAI_CONFIG" <<'CONFIG'
@@ -49,6 +52,13 @@ wait_health() {
 
 check_port() {
     [[ -z "$(ss -Hltn "sport = :$1")" ]] || { echo "端口 $1 已占用，不会停止其拥有者。" >&2; return 1; }
+}
+
+gpu_index() {
+    local index
+    index=$(nvidia-smi -i "$1" --query-gpu=index --format=csv,noheader) || return 1
+    [[ "$index" =~ ^[0-9]+$ ]] || { echo 'Expected one explicit GPU' >&2; return 1; }
+    printf '%s' "$index"
 }
 
 weights() {
@@ -115,7 +125,8 @@ PY
         [[ -f "${RUNTIME_ROOT:?Use the same RUNTIME_ROOT as scripts/start.sh}/config/joyai-backend.yml" ]] || { echo '请先运行 prepare 并重新启动本目录后端。'; exit 1; }
         if ! runtime status joyai_model; then
             check_port "$JOYAI_MODEL_PORT"
-            runtime start joyai_model "$ROOT_DIR" "$LOG_DIR/joyai_model.log" env CUDA_VISIBLE_DEVICES="${JOYAI_GPU:?Set explicit JoyAI GPU UUID}" \
+            gpu=$(gpu_index "${JOYAI_GPU:?Set explicit JoyAI GPU UUID}")
+            runtime start joyai_model "$ROOT_DIR" "$LOG_DIR/joyai_model.log" env CUDA_VISIBLE_DEVICES="$gpu" \
                 "$JOY_PYTHON" -m vllm.entrypoints.openai.api_server --host 127.0.0.1 --port "$JOYAI_MODEL_PORT" \
                 --model "$JOY_MODEL_DIR" --served-model-name jdopensource/JoyAI-VL-Interaction \
                 --dtype bfloat16 --max-model-len 4096 --max-num-seqs 1 --max-num-batched-tokens 1024 \
@@ -155,7 +166,8 @@ PY
         fi
         if ! runtime status joyai_qwen; then
             check_port "$JOYAI_REVIEW_PORT"
-            runtime start joyai_qwen "$ROOT_DIR" "$LOG_DIR/joyai_qwen.log" env CUDA_VISIBLE_DEVICES="${JOYAI_REVIEW_GPU:?Set explicit Qwen GPU UUID}" \
+            gpu=$(gpu_index "${JOYAI_REVIEW_GPU:?Set explicit Qwen GPU UUID}")
+            runtime start joyai_qwen "$ROOT_DIR" "$LOG_DIR/joyai_qwen.log" env CUDA_VISIBLE_DEVICES="$gpu" \
                 "$JOY_PYTHON" -m vllm.entrypoints.openai.api_server --host 127.0.0.1 --port "$JOYAI_REVIEW_PORT" \
                 --model "$JOY_DIR/models/Qwen3.8-27B-AWQ-INT4" --served-model-name Qwen/Qwen3.8-27B-AWQ-INT4 \
                 --dtype bfloat16 --max-model-len 8192 --max-num-seqs 1 --max-num-batched-tokens 1024 \

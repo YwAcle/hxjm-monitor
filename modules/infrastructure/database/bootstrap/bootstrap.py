@@ -6,6 +6,7 @@ import re
 import sys
 import uuid
 import schema
+from shared_files import write_text
 
 BASE = Path(__file__).parent
 OUT = Path('/config')
@@ -29,8 +30,7 @@ def connections():
 def private(name, text):
     OUT.mkdir(parents=True,exist_ok=True)
     path=OUT/name
-    with open(path,'w',opener=lambda p,f: os.open(p,f,0o600)) as f:f.write(text)
-    path.chmod(0o600)
+    write_text(path, text)
 
 def camera_configuration():
     cameras=json.loads(Path('/input/cameras.json').read_text())
@@ -169,7 +169,7 @@ if __name__=='__main__':
             import subprocess
             env=dict(os.environ,HXJM_PIPELINE_TOKEN=os.environ['PIPELINE_TOKEN'])
             contract_root=Path('/opt/contracts')
-            configs=[contract_root/(name+'.json') for name in ('events','reports','identities','tracklets')]
+            configs=[contract_root/(name+'.json') for name in ('events','reports','identities','tracklets','report-generation')]
             if os.getenv('GALLERY_BUSINESS_URL'):
                 configs.extend(contract_root/('gallery-'+name+'.json') for name in ('image','screenshot','description','select'))
             if os.getenv('CLEANUP_MODE','disabled')!='disabled':

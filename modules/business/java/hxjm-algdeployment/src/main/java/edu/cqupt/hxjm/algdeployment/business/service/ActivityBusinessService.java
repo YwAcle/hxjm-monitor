@@ -24,7 +24,7 @@ public class ActivityBusinessService {
         Map<String,Object> a=one(jdbc.queryForList("SELECT id AS activity_id,identity_id,title,start_ts,end_ts,activity_type,state,end_reason,coverage_json,revision,expires_at FROM public.episode WHERE id=?::uuid AND identity_id IS NOT NULL",id),"活动不存在");fresh(a);
         List<Map<String,Object>> tracks=jdbc.queryForList("SELECT t.id AS tracklet_id,t.source_id,t.stream_session_id,t.first_observed_at,t.last_observed_at,t.start_ts,t.end_ts,t.end_reason,t.expires_at FROM public.episode_tracklet_link l JOIN public.tracklet t ON t.id=l.tracklet_id WHERE l.episode_id=?::uuid AND t.expires_at>now() ORDER BY t.first_observed_at,t.id",id);
         if(tracks.isEmpty()){data.identity(jdbc,actor,a.get("identity_id").toString());}
-        for(Map<String,Object> t:tracks){actor.requireSource(String.valueOf(t.get("source_id")));clean(t);}a.put("tracks",tracks);return a;
+        for(Map<String,Object> t:tracks){actor.requireSource(String.valueOf(t.get("source_id")));clean(t);}a.put("tracks",tracks);a.put("evidence",evidence(jdbc,"activity_id",id));return a;
     }
     public Map<String,Object> getActivity(BusinessActor actor,String id){return clean(activity(data.store().jdbc(),actor,uuid(id,"activity_id")));}
 
