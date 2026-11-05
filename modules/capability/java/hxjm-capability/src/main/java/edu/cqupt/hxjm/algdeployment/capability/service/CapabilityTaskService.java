@@ -315,6 +315,35 @@ public class CapabilityTaskService {
         });
     }
 
+    /** Runtime producers finish already registered results; platform tasks retain their execution-token API. */
+    public Map<String,Object> endRuntime(BusinessActor actor,Map<String,Object> body) {
+        fields(body,"request_id","trace_id","task_id","run_id","expected_revision","state","result_ids","error_code");
+        if(!actor.isService()){throw BusinessException.forbidden();}
+        String task=uuid(body,"task_id"),run=uuid(body,"run_id"),state=text(body,"state",16);
+        if(!Arrays.asList("succeeded","failed","cancelled").contains(state)){throw BusinessException.invalid("运行时终态无效");}
+        List<String> results=uuids(body.getOrDefault("result_ids",Collections.emptyList()));
+        String error="failed".equals(state)?text(body,"error_code",64):null;
+        long expected=integer(body,"expected_revision",1,Long.MAX_VALUE);
+        Map<String,Object> prior=owned(actor,task);OffsetDateTime expires=timestamp(prior.get("expires_at"));
+        return store.write(actor,"tasks.end",body,expires,jdbc->{
+            Map<String,Object> row=jdbc.queryForMap("SELECT * FROM public.business_task WHERE task_id=?::uuid FOR UPDATE",task);
+            if(!actor.getActorKey().equals(row.get("actor_key"))){throw BusinessException.forbidden();}
+            if(!"runtime_managed".equals(row.get("dispatch_mode"))){throw BusinessException.conflict("此入口只支持Runtime托管任务");}
+            if(((Number)row.get("revision")).longValue()!=expected||!"running".equals(row.get("state"))||!run.equals(String.valueOf(row.get("current_run_id")))){throw BusinessException.conflict("任务状态、当前执行或修订号已改变");}
+            if(!expires.isAfter(OffsetDateTime.now())){throw BusinessException.expired("任务到期");}
+            List<String> outputs=strings(required(parse(row.get("input_json").toString()),"requested_outputs"),64);
+            if("succeeded".equals(state)&&"once".equals(row.get("task_mode"))&&results.isEmpty()){throw BusinessException.invalid("一次性成功任务须引用已登记成果");}
+            for(String id:results){
+                List<Map<String,Object>> refs=jdbc.queryForList("SELECT r.result_type FROM public.algorithm_result r JOIN public.result_set s ON s.id=r.result_set_id WHERE r.id=?::uuid AND s.run_id=?::uuid AND r.expires_at>now()",id,run);
+                if(refs.isEmpty()||!outputs.contains(refs.get(0).get("result_type"))){throw BusinessException.invalid("成果不属于本次执行或输出契约");}
+            }
+            int changed=jdbc.update("UPDATE public.task_attempt SET state=?,error_code=?,finished_at=now(),lease_until=NULL,updated_at=now() WHERE run_id=?::uuid AND task_id=?::uuid AND lease_owner=? AND state='running'",state,error,run,task,actor.getActorKey());
+            if(changed!=1){throw BusinessException.conflict("执行身份或状态无效");}
+            jdbc.update("UPDATE public.business_task SET state=?,error_code=?,progress=CASE WHEN ?='succeeded' THEN 100 ELSE progress END,revision=revision+1,updated_at=now() WHERE task_id=?::uuid",state,error,state,task);
+            Map<String,Object> response=summary(jdbc,task);store.event(jdbc,"tasks."+state,"business_task",task,expected+1,response,expires);return response;
+        });
+    }
+
     public Map<String,Object> finish(BusinessActor actor,Map<String,Object> body) {
         fields(body,"request_id","trace_id","task_id","run_id","expected_revision","feature_ids");
         if(!actor.isService()){throw BusinessException.forbidden();}

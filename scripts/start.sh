@@ -7,7 +7,7 @@ configure() {
     local -a overrides=()
     while (($#)); do
         case "$1" in
-          --help|-h) printf '%s\n' 'start.sh [--scope local|dev|shared|isolated] [--config FILE] [--only frontend,backend,analysis,reid,mediamtx,stream]' '--build --check --status --render --init-db --upgrade-db --plan-db --register --infra new|external' '--frontend-port N --backend-port N --analysis-port N --reid-port N --analysis-gpu GPU-UUID --reid-gpu GPU-UUID'; exit 0;;
+          --help|-h) printf '%s\n' 'start.sh [--scope local|dev|shared|isolated] [--config FILE] [--only frontend,backend,analysis,reid,mediamtx,stream,garbage-analysis]' '--build --check --status --render --init-db --upgrade-db --plan-db --register --infra new|external' '--frontend-port N --backend-port N --analysis-port N --reid-port N --analysis-gpu GPU-UUID --reid-gpu GPU-UUID'; exit 0;;
           --build-only) ACTION=build; shift;;
           --build) BUILD=true; shift;; --check) CHECK=true; shift;; --status) STATUS=true; shift;;
           --render) ACTION=render; shift;; --init-db) ACTION=initialize; shift;; --register) ACTION=register; shift;; --check-db) ACTION=check; shift;; --upgrade-db) ACTION=upgrade; shift;; --plan-db) ACTION=plan; shift;;
@@ -70,12 +70,12 @@ configure() {
     [[ -n "$ONLY" ]] || { if [[ "$SCOPE" == dev ]]; then ONLY=frontend; else ONLY=frontend,backend,mediamtx,stream,analysis,reid; fi; }
     IFS=, read -r -a SERVICES <<< "$ONLY"
     for item in "${SERVICES[@]}"; do
-        [[ "$item" =~ ^(frontend|backend|mediamtx|stream|analysis|reid)$ ]] || { echo "Unknown service: $item" >&2; return 2; }
+        [[ "$item" =~ ^(frontend|backend|mediamtx|stream|analysis|reid|garbage-analysis)$ ]] || { echo "Unknown service: $item" >&2; return 2; }
         
     done
     COMPOSE=(docker compose --project-name "$COMPOSE_PROJECT_NAME" --project-directory "$ROOT/deploy" -f "$ROOT/deploy/compose.yml")
     [[ "$SCOPE" != dev ]] || COMPOSE+=(-f "$ROOT/deploy/development.yml")
-    if [[ ",$ONLY," == *,analysis,* || ",$ONLY," == *,reid,* ]]; then COMPOSE+=(-f "$ROOT/deploy/gpu.yml"); fi
+    if [[ ",$ONLY," == *,analysis,* || ",$ONLY," == *,reid,* || ",$ONLY," == *,garbage-analysis,* ]]; then COMPOSE+=(-f "$ROOT/deploy/gpu.yml"); fi
     if [[ -f "$RUNTIME_ROOT/config/analysis.env" ]]; then
         while IFS='=' read -r key value; do case "$key" in ANALYSIS_CAMERAS|SOURCE_IDS) export "$key=$value";; CAMERA_CODES) export CAMERA_CODES="${CAMERA_CODES:-$value}";; esac; done < "$RUNTIME_ROOT/config/analysis.env"
     fi
@@ -129,15 +129,15 @@ main() {
     fi
     local n uuid running
     running=$("${COMPOSE[@]}" ps --status running --services)
-    for n in analysis reid; do
+    for n in analysis reid garbage-analysis; do
         [[ ",$ONLY," == *,$n,* ]] || continue
         grep -qx "$n" <<< "$running" && continue
-        if [[ "$n" == analysis ]]; then uuid=${ANALYSIS_GPU_UUID:-}; else uuid=${REID_GPU_UUID:-}; fi
+        case "$n" in analysis) uuid=${ANALYSIS_GPU_UUID:-};; reid) uuid=${REID_GPU_UUID:-};; garbage-analysis) uuid=${GARBAGE_GPU_UUID:-};; esac
         [[ "$uuid" == GPU-* ]] || { echo "$n requires explicit GPU UUID" >&2; return 2; }
         nvidia-smi --query-gpu=uuid --format=csv,noheader | rg -Fx "$uuid" >/dev/null || { echo 'GPU unavailable' >&2; return 2; }
-        [[ "$n" != analysis || "${VIDEO_ANALYSIS_ALGORITHM:-botsort}" != botsort || -f "$MODEL_ROOT/botsort/pretrained/bytetrack_x_mot17.pth.tar" && -f "$MODEL_ROOT/botsort/pretrained/mot17_sbs_S50.pth" ]] || { echo 'Missing BoT-SORT weights' >&2; return 2; }
+        [[ "$n" != analysis || -f "$MODEL_ROOT/botsort/pretrained/bytetrack_x_mot17.pth.tar" && -f "$MODEL_ROOT/botsort/pretrained/mot17_sbs_S50.pth" ]] || { echo 'Missing BoT-SORT weights' >&2; return 2; }
         [[ "$n" != reid || -f "$MODEL_ROOT/reid/MSMT17_clipreid_RN50_120.pth" && -f "$MODEL_ROOT/reid/yolov8n.pt" ]] || { echo 'Missing ReID weights' >&2; return 2; }
-        if [[ "$n" == analysis && "${VIDEO_ANALYSIS_ALGORITHM:-botsort}" == garbage ]]; then
+        if [[ "$n" == garbage-analysis ]]; then
             [[ "${GARBAGE_MODEL_PATH:-}" == /models/* && -d "$MODEL_ROOT/${GARBAGE_MODEL_PATH#/models/}" ]] || { echo 'Missing configured local garbage model directory' >&2; return 2; }
         fi
         local available
@@ -167,7 +167,7 @@ PY
     RUNNING_SERVICES="$running" python3 - <<'PORTCHECK'
 import os,socket
 selected=os.environ['ONLY'].split(','); running=os.environ['RUNNING_SERVICES'].split()
-ports={'frontend':[('FRONTEND_PORT',3104,1)],'backend':[('BACKEND_PORT',18580,1)],'analysis':[('ANALYSIS_PORT',28114,1)],'reid':[('REID_PORT',28124,1)],'mediamtx':[('RTSP_PORT',19554,1),('MEDIA_HTTP_PORT',19389,1),('MEDIA_API_PORT',10497,1),('MEDIA_ICE_PORT',19390,2)],'stream':[('STREAM_PORT',19590,1)]}
+ports={'garbage-analysis':[('GARBAGE_ANALYSIS_PORT',28134,1)],'frontend':[('FRONTEND_PORT',3104,1)],'backend':[('BACKEND_PORT',18580,1)],'analysis':[('ANALYSIS_PORT',28114,1)],'reid':[('REID_PORT',28124,1)],'mediamtx':[('RTSP_PORT',19554,1),('MEDIA_HTTP_PORT',19389,1),('MEDIA_API_PORT',10497,1),('MEDIA_ICE_PORT',19390,2)],'stream':[('STREAM_PORT',19590,1)]}
 seen=set();probes=[]
 try:
  for name in selected:
@@ -188,12 +188,15 @@ finally:
  for s in probes:s.close()
 PORTCHECK
     "$CHECK" && { echo "Validated $COMPOSE_PROJECT_NAME: $ONLY ($REVISION)"; return; }
-    mkdir -p "$RUNTIME_ROOT/config" "$RUNTIME_ROOT/frontend/node_modules" "$RUNTIME_ROOT/backend" "$RUNTIME_ROOT/analysis" "$RUNTIME_ROOT/reid" "$DATA_ROOT"/{uploads,images,recordings,result-spool,mysql,postgres,redis}
+    mkdir -p "$RUNTIME_ROOT/config" "$RUNTIME_ROOT/frontend/node_modules" "$RUNTIME_ROOT/backend" "$RUNTIME_ROOT/analysis" "$RUNTIME_ROOT/reid" "$RUNTIME_ROOT/garbage" "$DATA_ROOT"/{uploads,images,recordings,result-spool,mysql,postgres,redis}
     if [[ ",$ONLY," == *,backend,* || ",$ONLY," == *,analysis,* || ",$ONLY," == *,mediamtx,* || ",$ONLY," == *,stream,* ]]; then
         [[ -f "$RUNTIME_ROOT/config/backend.yml" ]] || { echo 'Render/provide config first; see deploy/README.md' >&2; return 2; }
     fi
     if [[ ",$ONLY," == *,analysis,* ]]; then
         [[ -f "$RUNTIME_ROOT/config/business.json" && -n "${ANALYSIS_CAMERAS:-}" && -n "${SOURCE_IDS:-}" ]] || { echo 'Register pipeline first' >&2; return 2; }
+    fi
+    if [[ ",$ONLY," == *,garbage-analysis,* ]]; then
+        [[ -f "$RUNTIME_ROOT/config/garbage-sources.json" && -n "${ANALYSIS_CAMERAS:-}" && -n "${SOURCE_IDS:-}" ]] || { echo 'Register garbage runtime first (GARBAGE_ENABLED=true --register)' >&2; return 2; }
     fi
     "$BUILD" && "${COMPOSE[@]}" build "${SERVICES[@]}"
     if [[ "$INFRA" == new ]]; then

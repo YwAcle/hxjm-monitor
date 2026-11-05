@@ -43,3 +43,5 @@ npm --prefix modules/access/web run build
 
 
 当前检查范围：前端测试与生产构建、Java 库编译和应用装配检查、Python 当前接口检查已通过；本机完整 Maven package 仍受离线缓存缺少构建插件限制。真实模型、摄像头和机器狗需在配置完成后另行联调，详见阶段记录。
+
+主监控 BoT-SORT 与 JoyAI/Qwen 并行、垃圾业务独立启动及设备操作接手方式，见 [当前整合说明](docs/refactor/monitor-device-integration.md)。

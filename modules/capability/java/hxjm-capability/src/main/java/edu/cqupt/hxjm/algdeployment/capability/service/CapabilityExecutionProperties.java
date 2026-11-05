@@ -18,6 +18,8 @@ public class CapabilityExecutionProperties {
     public static class Operation {
         private String url;
         private String adapter = "http";
+        private String deviceOperation;
+        private boolean exclusive = true;
         private String method = "POST";
         private String version = "1";
         private String credentialRef;

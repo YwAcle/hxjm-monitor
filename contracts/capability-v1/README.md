@@ -42,3 +42,8 @@ Executor 默认单次轮询领取一项，短事务领取、事务外网络调�
 - `validation-current.json` 为本次真实验收证据。空事件结果仅证明真实空查询链路，不能宣称非空事件验收通过。
 
 图库使用同一登记入口，附加 `gallery-image.json gallery-screenshot.json gallery-description.json gallery-select.json`。可信 gallery-business 操作配置见 services.example.yml，目标为现有 Flask 承载的 Business 模块；部署生成器通过 GALLERY_BUSINESS_URL 配置，数据库与特征客户端配置归 Business 模块。完整阶段接口与边界见 ../../docs/refactor/interfaces.md。
+
+
+Runtime 托管任务使用 `POST /api/v1/business/tasks/end` 正确收尾；此接口与平台 execution_token 完成入口分开。字段为 request_id、task_id、run_id、expected_revision、state(succeeded/failed/cancelled)、result_ids；failed 另需 error_code。服务须拥有 tasks.end、当前任务/执行和成果；一次性 succeeded 必须引用同 run 的已登记成果。详见 [整合记录](../../docs/refactor/monitor-device-integration.md)。
+
+设备操作定义增加 device-m20-status/route/stop.json；可信配置的 device-operation 和 exclusive 由设备边界解释/通用执行器协调，不在核心执行器硬编码机器人型号。真实协议与模拟边界见 [设备对接](../../docs/refactor/robot-dog-integration.md)。

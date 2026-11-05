@@ -19,7 +19,7 @@ class VadRow:
 
 
 def count_vads(engine: Engine, schema: str) -> int:
-    sql = text(f"select count(*) as cnt from {schema}.vad")
+    sql = text(f"select count(*) as cnt from {schema}.vad where anomaly_name='fire'")
     with engine.connect() as conn:
         v = conn.execute(sql).mappings().first()
     if v is None:
@@ -32,6 +32,7 @@ def fetch_vad_batch(engine: Engine, schema: str, offset: int, limit: int) -> lis
         f"""
         select v.id, v.created_at, v.media_asset_id, v.stream_id, v.frame_vad_base64, v.anomaly_name, v.anomaly_level
         from {schema}.vad v
+        where v.anomaly_name='fire'
         order by v.id
         offset :offset
         limit :limit
@@ -67,7 +68,7 @@ def fetch_pending_vads(
         f"""
         select v.id, v.created_at, v.media_asset_id, v.stream_id, v.frame_vad_base64, v.anomaly_name, v.anomaly_level
         from {schema}.vad v
-        where not exists (
+        where v.anomaly_name='fire' and not exists (
           select 1
           from {schema}.llm_report r
           where r.vad_id = v.id

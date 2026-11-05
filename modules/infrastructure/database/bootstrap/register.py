@@ -82,7 +82,7 @@ def main():
     path=Path(ns.state)
     state_path=path.with_name("bootstrap-state.json" if algorithm=="botsort" else "garbage-bootstrap-state.json")
     if state_path.exists(): state=json.loads(state_path.read_text())
-    elif path.exists():
+    elif path.exists() and algorithm=="botsort":
         legacy=json.loads(path.read_text()); state={"request_ids":legacy.get("request_ids",{}),"instances":legacy.get("instances",[])}
     else: state={}
     sources_status,sources=req("GET","/sources?page_size=200")
@@ -99,7 +99,7 @@ def main():
         source_streams[item["source_id"]]=raw[0]["stream_id"]
     state["source_ids"]=source_ids; state["source_streams"]=source_streams
     # Allocate stable identities before the first side effect, including failed runs.
-    saved_instances={item.get('source_id'):item for item in state.get('instances',[]) if isinstance(item,dict)}
+    saved_instances={item.get('source_id'):item for item in state.get('instances',[]) if isinstance(item,dict) and item.get('algorithm', 'botsort')==algorithm}
     instance_list=[{'source_id':source,'algorithm':algorithm,
                     'instance_id':saved_instances.get(source,{}).get('instance_id') or str(uuid.uuid4()),
                     'capability_code':CAPABILITY} for source in source_ids.values()]

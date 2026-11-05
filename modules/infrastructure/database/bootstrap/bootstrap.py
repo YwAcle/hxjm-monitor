@@ -46,7 +46,7 @@ def render(cameras):
     import yaml
     token=os.environ['PIPELINE_TOKEN']
     if len(token)<24 or len(os.environ.get('STREAM_TOKEN',''))<24:raise ValueError('Provide independent PIPELINE_TOKEN and STREAM_TOKEN, each at least 24 characters')
-    ops='activities.close activities.query assets.process assets.query assets.register assets.upload capabilities.describe capabilities.register events.query events.register feature_spaces.register features.register identities.associate identities.query identities.register instances.configure instances.query media.resolve queries.candidates queries.create queries.get queries.process queries.select reports.query reports.register result_types.register result_types.query results.query results.register samples.process samples.query samples.register search.execute sources.query sources.register streams.close streams.open tasks.get tasks.start tasks.finish tasks.submit tasks.complete tasks.fail tasks.heartbeat tracklets.query tracking.close'.split()
+    ops='activities.close activities.query assets.process assets.query assets.register assets.upload capabilities.describe capabilities.register events.query events.register feature_spaces.register features.register identities.associate identities.query identities.register instances.configure instances.query media.resolve queries.candidates queries.create queries.get queries.process queries.select reports.query reports.register result_types.register result_types.query results.query results.register samples.process samples.query samples.register search.execute sources.query sources.register streams.close streams.open tasks.end tasks.get tasks.start tasks.finish tasks.submit tasks.complete tasks.fail tasks.heartbeat tracklets.query tracking.close'.split()
     backend={'hxjm':{'business':{'enabled':True,'storage-root':'/data','security':{'services':{'hxjm-pipeline':{'token':token,'operations':ops,'source-ids':[c['source_id'] for c in cameras]}}}}},'ruoyi':{'profile':'/data/uploads'},'smartmonitor':{'ai':{'public-host':os.getenv('PUBLIC_HOST','127.0.0.1'),'live-port':int(os.getenv('MEDIA_HTTP_PORT','19389'))}}}
     backend['hxjm']['business']['execution']={
         'enabled':os.getenv('CAPABILITY_EXECUTOR_ENABLED','false').lower()=='true',
@@ -62,8 +62,11 @@ def render(cameras):
     backend['hxjm']['business']['cleanup']={'enabled':mode!='disabled','routes':routes}
     if mode!='disabled':
         endpoint='mock://local' if mode=='simulation' else os.environ['M20_CONTROL_URL']
-        backend['hxjm']['business']['execution']['services']['robot-dog']={'cleanup':{'url':endpoint,'adapter':'m20_mock' if mode=='simulation' else 'm20_route','required-operation':'cleanup.execute','credential-ref':'hxjm-pipeline'}}
-    ops.extend(['cleanup.execute','cleanup.submit'])
+        backend['hxjm']['business']['execution']['services']['robot-dog']={'cleanup':{'url':endpoint,'adapter':'m20_mock' if mode=='simulation' else 'm20_route','device-operation':'route.start','exclusive':True,'required-operation':'cleanup.execute','credential-ref':'hxjm-pipeline'}}
+    if mode!='disabled':
+        for name,operation in [('status','device.status'),('route','route.start'),('stop','route.stop')]:
+            backend['hxjm']['business']['execution']['services']['robot-dog'][name]={'url':endpoint,'adapter':'m20_mock' if mode=='simulation' else 'm20_route','device-operation':operation,'exclusive':name=='route','required-operation':'devices.query' if name=='status' else 'devices.execute','credential-ref':'hxjm-pipeline'}
+    ops.extend(['cleanup.execute','cleanup.submit','devices.query','devices.execute'])
     gallery_url = os.getenv('GALLERY_BUSINESS_URL', '').rstrip('/')
     if gallery_url:
         backend['hxjm']['business']['execution']['services']['gallery-business'] = {
@@ -169,11 +172,15 @@ if __name__=='__main__':
             configs=[contract_root/(name+'.json') for name in ('events','reports','identities','tracklets')]
             if os.getenv('GALLERY_BUSINESS_URL'):
                 configs.extend(contract_root/('gallery-'+name+'.json') for name in ('image','screenshot','description','select'))
-            if os.getenv('CLEANUP_MODE','disabled')!='disabled':configs.append(contract_root/'garbage-cleanup.json')
+            if os.getenv('CLEANUP_MODE','disabled')!='disabled':
+                configs.append(contract_root/'garbage-cleanup.json')
+                configs.extend(contract_root/('device-m20-'+name+'.json') for name in ('status','route','stop'))
             command=[sys.executable,str(contract_root/'tools/register.py'),'--base-url',os.environ['PIPELINE_BACKEND_URL'].rstrip('/')+'/api/v1/business','--namespace',os.environ['INSTANCE_NAMESPACE']]
             if os.getenv('CLEANUP_MODE')=='simulation':command.append('--simulate-device')
             subprocess.run(command+[str(path) for path in configs],env=dict(env,CAPABILITY_SERVICE_ID='hxjm-pipeline',CAPABILITY_SERVICE_TOKEN=os.environ['PIPELINE_TOKEN']),check=True)
-            subprocess.run([sys.executable,str(BASE/'register.py'),'--state','/config/business.json','--base-url',os.environ['PIPELINE_BACKEND_URL'].rstrip('/')+'/api/v1/business','--feature-url',os.environ['PIPELINE_REID_URL'],'--algorithm',os.getenv('VIDEO_ANALYSIS_ALGORITHM','botsort')],env=env,check=True)
+            subprocess.run([sys.executable,str(BASE/'register.py'),'--state','/config/business.json','--base-url',os.environ['PIPELINE_BACKEND_URL'].rstrip('/')+'/api/v1/business','--feature-url',os.environ['PIPELINE_REID_URL'],'--algorithm','botsort'],env=env,check=True)
+            if os.getenv('GARBAGE_ENABLED','false').lower()=='true':
+                subprocess.run([sys.executable,str(BASE/'register.py'),'--state','/config/business.json','--base-url',os.environ['PIPELINE_BACKEND_URL'].rstrip('/')+'/api/v1/business','--feature-url',os.environ['PIPELINE_REID_URL'],'--algorithm','garbage'],env=env,check=True)
         else:raise ValueError('Use plan, render, initialize, rebuild --confirm TARGETS, upgrade, check, or register')
     except Exception as e:
         # Do not include credentials/SQL/connection strings from driver exceptions.

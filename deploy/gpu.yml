@@ -19,3 +19,13 @@ services:
             - ${REID_GPU_UUID:-unassigned}
             capabilities:
             - gpu
+  garbage-analysis:
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            device_ids:
+            - ${GARBAGE_GPU_UUID:-unassigned}
+            capabilities:
+            - gpu

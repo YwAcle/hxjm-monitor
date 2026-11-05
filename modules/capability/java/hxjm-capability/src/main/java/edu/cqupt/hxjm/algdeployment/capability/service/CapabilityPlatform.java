@@ -22,8 +22,11 @@ import static edu.cqupt.hxjm.algdeployment.business.store.BusinessValues.*;
 @ConditionalOnProperty(prefix="hxjm.business",name="enabled",havingValue="true")
 public class CapabilityPlatform {
     private static final Logger LOG=LoggerFactory.getLogger(CapabilityPlatform.class);
-    private final edu.cqupt.hxjm.devices.M20RouteAdapter devices=new edu.cqupt.hxjm.devices.M20RouteAdapter();
-    @javax.annotation.PreDestroy public void closeDevices(){devices.close();}
+    private edu.cqupt.hxjm.devices.DeviceAdapters devices;
+    @org.springframework.beans.factory.annotation.Autowired public void setDevices(edu.cqupt.hxjm.devices.DeviceAdapters devices){this.devices=devices;}
+    private org.springframework.context.ApplicationEventPublisher events;
+    @org.springframework.beans.factory.annotation.Autowired public void setEvents(org.springframework.context.ApplicationEventPublisher events){this.events=events;}
+    @javax.annotation.PreDestroy public void closeDevices(){if(devices!=null){devices.close();}}
     private final String executorId=UUID.randomUUID().toString();
     private final BusinessStore store;
     private final CapabilityExecutionProperties config;
@@ -39,16 +42,14 @@ public class CapabilityPlatform {
     }
     public Map<String,Object> operation(String service,Map<String,Object> execution){
         fields(execution,"adapter","operation","result_type","schema_version");
-        if(!Arrays.asList("http","m20_route","m20_mock").contains(text(execution,"adapter",16))){throw BusinessException.invalid("不支持该能力适配器");}
+        text(execution,"adapter",64);
         Map<String,CapabilityExecutionProperties.Operation> operations=config.getServices().get(service);
         CapabilityExecutionProperties.Operation op=operations==null?null:operations.get(text(execution,"operation",64));
         if(op==null){throw BusinessException.invalid("服务或操作未在可信配置登记");}
         if(!op.getAdapter().equals(execution.get("adapter"))){throw BusinessException.invalid("Adapter must match trusted configuration");}
         if(!"http".equals(op.getAdapter())){
-            URI device=URI.create(op.getUrl());boolean simulated="m20_mock".equals(op.getAdapter());
-            if(!simulated&&(!Arrays.asList("ws","wss").contains(device.getScheme())||device.getHost()==null||device.getUserInfo()!=null||!"/control".equals(device.getPath())||device.getQuery()!=null||device.getFragment()!=null)){throw BusinessException.invalid("M20 /control URL required");}
-            if(simulated&&!"mock://local".equals(op.getUrl())){throw BusinessException.invalid("Mock endpoint must be mock://local");}
-            return values("adapter",op.getAdapter(),"url",op.getUrl(),"required_operation",op.getRequiredOperation(),"credential_ref",op.getCredentialRef());
+            try{devices.get(op.getAdapter()).validate(op.getUrl(),op.getDeviceOperation());}catch(IllegalArgumentException invalid){throw BusinessException.invalid(invalid.getMessage());}
+            return values("adapter",op.getAdapter(),"url",op.getUrl(),"device_operation",op.getDeviceOperation(),"exclusive",op.isExclusive(),"required_operation",op.getRequiredOperation(),"credential_ref",op.getCredentialRef());
         }
         URI uri;
         try{uri=URI.create(op.getUrl());}catch(RuntimeException invalid){throw BusinessException.invalid("服务URL无效");}
@@ -190,9 +191,9 @@ public class CapabilityPlatform {
                 Map<String,Object> payload=map(map(snapshot.get("input")).get("payload"));
                 Map<String,Object> result;
                 // A lost socket cannot identify the external run after restart. Require operator reconciliation.
-                boolean unresolved="m20_route".equals(operation.get("adapter"))&&store.jdbc().queryForObject("SELECT count(*) FROM public.business_task t JOIN public.task_attempt a ON a.task_id=t.task_id WHERE a.run_id<>?::uuid AND t.execution_snapshot->'operation'->>'url'=? AND a.send_phase='sending' AND (a.state='running' OR a.error_code IN ('REMOTE_OUTCOME_UNKNOWN','DEVICE_SESSION_LOST'))",Long.class,task.get("run_id"),operation.get("url"))>0;
-                if(unresolved){result=values("state","failed","simulated",false,"external_task_id",null,"protocol_request_id",task.get("run_id"),"route",payload.get("route"),"error_code","DEVICE_RECONCILIATION_REQUIRED");}
-                else{result=devices.submit(task.get("run_id").toString(),text(operation,"url",2048),text(payload,"route",16),"m20_mock".equals(operation.get("adapter")));}
+                boolean unresolved=Boolean.TRUE.equals(operation.get("exclusive"))&&store.jdbc().queryForObject("SELECT count(*) FROM public.business_task t JOIN public.task_attempt a ON a.task_id=t.task_id WHERE a.run_id<>?::uuid AND t.execution_snapshot->'operation'->>'url'=? AND a.send_phase='sending' AND (a.state='running' OR a.error_code IN ('REMOTE_OUTCOME_UNKNOWN','DEVICE_SESSION_LOST'))",Long.class,task.get("run_id"),operation.get("url"))>0;
+                if(unresolved){result=values("state","failed","simulated",false,"external_task_id",null,"protocol_request_id",task.get("run_id"),"error_code","DEVICE_RECONCILIATION_REQUIRED");}
+                else{result=devices.get(text(operation,"adapter",64)).submit(task.get("run_id").toString(),text(operation,"url",2048),text(operation,"device_operation",64),payload);}
                 store.jdbc().update("UPDATE public.task_attempt SET external_execution=?::jsonb,lease_until=now()+interval '60 seconds' WHERE run_id=?::uuid",json(result),task.get("run_id"));
                 return;
             }
@@ -208,7 +209,8 @@ public class CapabilityPlatform {
     public void pollDevices(){
         for(Map<String,Object> task:store.jdbc().queryForList("SELECT t.*,a.run_id,a.execution_token,a.external_execution::text FROM public.business_task t JOIN public.task_attempt a ON a.run_id=t.current_run_id WHERE t.dispatch_mode='platform_managed' AND t.execution_namespace=? AND t.state='running' AND t.expires_at>now() AND a.executor_id=? AND a.external_execution IS NOT NULL",namespace(),executorId)){
             Map<String,Object> previous=parse(task.get("external_execution").toString());
-            Map<String,Object> result="running".equals(previous.get("state"))?devices.poll(task.get("run_id").toString()):previous;
+            edu.cqupt.hxjm.devices.DeviceAdapter device=devices.get(text(map(parse(task.get("execution_snapshot").toString()).get("operation")),"adapter",64));
+            Map<String,Object> result="running".equals(previous.get("state"))?device.poll(task.get("run_id").toString()):previous;
             previous.putAll(result);result=previous;
             store.jdbc().update("UPDATE public.task_attempt SET external_execution=?::jsonb,lease_until=now()+interval '60 seconds' WHERE run_id=?::uuid AND state='running'",json(result),task.get("run_id"));
             if("running".equals(result.get("state"))){continue;}
@@ -218,8 +220,8 @@ public class CapabilityPlatform {
             if(success){Map<String,Object> execution=map(parse(task.get("execution_snapshot").toString()).get("execution"));completion.put("outputs",Arrays.asList(values("result_type",execution.get("result_type"),"schema_version",execution.get("schema_version"),"producer_result_key","device-feedback","payload",result)));}
             else{completion.put("error_code",result.getOrDefault("error_code","DEVICE_EXECUTION_FAILED"));}
             terminal(actor,completion,success);
-            devices.release(task.get("run_id").toString());
-            new GarbageBusinessService(store).refreshCleanup(task.get("task_id").toString());
+            device.release(task.get("run_id").toString());
+            if(events!=null){events.publishEvent(new TaskExecutionChanged(task.get("task_id").toString()));}
         }
     }
     public void recover(){
@@ -228,7 +230,7 @@ public class CapabilityPlatform {
                 String code="sending".equals(row.get("send_phase"))?"REMOTE_OUTCOME_UNKNOWN":"EXECUTION_INTERRUPTED_BEFORE_SEND";
                 jdbc.update("UPDATE public.task_attempt SET state='failed',error_code=?,finished_at=now(),lease_until=NULL WHERE run_id=?",code,row.get("run_id"));
                 jdbc.update("UPDATE public.business_task SET state='failed',error_code=?,revision=revision+1,updated_at=now() WHERE task_id=?",code,row.get("task_id"));
-                devices.release(row.get("run_id").toString());
+                for(Map<String,Object> adapter:devices.describe()){devices.get(adapter.get("adapter").toString()).release(row.get("run_id").toString());}
             }return null;
         });
     }

@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, Download, Eraser } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './RightSidebar.module.css';
+import { monitoringReports } from '../../services/monitorReports';
 import { useLLMReportWebSocket } from '../../contexts/LLMReportWebSocketContext';
 import VideoModal from '../VideoModal/VideoModal';
 import PedestrianSearchResult from './PedestrianSearchResult';
@@ -85,7 +86,7 @@ function LogReport() {
   
   // 显示最新的 20 条报告（按时间倒序）
   const displayReports = useMemo(() => {
-    return reports
+    return monitoringReports(reports)
       .slice()
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, 20);

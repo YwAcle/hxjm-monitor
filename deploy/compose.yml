@@ -71,7 +71,7 @@ services:
     - ${DATA_ROOT}:/data
     environment:
       SERVER_PORT: '8080'
-      SPRING_CONFIG_ADDITIONAL_LOCATION: file:/config/backend.yml
+      SPRING_CONFIG_ADDITIONAL_LOCATION: file:/config/backend.yml,optional:file:/config/joyai-backend.yml
       SPRING_DATASOURCE_DRUID_MASTER_URL: jdbc:mysql://${MYSQL_HOST:-mysql}:${MYSQL_PORT:-3306}/${MYSQL_DATABASE:-hxjm_sm}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
       SPRING_DATASOURCE_DRUID_MASTER_USERNAME: ${MYSQL_USER:-root}
       SPRING_DATASOURCE_DRUID_MASTER_PASSWORD: ${MYSQL_PASSWORD:-}
@@ -96,6 +96,8 @@ services:
     mem_limit: 1536m
     cpus: 2
     pids_limit: 256
+    extra_hosts:
+    - host.docker.internal:host-gateway
     ports:
     - ${BACKEND_PORT:-18580}:8080
   analysis:
@@ -112,7 +114,7 @@ services:
       dockerfile: deploy/containers/python.Dockerfile
       args:
         REVISION: ${REVISION:-unknown}
-        RUNTIME: ${ANALYSIS_RUNTIME:-analysis}
+        RUNTIME: analysis
         PIP_INDEX_URL: ${PYTHON_PACKAGE_INDEX:-https://pypi.org/simple}
       network: ${BUILD_NETWORK:-default}
     shm_size: 512m
@@ -125,7 +127,7 @@ services:
     - ${SOURCE_ROOT}/modules/perception-devices/vendor:/app/vendor:ro
     - ${SOURCE_ROOT}/modules/infrastructure/python:/app/infrastructure:ro
     environment:
-      VIDEO_ANALYSIS_ALGORITHM: ${VIDEO_ANALYSIS_ALGORITHM:-botsort}
+      VIDEO_ANALYSIS_ALGORITHM: botsort
       GARBAGE_MODEL_PATH: ${GARBAGE_MODEL_PATH:-}
       GARBAGE_DEVICE: ${GARBAGE_DEVICE:-cuda}
       VIDEO_ANALYSIS_WORKERS: '1'
@@ -147,10 +149,10 @@ services:
       VIDEO_RESULTS_BUSINESS_BASE_URL: http://backend:8080/api/v1/business
       VIDEO_RESULTS_SERVICE_ID: hxjm-pipeline
       VIDEO_RESULTS_SERVICE_TOKEN: ${PIPELINE_TOKEN}
-      VIDEO_RESULTS_SOURCE_MAP_FILE: /config/${VIDEO_RESULTS_SOURCE_MAP:-tracking-sources.json}
+      VIDEO_RESULTS_SOURCE_MAP_FILE: /config/tracking-sources.json
       VIDEO_RESULTS_SPOOL_DIR: /runtime/tracking-results
-      VIDEO_RESULTS_CAPABILITY_CODE: ${VIDEO_RESULTS_CAPABILITY_CODE:-person.tracking}
-      VIDEO_RESULTS_IMPLEMENTATION_CODE: ${VIDEO_ANALYSIS_ALGORITHM:-botsort}
+      VIDEO_RESULTS_CAPABILITY_CODE: person.tracking
+      VIDEO_RESULTS_IMPLEMENTATION_CODE: botsort
       VIDEO_RESULTS_IMPLEMENTATION_VERSION: configured
     command:
     - python
@@ -420,7 +422,8 @@ services:
       CLEANUP_MODE: ${CLEANUP_MODE:-disabled}
       CLEANUP_SOURCE_ROUTES: ${CLEANUP_SOURCE_ROUTES:-{}}
       M20_CONTROL_URL: ${M20_CONTROL_URL:-}
-      VIDEO_ANALYSIS_ALGORITHM: ${VIDEO_ANALYSIS_ALGORITHM:-botsort}
+      VIDEO_ANALYSIS_ALGORITHM: botsort
+      GARBAGE_ENABLED: ${GARBAGE_ENABLED:-false}
       CAPABILITY_EXECUTOR_ENABLED: ${CAPABILITY_EXECUTOR_ENABLED:-false}
       GALLERY_BUSINESS_URL: ${GALLERY_BUSINESS_URL:-}
       PUBLIC_HOST: ${PUBLIC_HOST:-127.0.0.1}
@@ -466,3 +469,91 @@ services:
     - tcp
     - ${TEST_PUBLISH_URL:-rtsp://mediamtx:8554/test-input}
     restart: unless-stopped
+
+  garbage-analysis:
+    init: true
+    restart: unless-stopped
+    user: ${LOCAL_UID:-1000}:${LOCAL_GID:-1000}
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+    labels:
+      hxjm.revision: ${REVISION:-unknown}
+    image: ${GARBAGE_IMAGE:-hxjm/garbage:v0.2-compose1}
+    profiles:
+    - garbage
+    build:
+      context: ..
+      dockerfile: deploy/containers/python.Dockerfile
+      args:
+        REVISION: ${REVISION:-unknown}
+        RUNTIME: garbage
+        PIP_INDEX_URL: ${PYTHON_PACKAGE_INDEX:-https://pypi.org/simple}
+      network: ${BUILD_NETWORK:-default}
+    shm_size: 512m
+    volumes:
+    - ${MODEL_ROOT}:/models:ro
+    - ${RUNTIME_ROOT}/garbage:/runtime
+    - ${RUNTIME_ROOT}/config:/config:ro
+    - ${DATA_ROOT}:/data
+    - ${SOURCE_ROOT}/modules/perception-devices/python:/app/python:ro
+    - ${SOURCE_ROOT}/modules/perception-devices/vendor:/app/vendor:ro
+    - ${SOURCE_ROOT}/modules/infrastructure/python:/app/infrastructure:ro
+    environment:
+      VIDEO_ANALYSIS_ALGORITHM: garbage
+      GARBAGE_MODEL_PATH: ${GARBAGE_MODEL_PATH:-}
+      GARBAGE_DEVICE: ${GARBAGE_DEVICE:-cuda}
+      VIDEO_ANALYSIS_WORKERS: '1'
+      VIDEO_ANALYSIS_GPU: '0'
+      VIDEO_ANALYSIS_CAMERAS: ${ANALYSIS_CAMERAS:-}
+      VIDEO_ANALYSIS_SOURCE_IDS: ${SOURCE_IDS:-}
+      VIDEO_ANALYSIS_RECORDING_ENABLED: 'no'
+      VIDEO_ANALYSIS_RECORDING_ROOT: /data
+      VIDEO_ANALYSIS_RECORDING_SEGMENT_SECONDS: ${RECORDING_SEGMENT_SECONDS:-3600}
+      VIDEO_ANALYSIS_BUSINESS_CONFIG: /config/business.json
+      HXJM_PIPELINE_TOKEN: ${PIPELINE_TOKEN:-}
+      BOTSORT_ROOT: /models/botsort
+      VIDEO_ANALYSIS_SYNC_FPS: ${ANALYSIS_SYNC_FPS:-4}
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      PYTHONPATH: /app/python:/app/vendor/botsort:/app/infrastructure
+      HOME: /runtime
+      TORCH_HOME: /runtime/torch
+      VIDEO_RESULTS_PERSIST_ENABLED: 'true'
+      VIDEO_RESULTS_BUSINESS_BASE_URL: http://backend:8080/api/v1/business
+      VIDEO_RESULTS_SERVICE_ID: hxjm-pipeline
+      VIDEO_RESULTS_SERVICE_TOKEN: ${PIPELINE_TOKEN}
+      VIDEO_RESULTS_SOURCE_MAP_FILE: /config/garbage-sources.json
+      VIDEO_RESULTS_SPOOL_DIR: /runtime/garbage-results
+      VIDEO_RESULTS_CAPABILITY_CODE: garbage.detection
+      VIDEO_RESULTS_IMPLEMENTATION_CODE: garbage
+      VIDEO_RESULTS_IMPLEMENTATION_VERSION: configured
+    command:
+    - python
+    - -m
+    - uvicorn
+    - video_analysis.app:app
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8010'
+    - --workers
+    - '1'
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen("http://127.0.0.1:8010/health",timeout=3)
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 90s
+    mem_limit: 5g
+    cpus: 2
+    pids_limit: 256
+    ports:
+    - ${GARBAGE_ANALYSIS_PORT:-28134}:8010
+    extra_hosts:
+    - host.docker.internal:host-gateway

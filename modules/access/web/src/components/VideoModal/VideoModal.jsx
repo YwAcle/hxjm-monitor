@@ -376,7 +376,7 @@ function VideoPlayback({ url }) {
 }
 
 // 统一的视频弹窗组件
-function VideoModal({ visible, url, title, time, onClose }) {
+function VideoModal({ visible, url, title, time, onClose, report }) {
   if (!visible) return null;
 
   // 使用 Portal 渲染到 body，避免受父容器样式影响
@@ -394,8 +394,9 @@ function VideoModal({ visible, url, title, time, onClose }) {
           </button>
         </div>
         {/* 视频播放器 */}
-        <div className={styles.videoModalBody}>
+        <div className={`${styles.videoModalBody} ${report ? styles.withReport : ''}`}>
           <VideoPlayback url={url} />
+        {report && <div className={styles.videoReport}>{report}</div>}
         </div>
       </div>
     </div>,

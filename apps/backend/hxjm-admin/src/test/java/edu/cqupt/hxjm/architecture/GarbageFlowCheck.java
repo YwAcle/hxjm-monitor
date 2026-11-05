@@ -26,13 +26,14 @@ public class GarbageFlowCheck {
                 String source=jdbc.queryForObject("SELECT id::text FROM public.camera ORDER BY id LIMIT 1",String.class);
                 BusinessSecurityProperties security=new BusinessSecurityProperties();
                 BusinessSecurityProperties.ServiceIdentity grant=new BusinessSecurityProperties.ServiceIdentity();grant.setToken("local-fixture-only");grant.setSourceIds(new LinkedHashSet<>(Arrays.asList(source)));
-                grant.setOperations(new LinkedHashSet<>(Arrays.asList("tasks.submit","tasks.start","capabilities.register","instances.configure","result_types.register","results.register","cleanup.execute")));
+                grant.setOperations(new LinkedHashSet<>(Arrays.asList("tasks.end","tasks.submit","tasks.start","capabilities.register","instances.configure","result_types.register","results.register","cleanup.execute","devices.query","devices.execute")));
                 security.getServices().put("hxjm-pipeline",grant);BusinessAuthentication auth=new BusinessAuthentication(security,store);auth.afterPropertiesSet();
                 BusinessActor actor=auth.serviceActor("hxjm-pipeline","tasks.submit");
                 BusinessDataAccess data=new BusinessDataAccess(store,null);
                 CapabilityExecutionProperties execution=new CapabilityExecutionProperties();execution.setEnabled(true);execution.setNamespace("stage4-test");
-                CapabilityExecutionProperties.Operation op=new CapabilityExecutionProperties.Operation();op.setAdapter("m20_mock");op.setUrl("mock://local");op.setRequiredOperation("cleanup.execute");op.setCredentialRef("hxjm-pipeline");execution.getServices().put("robot-dog",Collections.singletonMap("cleanup",op));
+                CapabilityExecutionProperties.Operation op=new CapabilityExecutionProperties.Operation();op.setDeviceOperation("route.start");op.setAdapter("m20_mock");op.setUrl("mock://local");op.setRequiredOperation("cleanup.execute");op.setCredentialRef("hxjm-pipeline");execution.getServices().put("robot-dog",Collections.singletonMap("cleanup",op));
                 CapabilityPlatform platform=new CapabilityPlatform(store,execution,auth,data);
+                platform.setDevices(new edu.cqupt.hxjm.devices.DeviceAdapters(Arrays.asList(new edu.cqupt.hxjm.devices.M20RouteAdapter(),new edu.cqupt.hxjm.devices.M20MockAdapter())));
                 CapabilityTaskService tasks=new CapabilityTaskService(store,data,new BusinessTaskInputs(data,null));
                 try{java.lang.reflect.Field f=CapabilityTaskService.class.getDeclaredField("platform");f.setAccessible(true);f.set(tasks,platform);}catch(Exception e){throw new IllegalStateException(e);}
                 try{
@@ -58,6 +59,9 @@ public class GarbageFlowCheck {
                     body.put("results",Arrays.asList(values("result_id",nextResult,"producer_result_key","frame-2","start_at",iso(now),"payload",values("has_target",true,"targets",Arrays.asList(target)))));
                     map(body.get("analysis_coverage")).put("result_ids",Arrays.asList(result,nextResult));
                     expect(list(results.register(actor,body).get("accepted_result_ids")).size()==1,"next observation must persist");
+                    Map<String,Object> end=values("request_id",id(),"task_id",started.get("task_id"),"run_id",started.get("run_id"),"expected_revision",started.get("revision"),"state","succeeded","result_ids",Arrays.asList(result));
+                    expect("succeeded".equals(tasks.endRuntime(actor,end).get("state")),"runtime end must succeed, never cancelled");
+                    expect("succeeded".equals(tasks.endRuntime(actor,end).get("state")),"runtime end acknowledgement must be idempotent");
                     String event=jdbc.queryForObject("SELECT id::text FROM public.business_event WHERE event_type='garbage.detected'",String.class);
                     expect(jdbc.queryForObject("SELECT count(*) FROM public.business_event WHERE event_type='garbage.detected'",Integer.class)==1,"dedup event");
                     GarbageBusinessService garbage=new GarbageBusinessService(store);CleanupProperties config=new CleanupProperties();config.setEnabled(true);config.getRoutes().put(source,"route1");
@@ -73,6 +77,18 @@ public class GarbageFlowCheck {
                     expect("open".equals(state.get("state")),"simulation must never mark event physically cleaned");
                     expect(jdbc.queryForObject("SELECT count(*) FROM public.task_output WHERE task_id=?::uuid",Integer.class,cleanup.get("task_id"))==1,"must persist task output");
                     expect(list(controller.events(request).get("items")).size()==1,"public page API must show event");
+                    for(String name:Arrays.asList("status","route","stop")){
+                        Map<String,Object> deviceContract=parse(new String(Files.readAllBytes(Paths.get("contracts/capability-v1/device-m20-"+name+".json")),java.nio.charset.StandardCharsets.UTF_8));
+                        Map<String,Object> definition=map(deviceContract.get("capability"));definition.put("request_id",id());tasks.capability(actor,definition);
+                        Map<String,Object> output=map(deviceContract.get("result_type"));output.put("request_id",id());if("status".equals(name)){tasks.resultType(actor,output);}
+                        CapabilityExecutionProperties.Operation deviceOp=new CapabilityExecutionProperties.Operation();deviceOp.setAdapter("m20_mock");deviceOp.setUrl("mock://local");deviceOp.setDeviceOperation("status".equals(name)?"device.status":"route."+("route".equals(name)?"start":"stop"));deviceOp.setExclusive("route".equals(name));deviceOp.setRequiredOperation("status".equals(name)?"devices.query":"devices.execute");
+                        execution.getServices().put("device-test-"+name,Collections.singletonMap(name,deviceOp));
+                        Map<String,Object> deviceInstance=map(deviceContract.get("instance"));String iid=id();map(deviceInstance.get("execution")).put("adapter","m20_mock");deviceInstance.putAll(values("request_id",id(),"instance_id",iid,"instance_key","stage4-test","capability_code","device.m20."+name,"service_ref","device-test-"+name));tasks.instance(actor,deviceInstance);
+                        Map<String,Object> payload=values("source_ids",Arrays.asList(source));if("route".equals(name)){payload.put("route","route2");}
+                        Map<String,Object> submittedDevice=tasks.submit(actor,values("request_id",id(),"task_kind","device.m20."+name,"capability_code","device.m20."+name,"instance_id",iid,"task_mode","once","input",values("kind","capability_call","payload",payload),"requested_outputs",Arrays.asList("device.operation")));
+                        platform.tick();platform.tick();
+                        expect("succeeded".equals(jdbc.queryForObject("SELECT state FROM public.business_task WHERE task_id=?::uuid",String.class,submittedDevice.get("task_id"))),"generic "+name+" operation must finish via registry");
+                    }
                     // A previous uncertain device run must block a different new run even after in-memory sessions disappear.
                     String endpoint="ws://robot.invalid:8765/control";
                     jdbc.update("UPDATE public.business_task SET execution_snapshot=jsonb_set(execution_snapshot,'{operation,url}',to_jsonb(?::text)) WHERE task_id=?::uuid",endpoint,cleanup.get("task_id"));

@@ -214,3 +214,5 @@ apps/llm/.capability-deps/
 # Historical database snapshots may contain old business data; retain locally only.
 /references/database-snapshots/
 /references/stream-variants/base/postgresql/public.sql
+
+!/scripts/joyai-tool.sh

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import styles from './RealTimeAlarm.module.css';
+import JoyAlarmCards from './JoyAlarmCards';
 import { useAlarmWebSocket } from '../../../../contexts/AlarmWebSocketContext';
 import { normalizeImageSrc } from '../../../../utils/imageSrc';
 import VideoModal from '../../../VideoModal/VideoModal';
@@ -28,6 +29,7 @@ function RealTimeAlarm() {
   // 排序时如果时间戳相同，使用 id 作为次要排序条件，确保排序稳定
   const displayAlarms = useMemo(() => {
     return recentAlarms
+      .filter(alarm => !/fight|fall|打架|跌倒/i.test([alarm.type, alarm.event_type, alarm.title].join(' ')))
       .slice()  // 创建副本
       .sort((a, b) => {
         // 首先按时间戳倒序（最新的在前）
@@ -99,7 +101,8 @@ function RealTimeAlarm() {
       </div>
       
       {/* 告警列表 */}
-      <div className={`${styles.contentContainer} flex-col justify-end`}>
+      <div className={`${styles.contentContainer} flex-col`}>
+        <JoyAlarmCards />
         <div className={`${styles.alarmGrid} flex-row`}>
           <div className={`${styles.alarmList} flex-row`}>
             {displayAlarms.length > 0 ? (

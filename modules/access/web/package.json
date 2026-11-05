@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node --test src/services/garbageCleanup.test.js video-proxy.test.js src/components/VideoModal/videoPlaybackPolicy.test.js src/components/CenterPanel/components/MonitorGrid/WebRTCPlayer/webrtcPolicy.test.js src/contexts/alarmExpiryPolicy.test.js src/services/agentChat.test.js src/services/pedestrianSearch.test.js src/utils/detectionProtocol.test.js src/utils/detectionChannel.test.js src/utils/videoAlignment.test.js src/utils/alignedVideoRenderer.test.js src/utils/exactVideoRenderer.test.js",
+    "test": "node --test src/services/joyaiAlarms.test.js src/services/garbageCleanup.test.js video-proxy.test.js src/components/VideoModal/videoPlaybackPolicy.test.js src/components/CenterPanel/components/MonitorGrid/WebRTCPlayer/webrtcPolicy.test.js src/contexts/alarmExpiryPolicy.test.js src/services/agentChat.test.js src/services/pedestrianSearch.test.js src/utils/detectionProtocol.test.js src/utils/detectionChannel.test.js src/utils/videoAlignment.test.js src/utils/alignedVideoRenderer.test.js src/utils/exactVideoRenderer.test.js",
     "build": "vite build",
     "preview": "vite preview"
   },

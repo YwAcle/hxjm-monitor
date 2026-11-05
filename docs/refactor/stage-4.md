@@ -27,7 +27,7 @@
 
 正式 React 页面 `/garbage-cleanup`，主监控页有入口；复用 businessApi HTTP 客户端。可看检测时间、来源、类别、区域、置信度、成果/证据引用、任务和执行反馈，手动提交，5秒刷新。不依赖旧监控 WebSocket Provider，不向机器人发控制指令。当前持续成果没有自动保存截图，页面如实显示未提供截图，不用假图代替证据。
 
-算法部署沿用 analysis 服务，新增 `ANALYSIS_RUNTIME=garbage` 构建依赖（已有 torch2.5 环境加 transformers），配置 `VIDEO_ANALYSIS_ALGORITHM=garbage`、`VIDEO_RESULTS_CAPABILITY_CODE=garbage.detection`、`VIDEO_RESULTS_SOURCE_MAP=garbage-sources.json`、本地 GARBAGE_MODEL_PATH 和 GARBAGE_DEVICE。Compose 默认 cuda，继续要求显式分配 analysis GPU；直接 Python 运行支持显式 cpu。一个 Runtime 实例只运行一种算法，本阶段没有让跟踪和垃圾检测在同一 Worker 中混跑。
+后续整合已将垃圾检测调整为独立 `garbage-analysis` 服务（garbage 构建依赖），单独配置 GARBAGE_ENABLED、GARBAGE_GPU_UUID、GARBAGE_MODEL_PATH 和 GARBAGE_DEVICE。主 analysis 固定 botsort，不再用算法变量切换。每个实例独立运行，详见 [主监控与设备整合](monitor-device-integration.md)。
 
 Docker COPY、Maven reactor、Compose 参数、start 模型预检、bootstrap render/register、权威能力定义均同步更新。算法登记为垃圾模式时不依赖 ReID 特征流水线。公共业务与设备注册复用原登记工具，不另建 Registry。
 

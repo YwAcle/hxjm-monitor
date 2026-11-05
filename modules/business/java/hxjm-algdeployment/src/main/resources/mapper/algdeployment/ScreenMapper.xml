@@ -9,9 +9,17 @@
         from camera
     </select>
 
+    <sql id="currentAnomalies">
+        (select 'fire'::text as anomaly_name,created_at from vad where anomaly_name='fire'
+         union all
+         select substring(event_type from 10) as anomaly_name,start_at as created_at
+         from business_event where event_type in ('behavior.fight','behavior.fall')
+         and conclusion_json->>'label'='confirmed' and expires_at>now()) current_anomalies
+    </sql>
+
     <select id="selectVadAnomalyTotal" resultType="java.lang.Long">
         select count(1)
-        from vad
+        from <include refid="currentAnomalies"/>
         where anomaly_name in ('fight', 'fire', 'fall')
     </select>
 
@@ -19,14 +27,14 @@
         select
             anomaly_name as type,
             count(1) as count
-        from vad
+        from <include refid="currentAnomalies"/>
         where anomaly_name in ('fight', 'fire', 'fall')
         group by anomaly_name
     </select>
 
     <select id="selectVadAnomalyTotalToday" resultType="java.lang.Long">
         select count(1)
-        from vad
+        from <include refid="currentAnomalies"/>
         where anomaly_name in ('fight', 'fire', 'fall')
           and created_at >= date_trunc('day', now())
           and created_at &lt; date_trunc('day', now()) + interval '1 day'
@@ -36,7 +44,7 @@
         select
             anomaly_name as type,
             count(1) as count
-        from vad
+        from <include refid="currentAnomalies"/>
         where anomaly_name in ('fight', 'fire', 'fall')
           and created_at >= date_trunc('day', now())
           and created_at &lt; date_trunc('day', now()) + interval '1 day'
@@ -129,7 +137,7 @@
             left join media_asset ma on ma.id = v.media_asset_id
             left join camera_stream cs on cs.stream_name = substring(trim(v.stream_id) from '(camera_[0-9]+)')
             left join camera c on c.id = cs.camera_id
-            where v.anomaly_name in ('fight', 'fire', 'fall')
+            where v.anomaly_name = 'fire'
         ) a
         order by a.sort_ts desc
         limit 5
@@ -177,7 +185,7 @@
             left join media_asset ma on ma.id = v.media_asset_id
             left join camera_stream cs on cs.stream_name = substring(trim(v.stream_id) from '(camera_[0-9]+)')
             left join camera c on c.id = cs.camera_id
-            where v.anomaly_name in ('fight', 'fire', 'fall')
+            where v.anomaly_name = 'fire'
         ) a
         order by a.sort_ts desc
         limit 1

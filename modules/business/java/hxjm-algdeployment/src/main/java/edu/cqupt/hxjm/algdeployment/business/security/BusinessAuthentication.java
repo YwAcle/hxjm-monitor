@@ -27,7 +27,7 @@ public class BusinessAuthentication implements InitializingBean {
     private final BusinessSecurityProperties properties;
     private final BusinessStore store;
     private static final Set<String> SHARED_OPERATIONS = Collections.unmodifiableSet(new LinkedHashSet<>(Arrays.asList(
-            "cleanup.submit", "sources.query", "assets.query", "media.resolve", "results.query", "assets.upload",
+            "behavior.review", "cleanup.submit", "sources.query", "assets.query", "media.resolve", "results.query", "assets.upload",
             "identities.register", "identities.query", "tracklets.query", "activities.query", "events.query", "reports.query",
             "queries.create", "queries.get", "queries.select", "search.execute", "samples.query")));
 

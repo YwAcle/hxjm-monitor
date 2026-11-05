@@ -55,6 +55,8 @@
 .contentContainer {
   background-color: rgba(62, 135, 206, 0.08);
   height: 230px;
+  overflow-y: auto;
+  justify-content: flex-start;
   border: 1px solid;
   width: 1302px;
 }
@@ -62,12 +64,14 @@
 .alarmGrid {
   width: 1254px;
   height: 180px;
+  flex-shrink: 0;
   margin: 12px 0 0 24px;
 }
 
 .alarmList {
   width: 1254px;
   height: 180px;
+  flex-shrink: 0;
   overflow: hidden;
 }
 
@@ -187,4 +191,34 @@
   opacity: 1;
 }
 
+
+
+.joyStatus { color: #b9d9ef; font-size: 15px; padding: 9px 20px 3px; min-height: 23px; flex-shrink: 0; }
+.joyCards { display: flex; gap: 12px; padding: 8px 20px; overflow-x: auto; flex: 0 0 180px; }
+.joyCard { display: flex; flex-direction: column; gap: 5px; flex: 0 0 238px; padding: 8px;
+  background: #122d48; color: #e4f0fa; border: 1px solid #39749c; border-radius: 6px; text-align: left;
+  cursor: pointer; font: inherit; font-size: 13px; position: relative; overflow: hidden; }
+.joyCard:focus-visible { outline: 3px solid #56d3ff; outline-offset: 2px; }
+.joyPlayback { display: flex; flex-direction: column; gap: 3px; border: 0; padding: 0;
+  background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; width: 100%; }
+.joyPlayback:focus-visible, .joyReviewButton:focus-visible { outline: 2px solid #56d3ff; }
+.joyPlayback[aria-disabled="true"] { cursor: default; }
+.joyReviewButton { border: 1px solid #6999ba; border-radius: 4px; background: #183c59;
+  color: #deefff; padding: 3px 6px; font: inherit; font-size: 12px; cursor: pointer; margin-top: auto; }
+.joyReviewButton:disabled { opacity: .6; cursor: default; }
+.joyBadge { color: inherit; font-weight: 600; padding-right: 76px; }
+.joySuspected { border-color: #f5c451; background: #352f1d; }
+.joySuspected .joyBadge, .joySuspected .joyStage { color: #ffda70; }
+.joyConfirmed { border-color: #ff6269; background: #3c202c; }
+.joyConfirmed .joyBadge { color: #ff747a; }
+.joyExcluded { border-color: #718298; background: #202d3d; }
+.joyExcluded .joyBadge { color: #b1bdcc; }
+.joyStage { font-size: 12px; padding-right: 76px; }
+.joyCard[aria-disabled="true"] { cursor: default; }
+.joySummary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.joyEmpty { color: #94aabf; margin: auto; font-size: 16px; }
+.joyReport { color: #e4f0fa; background: #102039; padding: 12px 20px; max-height: 28vh;
+  overflow-y: auto; font-size: 15px; line-height: 1.6; }
+.joyReport p { margin: 5px 0; }
+.joyThumbnail { width: 70px; height: 45px; object-fit: cover; position: absolute; right: 8px; top: 8px; }
 

@@ -1,0 +1,115 @@
+{
+  "capability": {
+    "capability_code": "device.m20.status",
+    "display_name": "机器狗状态查询",
+    "object_types": [
+      "device"
+    ],
+    "input_kinds": [
+      "capability_call"
+    ],
+    "contract": {
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "const": "capability_call"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source_ids"
+            ],
+            "properties": {
+              "source_ids": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 36,
+                  "maxLength": 36
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "payload"
+        ],
+        "additionalProperties": false
+      },
+      "parameters_schema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "output_types": [
+        "device.operation"
+      ]
+    },
+    "agent": {
+      "enabled": true,
+      "read_only": true,
+      "tool_name": "m20_status",
+      "description": "查询外部机器狗路线服务的真实运行状态"
+    }
+  },
+  "result_type": {
+    "type_code": "device.operation",
+    "schema_version": "1",
+    "json_schema": {
+      "type": "object",
+      "required": [
+        "state",
+        "simulated",
+        "external_task_id",
+        "protocol_request_id"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "succeeded"
+          ]
+        },
+        "simulated": {
+          "type": "boolean"
+        },
+        "external_task_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "protocol_request_id": {
+          "type": "string"
+        },
+        "route": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "max_inline_bytes": 65536
+  },
+  "instance": {
+    "implementation_code": "m20.route",
+    "implementation_version": "1",
+    "source_ids": [],
+    "resource_scope": {
+      "scope_type": "global",
+      "resource_ids": []
+    },
+    "dispatch_mode": "platform_managed",
+    "service_ref": "robot-dog",
+    "execution": {
+      "adapter": "m20_route",
+      "operation": "status",
+      "result_type": "device.operation",
+      "schema_version": "1"
+    }
+  }
+}

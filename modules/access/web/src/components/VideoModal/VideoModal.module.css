@@ -206,3 +206,9 @@
   box-shadow: 0 0 10px rgba(65, 177, 255, 0.3);
 }
 
+
+.videoReport { max-height: 35vh; overflow: auto; padding: 16px; color: #d8eaff; white-space: pre-wrap; }
+
+.withReport { flex-direction: column; overflow-y: auto; min-height: 0; }
+.withReport .webrtcPlayerContainer { width: 100%; flex-shrink: 0; }
+.withReport .videoPlayer { max-height: 45vh; }

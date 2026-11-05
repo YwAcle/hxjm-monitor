@@ -61,7 +61,7 @@ class Entrypoints(unittest.TestCase):
             calls=log.read_text().splitlines()
             self.assertEqual(len(calls),1)
             self.assertTrue(calls[0].endswith(' stop frontend'),calls)
-        self.assertEqual(sorted(p.name for p in (ROOT/'scripts').iterdir()),['start.sh','stop.sh'])
+        self.assertEqual(sorted(p.name for p in (ROOT/'scripts').iterdir()),['joyai-tool.sh','start.sh','stop.sh'])
     def test_occupied_algorithm_port_is_reused_without_gpu_or_start(self):
         with tempfile.TemporaryDirectory() as t, socket.socket() as listener:
             listener.bind(('127.0.0.1',0));listener.listen()
