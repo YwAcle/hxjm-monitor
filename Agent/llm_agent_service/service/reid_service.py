@@ -20,14 +20,10 @@ from langchain_core.messages import BaseMessage, HumanMessage
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-from llm_chat_service.db.reid_repo import list_reid_targets, list_persons_by_name
-from llm_chat_service.db.tracklet_repo import list_tracklets_for_persons, TrackletRow
-from llm_chat_service.db.report_repo import list_reports_for_persons
-from llm_api_service.db.vad_repo import list_vad_anomalies, VADRow
+from llm_agent_service.db.reid_repo import list_reid_targets, list_persons_by_name
+from llm_agent_service.db.tracklet_repo import list_tracklets_for_persons, TrackletRow
+from llm_agent_service.db.report_repo import list_reports_for_persons
+from llm_agent_service.db.vad_repo import list_vad_anomalies, VADRow
 from llm_agent_service.service.memory import SessionMemoryStore
 from llm_agent_service.tools.time_parser import parse_time
 from llm_report_service.llm.vision import decode_base64_image, image_to_data_url

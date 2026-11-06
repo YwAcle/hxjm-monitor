@@ -81,6 +81,13 @@ class ClipReIDClient:
         return self._request("POST", "/v1/reid/person-crops",
                              files={"file": ("screenshot.png", buffer.getvalue(), "image/png")})
 
+    def query_feature(self, image, *, bbox=None, feature=None):
+        """编码查询图并返回 (归一化向量, 特征空间)；用于数据库内 pgvector 检索。"""
+        with self._lock:
+            space = self.health()["feature_space_id"]
+            query = self._feature(feature, space) if feature is not None else self._encode(image, space, bbox)
+            return query, space
+
     def query_gallery(self, image, rows, *, bbox=None, feature=None):
         with self._lock:
             space = self.health()["feature_space_id"]

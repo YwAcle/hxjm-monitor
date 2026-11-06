@@ -37,6 +37,8 @@ class ServiceConfig:
     reid_text_feature_space_id: str = ""
     reid_text_contract_id: str = ""
     reid_text_max_chars: int = 200
+    # 历史轨迹裁剪图的本地根目录；为空时候选卡片不内嵌图片。
+    media_root: str = ""
     agent_request_timeout_s: float = 180.0
     agent_answer_max_new_tokens: int = 2048
     image_asset_ttl_s: int = 1800

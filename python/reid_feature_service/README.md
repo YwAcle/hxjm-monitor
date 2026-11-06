@@ -35,6 +35,17 @@ conda activate reid
 python -m pip install --target .run/reid-feature-deps -r python/reid_feature_service/requirements.txt
 PYTHONPATH="$PWD/.run/reid-feature-deps" REID_FEATURE_PORT=28024 \
   python python/reid_feature_service/server.py
+
+cd /data/nfs_storage/hxjm-zwd
+
+REID_FEATURE_HOST=0.0.0.0 \
+REID_FEATURE_PORT=28024 \
+REID_FEATURE_WEIGHTS=/data/nfs_storage/hxjm_datas/models/reid/MSMT17_clipreid_RN50_120.pth \
+REID_FEATURE_CONFIG=/data/nfs_storage/hxjm-zwd/python/reid/config/cnn_base.yml \
+REID_FEATURE_YOLO_WEIGHTS=/data/nfs_storage/hxjm_datas/models/reid/yolov8n.pt \
+REID_FEATURE_DEVICE=cuda:1 \
+python python/reid_feature_service/server.py
+
 ```
 
 默认监听 `127.0.0.1:28024`，通过 `REID_FEATURE_HOST` / `REID_FEATURE_PORT` 覆盖。

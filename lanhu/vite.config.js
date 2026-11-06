@@ -22,12 +22,12 @@ export default defineConfig({
     proxy: {
       ...videoProxies(),
       '/api/chat': {
-        target: 'http://192.168.96.202:8012',
+        target: 'http://127.0.0.1:8002',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/api/sessions': {
-        target: 'http://192.168.96.202:8012',
+        target: 'http://127.0.0.1:8002',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },

@@ -137,6 +137,11 @@ def main():
     parser.add_argument("--reid-text-contract-id", default=os.getenv("REID_TEXT_CONTRACT_ID", ""))
     parser.add_argument("--reid-text-max-chars", type=int, default=int(os.getenv("REID_TEXT_MAX_CHARS", "200")))
     parser.add_argument(
+        "--media-root",
+        default=os.getenv("AGENT_MEDIA_ROOT", ""),
+        help="历史轨迹裁剪图根目录，需与 media_asset.storage_key 拼接；为空时不内嵌图片",
+    )
+    parser.add_argument(
         "--image-asset-ttl-s",
         type=int,
         default=int(os.getenv("IMAGE_ASSET_TTL_S", "1800")),
@@ -211,6 +216,7 @@ def main():
         reid_text_feature_space_id=args.reid_text_feature_space_id,
         reid_text_contract_id=args.reid_text_contract_id,
         reid_text_max_chars=args.reid_text_max_chars,
+        media_root=args.media_root,
         agent_request_timeout_s=args.agent_request_timeout_s,
         agent_answer_max_new_tokens=args.agent_answer_max_new_tokens,
         image_asset_ttl_s=args.image_asset_ttl_s,

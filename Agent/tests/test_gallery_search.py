@@ -2,8 +2,11 @@
 
 import base64
 import json
+import tempfile
 import unittest
+from datetime import datetime, timezone
 from io import BytesIO
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -13,6 +16,10 @@ from llm_agent_service.agent.executor import AgentExecutor
 from llm_agent_service.app import create_app
 from llm_agent_service.config import DbConfig, ServiceConfig
 from llm_agent_service.db.gallery_repo import GalleryTarget, list_gallery
+from llm_agent_service.db.identity_repo import (
+    FeatureSpaceInfo, IdentityCandidate, IdentityOccurrence,
+    get_feature_space, list_occurrences,
+)
 from llm_agent_service.service.gallery_search import GallerySearchService
 from llm_agent_service.service.text_reid_client import TextTooLongError
 from llm_agent_service.tools.default_tools import build_default_registry
@@ -38,56 +45,149 @@ class GallerySearchTests(unittest.TestCase):
             text_feature_client=self.text_features, text_max_chars=20,
         )
 
-    @patch("llm_agent_service.service.gallery_search.list_gallery")
-    def test_ranks_clipreid_features_and_skips_missing_images(self, gallery):
-        gallery.return_value = [target("B"), target("A"), target("C", image="")]
-        self.features.query_gallery.return_value = ([1, 0], {"A": [1, 0], "B": [0, 1]}, "clipreid-test")
+    @patch("llm_agent_service.service.gallery_search.list_occurrences")
+    @patch("llm_agent_service.service.gallery_search.search_identities")
+    @patch("llm_agent_service.service.gallery_search.count_searchable_features")
+    @patch("llm_agent_service.service.gallery_search.get_feature_space")
+    def test_ranks_identity_features_and_returns_real_trajectories(
+            self, space, count, search, occurrences):
+        space.return_value = FeatureSpaceInfo("clipreid-test", "person", 2, "cosine", True)
+        count.return_value = 2
+        self.features.query_feature.return_value = ([1, 0], "clipreid-test")
+        search.return_value = [
+            IdentityCandidate("A", "temporary", 7, None, None, 0.9,
+                              datetime(2026, 11, 3, 1, 0, tzinfo=timezone.utc),
+                              datetime(2026, 11, 3, 2, 0, tzinfo=timezone.utc), 2),
+        ]
+        occurrences.return_value = [
+            IdentityOccurrence("A", "t-2", "source-1", "摄像头001",
+                               datetime(2026, 11, 3, 1, 30, tzinfo=timezone.utc),
+                               datetime(2026, 11, 3, 2, 0, tzinfo=timezone.utc),
+                               "asset-2", 2,
+                               datetime(2026, 11, 3, 1, 0, tzinfo=timezone.utc),
+                               datetime(2026, 11, 3, 2, 0, tzinfo=timezone.utc)),
+        ]
         result = self.service.search_image(image_data(), 1)
         self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["scope"], "identity_history")
+        self.assertEqual(result["scanned_count"], 2)
         self.assertEqual(result["compatible_count"], 2)
-        self.assertEqual(result["skipped_count"], 1)
         self.assertEqual(result["method"], "remote_clipreid")
         self.assertEqual(result["embedding_model"], "clipreid-test")
-        self.assertEqual(result["candidates"][0]["person_id"], "A")
-        self.assertAlmostEqual(result["candidates"][0]["similarity"], 1)
-        self.features.query_gallery.assert_called_once()
+        candidate = result["candidates"][0]
+        self.assertEqual(candidate["person_id"], "A")
+        self.assertEqual(candidate["identity_id"], "A")
+        self.assertEqual(candidate["label"], "临时身份 #7")
+        self.assertAlmostEqual(candidate["similarity"], 0.9)
+        self.assertEqual(candidate["occurrence_count"], 2)
+        self.assertEqual(candidate["occurrences"][0]["camera"], "摄像头001")
+        self.assertEqual(candidate["occurrences"][0]["access_url"],
+                         "/api/v1/business/assets/asset-2/content")
+        self.features.query_feature.assert_called_once()
+        search.assert_called_once_with(
+            self.service.engine, "public", "clipreid-test", "[1.0,0.0]", 1)
+        occurrences.assert_called_once_with(
+            self.service.engine, "public", ["A"], per_identity=5)
 
-    @patch("llm_agent_service.service.gallery_search.list_gallery")
-    def test_missing_and_invalid_images_do_not_search(self, gallery):
+    def test_missing_and_invalid_images_do_not_search(self):
         self.assertEqual(self.service.search_image("", 5)["status"], "missing_image")
         with self.assertRaisesRegex(ValueError, "无法解码"):
             self.service.search_image("invalid image", 5)
-        gallery.assert_not_called()
-        self.features.query_gallery.assert_not_called()
+        self.features.query_feature.assert_not_called()
 
-    @patch("llm_agent_service.service.gallery_search.list_gallery")
-    def test_gallery_limit_and_tie_order_are_explicit(self, gallery):
-        self.service.candidate_limit = 2
-        rows = [target("B"), target("A"), target("C")]
-        gallery.return_value = rows
-        self.features.query_gallery.return_value = ([1, 0], {"A": [1, 0], "B": [1, 0]}, "clipreid-test")
-        result = self.service.search_image(image_data(), 5)
-        self.assertTrue(result["gallery_truncated"])
-        self.assertEqual(result["scanned_count"], 2)
-        self.assertEqual(result["count"], 2)
-        self.assertEqual([item["person_id"] for item in result["candidates"]], ["A", "B"])
-        gallery.assert_called_once_with(self.service.engine, "public", 3)
-        self.assertEqual(self.features.query_gallery.call_args.args[1], rows[:2])
+    @patch("llm_agent_service.service.gallery_search.search_identities")
+    @patch("llm_agent_service.service.gallery_search.count_searchable_features")
+    @patch("llm_agent_service.service.gallery_search.get_feature_space")
+    def test_empty_space_and_unassigned_features_are_distinct(self, space, count, search):
+        self.features.query_feature.return_value = ([1, 0], "clipreid-test")
+        space.return_value = FeatureSpaceInfo("clipreid-test", "person", 2, "cosine", True)
+        count.return_value = 2
+        search.return_value = []
+        self.assertEqual(self.service.search_image(image_data(), 5)["status"],
+                         "no_identity_candidates")
+        count.return_value = 0
+        self.assertEqual(self.service.search_image(image_data(), 5)["status"], "empty_history")
 
-    @patch("llm_agent_service.service.gallery_search.list_gallery")
-    def test_empty_gallery_and_unusable_photos_are_distinct(self, gallery):
-        self.features.query_gallery.return_value = ([1, 0], {}, "clipreid-test")
-        gallery.return_value = []
-        self.assertEqual(self.service.search_image(image_data(), 5)["status"], "empty_gallery")
-        gallery.return_value = [target("A", image="invalid")]
-        self.assertEqual(self.service.search_image(image_data(), 5)["status"], "no_valid_images")
+    @patch("llm_agent_service.service.gallery_search.count_searchable_features")
+    @patch("llm_agent_service.service.gallery_search.get_feature_space")
+    def test_feature_space_version_is_checked(self, space, count):
+        self.features.query_feature.return_value = ([1, 0], "clipreid-test")
+        space.return_value = None
+        self.assertEqual(self.service.search_image(image_data(), 5)["status"],
+                         "feature_space_missing")
+        count.assert_not_called()
+        for info in (
+            FeatureSpaceInfo("clipreid-test", "person", 2, "l2", True),
+            FeatureSpaceInfo("clipreid-test", "car", 2, "cosine", True),
+            FeatureSpaceInfo("clipreid-test", "person", 3, "cosine", True),
+            FeatureSpaceInfo("clipreid-test", "person", 2, "cosine", False),
+        ):
+            with self.subTest(info=info):
+                space.return_value = info
+                self.assertEqual(self.service.search_image(image_data(), 5)["status"],
+                                 "feature_space_incompatible")
+        count.assert_not_called()
 
-    @patch("llm_agent_service.service.gallery_search.list_gallery")
-    def test_clipreid_failure_is_not_reported_as_no_match(self, gallery):
-        gallery.return_value = [target("A")]
-        self.features.query_gallery.side_effect = ValueError("CLIP-ReID 服务请求失败")
+    @patch("llm_agent_service.service.gallery_search.get_feature_space")
+    def test_clipreid_failure_is_not_reported_as_no_match(self, space):
+        self.features.query_feature.side_effect = ValueError("CLIP-ReID 服务请求失败")
         with self.assertRaisesRegex(ValueError, "请求失败"):
             self.service.search_image(image_data(), 5)
+        space.assert_not_called()
+
+    def test_identity_repository_rejects_unsafe_schema_and_empty_ids(self):
+        with self.assertRaises(ValueError):
+            get_feature_space(MagicMock(), 'public"; DROP TABLE x', "space")
+        self.assertEqual(list_occurrences(MagicMock(), "public", [], 5), [])
+
+    def test_identity_candidate_embeds_local_crop_preview(self):
+        with tempfile.TemporaryDirectory() as root:
+            crop = Path(root) / "images" / "history" / "a.jpg"
+            crop.parent.mkdir(parents=True)
+            crop.write_bytes(b"\xff\xd8crop")
+            service = GallerySearchService(
+                engine=MagicMock(), schema="public", feature_client=self.features,
+                text_feature_client=self.text_features, media_root=root,
+            )
+            candidate = IdentityCandidate(
+                "A", "temporary", 7, None, None, 0.9, None, None, 1)
+            occurrence = IdentityOccurrence(
+                "A", "t-1", "source-1", "摄像头001",
+                datetime(2026, 11, 3, 1, 30, tzinfo=timezone.utc),
+                datetime(2026, 11, 3, 2, 0, tzinfo=timezone.utc),
+                "asset-1", 1,
+                datetime(2026, 11, 3, 1, 30, tzinfo=timezone.utc),
+                datetime(2026, 11, 3, 2, 0, tzinfo=timezone.utc),
+                storage_key="images/history/a.jpg", content_type="image/jpeg",
+            )
+            preview = service._identity_candidate(candidate, [occurrence])["image_base64"]
+        self.assertTrue(preview.startswith("data:image/jpeg;base64,"))
+        self.assertEqual(base64.b64decode(preview.split(",", 1)[1]), b"\xff\xd8crop")
+
+    def test_candidate_preview_rejects_unsafe_or_unreadable_files(self):
+        with tempfile.TemporaryDirectory() as root:
+            media = Path(root) / "media"
+            media.mkdir()
+            (Path(root) / "outside.jpg").write_bytes(b"secret")
+            crop = media / "images" / "history" / "a.jpg"
+            crop.parent.mkdir(parents=True)
+            crop.write_bytes(b"\xff\xd8crop")
+            service = GallerySearchService(
+                engine=MagicMock(), schema="public", feature_client=self.features,
+                text_feature_client=self.text_features, media_root=media,
+            )
+            cases = (
+                SimpleNamespace(storage_key="../outside.jpg", content_type="image/jpeg"),
+                SimpleNamespace(storage_key="images/history/missing.jpg", content_type="image/jpeg"),
+                SimpleNamespace(storage_key="images/history/a.jpg", content_type="text/html"),
+                SimpleNamespace(storage_key=None, content_type="image/jpeg"),
+            )
+            for row in cases:
+                with self.subTest(row=row):
+                    self.assertIsNone(service._preview_data_url(row))
+            service.media_root = None
+            self.assertIsNone(service._preview_data_url(
+                SimpleNamespace(storage_key="images/history/a.jpg", content_type="image/jpeg")))
 
     @patch("llm_agent_service.service.gallery_search.list_gallery")
     def test_text_search_ranks_chinese_clip_features(self, gallery):

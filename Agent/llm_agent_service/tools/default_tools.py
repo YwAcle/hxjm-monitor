@@ -54,7 +54,7 @@ class EmptyArgs(BaseModel):
 
 class ImageSearchArgs(BaseModel):
     image_base64: str = Field(default="", description="服务器从本次上传图片注入，模型必须省略，不得生成或复制 Base64。第一版要求单人裁剪图。")
-    top_k: int = Field(default=5, ge=1, le=10, description="最多返回的相似登记照片数；相似度不是身份正确率。")
+    top_k: int = Field(default=5, ge=1, le=10, description="最多返回的相似身份候选数；相似度不是身份正确率。")
 
 
 class DescriptionSearchArgs(BaseModel):
@@ -90,7 +90,7 @@ def _find_person(service: ReidService, query: str) -> dict[str, Any]:
 
 
 def _tracklets(service: ReidService, args: PersonQueryArgs) -> dict[str, Any]:
-    from llm_chat_service.db.tracklet_repo import list_tracklets_for_persons
+    from llm_agent_service.db.tracklet_repo import list_tracklets_for_persons
     names = service._detect_person_names(args.query)
     person_ids = service._get_person_ids(names)
     time_range = service._parse_time_range(args.time_prompt)
@@ -101,7 +101,7 @@ def _tracklets(service: ReidService, args: PersonQueryArgs) -> dict[str, Any]:
 
 
 def _reports(service: ReidService, args: PersonQueryArgs) -> dict[str, Any]:
-    from llm_chat_service.db.report_repo import list_reports_for_persons
+    from llm_agent_service.db.report_repo import list_reports_for_persons
     names = service._detect_person_names(args.query)
     person_ids = service._get_person_ids(names)
     time_range = service._parse_time_range(args.time_prompt)
@@ -113,7 +113,7 @@ def _reports(service: ReidService, args: PersonQueryArgs) -> dict[str, Any]:
 
 def _reports_by_time(service: ReidService, args: ReportQueryArgs) -> dict[str, Any]:
     """查询指定时间内的全部报告，不要求先指定人员。"""
-    from llm_chat_service.db.report_repo import list_reports_global
+    from llm_agent_service.db.report_repo import list_reports_global
 
     time_range = service._parse_time_range(args.time_prompt)
     rows = list_reports_global(
@@ -146,7 +146,7 @@ def _reports_by_time(service: ReidService, args: ReportQueryArgs) -> dict[str, A
 
 
 def _vad(service: ReidService, args: VadArgs) -> dict[str, Any]:
-    from llm_api_service.db.vad_repo import list_recent_vad_anomalies, list_vad_anomalies
+    from llm_agent_service.db.vad_repo import list_recent_vad_anomalies, list_vad_anomalies
     latest_words = ("最近一次", "最新", "离现在最近", "last", "latest", "most recent")
     is_latest = args.mode == "latest" or any(word in args.time_prompt.lower() for word in latest_words)
     if is_latest:
@@ -202,20 +202,25 @@ def build_default_registry(service: ReidService, gallery_search: GallerySearchSe
     if gallery_search is not None:
         registry.register(ToolSpec(
             "search_pedestrians_in_screenshot",
-            "用户要求用监控截图、含多人或人数不明确的图片找登记行人时使用。单人自动提特征检索；多人返回候选框等待用户明确选择；无人时提示重传。不能自行挑最大框或最高分框。图片由服务器注入。",
+            "用户要求用监控截图、含多人或人数不明确的图片找相似行人时使用。单人会提取特征后检索已入库历史轨迹身份；"
+            "多人返回候选框等待用户明确选择；无人时提示重传。不能自行挑最大框或最高分框。图片由服务器注入。"
+            "结果候选是临时或登记身份及真实轨迹出现记录，不是实时位置。",
             ImageSearchArgs, lambda a: gallery_search.search_screenshot(a.image_base64, a.top_k),
         ))
         registry.register(ToolSpec(
             "search_pedestrians_by_image",
-            "用户明确要求用上传的单人图片查找相似登记行人时使用。只搜索 reid_target 有效登记库，"
-            "通过 CLIP-ReID 服务对登记照片和查询图提取同一特征空间的特征，返回候选姓名、ID、照片和相似度。图片由服务器注入。"
-            "模型或接口不可用时如实说明未执行匹配；不能用姓名名单替代。不是身份确认，不查实时摄像头、历史轨迹或出现时间。",
+            "用户明确要求用上传的单人图片查找相似行人时使用。通过 CLIP-ReID 编码查询图，"
+            "在样本管线已写入的新轨迹身份表（identity/feature/track_identity_assignment/tracklet）中做余弦检索，"
+            "返回身份候选、相似度以及该身份最近的真实轨迹出现记录（时间、摄像头、素材ID）。图片由服务器注入。"
+            "临时身份没有姓名，不能编造姓名；相似度不是身份确认。模型或接口不可用时如实说明未执行匹配，"
+            "不得说没有匹配人员。结果只覆盖当前保留期内的轨迹，不查实时摄像头。",
             ImageSearchArgs, lambda a: gallery_search.search_image(a.image_base64, a.top_k),
         ))
         registry.register(ToolSpec(
             "search_pedestrians_by_description",
-            "用户主动按衣着、颜色、背包等外观描述找登记行人时使用。调用远端 Chinese-CLIP 文本特征接口，"
-            "把描述编码为与登记照片同一特征空间的向量，在最多2000条有效登记记录中按余弦相似度返回候选姓名、ID、照片和相似度。"
+            "用户主动按衣着、颜色、背包等外观描述找登记人员时使用。调用远端 Chinese-CLIP 文本特征接口，"
+            "把描述编码为与登记照片同一特征空间的向量，在旧登记照片库中按余弦相似度返回候选姓名、ID、照片和相似度。"
+            "该工具不检索新历史轨迹特征，因为新表当前只有 CLIP-ReID 图片特征，没有兼容的文本空间。"
             "结果是相似度排序，不是身份确认；没有校准阈值，不能把首位当作命中。gallery_truncated=true表示只搜索了部分登记记录。"
             "不支持按时间、摄像头筛选，不查历史出现记录；登记照片外观可能不同于当前外观。"
             "文本服务不可用时说明未完成检索，不得说没有匹配。普通图片描述、读图或数人无需调用。",

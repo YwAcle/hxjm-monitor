@@ -16,7 +16,7 @@
 | `agent/executor.py` | 读取历史，执行工具，最终保存用户文本和回答；工具观察只进入本轮消息 | 下一轮缺少结构化查询条件、事件指针和完整证据来源 |
 | `service/agent_service.py` | 普通响应与 SSE；流式阶段再次调用模型输出最终正文 | `run()` 已写入的回答可能与用户实际收到的正文不一致 |
 | `tools/default_tools.py` | 人员轨迹、人员报告、时间范围报告、VAD、名单、时间解析、图片超分 | 是结构化记忆和事件证据的主要接入点 |
-| `llm_chat_service/db/`、`llm_api_service/db/` | PostgreSQL 轨迹、事件报告与异常查询 | 可以继续作为监控事实和证据关联的权威数据源 |
+| `llm_agent_service/db/` | PostgreSQL 轨迹、事件报告与异常查询 | 可以继续作为监控事实和证据关联的权威数据源 |
 | `llm_report_service/db/report_repo.py` | 保存关联 `episode_id` 或 `vad_id` 的模型报告 | 长期事件索引应覆盖已落库报告，不只覆盖用户问过的事件 |
 | `observability.py`、现有 Agent 测试 | `trace_id`、工具结果和最终回复日志；会话和流式相关测试 | 可用于建立基线；日志不能直接当作可信长期知识 |
 
@@ -310,5 +310,5 @@ embedding 与 reranker 的部署需要检查当前 InternVL 推理服务的剩�
 - [教程：第八章 记忆与检索](../第八章%20记忆与检索.md)：8.1分层架构、8.2记忆类型和生命周期、8.3分块与扩展检索、8.4工具协作案例。
 - [会话内存实现](../service/memory.py)、[执行器](../agent/executor.py)、[普通与流式服务](../service/agent_service.py)、[应用入口](../app.py)。
 - [工具实现](../tools/default_tools.py)、[动作与引用字段](../agent/schemas.py)、[提示词](../agent/prompts.py)、[配置](../config.py)。
-- [报告查询](../../llm_chat_service/db/report_repo.py)、[轨迹查询](../../llm_chat_service/db/tracklet_repo.py)、[VAD查询](../../llm_api_service/db/vad_repo.py)、[报告保存](../../llm_report_service/db/report_repo.py)。
+- [报告查询](../db/report_repo.py)、[轨迹查询](../db/tracklet_repo.py)、[VAD查询](../db/vad_repo.py)、[报告保存](../../llm_report_service/db/report_repo.py)。
 - [前端会话接入文档](前端会话接入开发文档.md)、[原四天完善计划](Agent模块四天完善计划.md)、[执行器测试](../../tests/test_agent_executor.py)、[流式测试](../../tests/test_agent_stream.py)、[原服务会话测试](../../tests/test_sglang_agent_service.py)。
