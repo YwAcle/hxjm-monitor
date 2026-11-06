@@ -87,8 +87,8 @@ class ToolRegistryTests(unittest.TestCase):
         self.assertEqual(result.data["start"], "2026-09-18T15:00:00+08:00")
         self.assertEqual(result.data["original_text"], "明天下午3点")
 
-    @patch("llm_api_service.db.vad_repo.list_vad_anomalies")
-    @patch("llm_api_service.db.vad_repo.list_recent_vad_anomalies")
+    @patch("llm_agent_service.db.vad_repo.list_vad_anomalies")
+    @patch("llm_agent_service.db.vad_repo.list_recent_vad_anomalies")
     def test_recent_vad_query_does_not_default_to_today(self, recent_query, range_query) -> None:
         recent_query.return_value = []
         service = MagicMock(engine=object(), schema="public")
@@ -97,8 +97,8 @@ class ToolRegistryTests(unittest.TestCase):
         recent_query.assert_called_once_with(service.engine, "public", limit=1)
         range_query.assert_not_called()
 
-    @patch("llm_api_service.db.vad_repo.list_vad_anomalies")
-    @patch("llm_api_service.db.vad_repo.list_recent_vad_anomalies")
+    @patch("llm_agent_service.db.vad_repo.list_vad_anomalies")
+    @patch("llm_agent_service.db.vad_repo.list_recent_vad_anomalies")
     def test_recent_duration_uses_parsed_time_range(self, recent_query, range_query) -> None:
         service = MagicMock(engine=object(), schema="public")
         service._parse_time_range.return_value = SimpleNamespace(start_ts="start", end_ts="end")
@@ -111,7 +111,7 @@ class ToolRegistryTests(unittest.TestCase):
         range_query.assert_called_once_with(service.engine, "public", "start", "end", limit=1)
         recent_query.assert_not_called()
 
-    @patch("llm_api_service.db.vad_repo.list_recent_vad_anomalies")
+    @patch("llm_agent_service.db.vad_repo.list_recent_vad_anomalies")
     def test_vad_time_is_displayed_in_china_time(self, recent_query) -> None:
         recent_query.return_value = [SimpleNamespace(
             id="event-1",

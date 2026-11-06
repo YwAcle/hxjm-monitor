@@ -26,18 +26,16 @@ class APIModeTests(unittest.TestCase):
                                 text=True, capture_output=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_api_config_reaches_report_agent_and_chat(self):
+    def test_api_config_reaches_report_and_agent(self):
         self.run_api_python('''
 import json
 import httpx
 from langchain_core.messages import HumanMessage
 from llm_agent_service.llm import build_llm as build_agent
-from llm_chat_service.config import ModelConfig as ChatConfig
-from llm_chat_service.llm.model import build_llm as build_chat
 from llm_report_service.config import ModelConfig
 from llm_report_service.llm.factory import build_chat_model
 
-for model in (build_chat_model(ModelConfig()), build_agent(ModelConfig()), build_chat(ChatConfig())):
+for model in (build_chat_model(ModelConfig()), build_agent(ModelConfig())):
     try:
         assert model.model_name == "remote-vision-model"
         assert model.base_url == "https://example.invalid/v1"
@@ -74,15 +72,13 @@ for model in (build_chat_model(ModelConfig()), build_agent(ModelConfig()), build
 import os
 from langchain_core.messages import HumanMessage
 from llm_agent_service.llm import build_llm as build_agent
-from llm_chat_service.config import ModelConfig as ChatConfig
-from llm_chat_service.llm.model import build_llm as build_chat
 from llm_report_service.config import ModelConfig
 from llm_report_service.llm.factory import build_chat_model
 
 mode = os.environ["LLM_REMOTE_RESPONSE_FORMAT"]
 schema = {"type": "json_schema", "json_schema": {"name": "decision", "schema": {"type": "object"}}}
 messages = [HumanMessage(content="Return a JSON object")]
-for model in (build_chat_model(ModelConfig()), build_agent(ModelConfig()), build_chat(ChatConfig())):
+for model in (build_chat_model(ModelConfig()), build_agent(ModelConfig())):
     try:
         assert model.response_format_mode == mode
         for stream in (False, True):

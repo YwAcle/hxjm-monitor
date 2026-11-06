@@ -90,7 +90,7 @@ def _find_person(service: ReidService, query: str) -> dict[str, Any]:
 
 
 def _tracklets(service: ReidService, args: PersonQueryArgs) -> dict[str, Any]:
-    from llm_chat_service.db.tracklet_repo import list_tracklets_for_persons
+    from llm_agent_service.db.tracklet_repo import list_tracklets_for_persons
     names = service._detect_person_names(args.query)
     person_ids = service._get_person_ids(names)
     time_range = service._parse_time_range(args.time_prompt)
@@ -101,7 +101,7 @@ def _tracklets(service: ReidService, args: PersonQueryArgs) -> dict[str, Any]:
 
 
 def _reports(service: ReidService, args: PersonQueryArgs) -> dict[str, Any]:
-    from llm_chat_service.db.report_repo import list_reports_for_persons
+    from llm_agent_service.db.report_repo import list_reports_for_persons
     names = service._detect_person_names(args.query)
     person_ids = service._get_person_ids(names)
     time_range = service._parse_time_range(args.time_prompt)
@@ -113,7 +113,7 @@ def _reports(service: ReidService, args: PersonQueryArgs) -> dict[str, Any]:
 
 def _reports_by_time(service: ReidService, args: ReportQueryArgs) -> dict[str, Any]:
     """查询指定时间内的全部报告，不要求先指定人员。"""
-    from llm_chat_service.db.report_repo import list_reports_global
+    from llm_agent_service.db.report_repo import list_reports_global
 
     time_range = service._parse_time_range(args.time_prompt)
     rows = list_reports_global(
@@ -146,7 +146,7 @@ def _reports_by_time(service: ReidService, args: ReportQueryArgs) -> dict[str, A
 
 
 def _vad(service: ReidService, args: VadArgs) -> dict[str, Any]:
-    from llm_api_service.db.vad_repo import list_recent_vad_anomalies, list_vad_anomalies
+    from llm_agent_service.db.vad_repo import list_recent_vad_anomalies, list_vad_anomalies
     latest_words = ("最近一次", "最新", "离现在最近", "last", "latest", "most recent")
     is_latest = args.mode == "latest" or any(word in args.time_prompt.lower() for word in latest_words)
     if is_latest:
