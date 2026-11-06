@@ -7,3 +7,5 @@ pydantic>=2.7,<3
 httpx==0.28.1
 # Reuse the YOLO runtime version already installed in the reid environment.
 ultralytics==8.4.33
+# Chinese-CLIP text encoder; verified with 5.5.x in the reid environment.
+transformers>=4.40,<6
