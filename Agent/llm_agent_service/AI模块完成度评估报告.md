@@ -66,8 +66,8 @@ HTTP 请求
 
 - LLM 实现来自 `llm_report_service/llm/model.py`。
 - 图片预处理来自 `llm_report_service/llm/vision.py`。
-- ReID、轨迹、报告查询来自 `llm_chat_service/db/`。
-- VAD 查询来自 `llm_api_service/db/vad_repo.py`。
+- ReID、轨迹、报告查询来自 `llm_agent_service/db/`。
+- VAD 查询来自 `llm_agent_service/db/vad_repo.py`。
 
 这能复用已有代码，但也导致 `llm_agent_service/requirements.txt` 无法单独表达或安装该服务的完整运行依赖。
 
