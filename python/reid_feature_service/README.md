@@ -98,7 +98,11 @@ ssh -N -L 28024:127.0.0.1:28024 <用户名>@<开发服务器地址>
 CLIP-ReID 模型在启动时加载、校验参数并预热一次；Chinese-CLIP 也在启动时从
 `REID_FEATURE_TEXT_MODEL` 加载到同一设备，先编码一段固定文本和一张合成图片，
 确认两个投影输出维度一致、均为有限单位向量后才把 `text_reid.ready` 置为 true。
-该探测只验证结构与特征空间一致，不代表检索准确率。Chinese-CLIP 加载失败不会
+该探测只验证结构与特征空间一致，不代表检索准确率。共享目录当前只有
+`pytorch_model.bin`；transformers 5.x 在 torch<2.6 时会以 CVE-2025-32434 为由拒绝
+`torch.load`，因此服务对这类受信任的本地权重使用 `torch.load(weights_only=True)`
+直接加载并校验缺失参数，不要求升级整个 ReID 环境；目录若改为提供
+`model.safetensors`，则优先走 transformers 标准加载。Chinese-CLIP 加载失败不会
 中止进程：`/health` 的 `text_reid.ready=false` 并附带 `error`，文字接口返回 503，
 已有图片接口继续可用。两个模型的推理都串行放在同一专用线程；等待请求有上限，
 满时返回 503。请求取消不会终止已经运行的 PyTorch 推理，该工作完成前仍占用请求

@@ -353,7 +353,7 @@ class TextExtractor:
 
     def __init__(self, settings, device="auto"):
         import torch
-        from transformers import ChineseCLIPModel, ChineseCLIPProcessor
+        from transformers import ChineseCLIPConfig, ChineseCLIPModel, ChineseCLIPProcessor
 
         self.torch = torch
         self.model_path = Path(settings.text_model).expanduser()
@@ -370,7 +370,6 @@ class TextExtractor:
         for path in weight_files:
             weights_digest.update(path.name.encode("utf-8"))
             weights_digest.update(bytes.fromhex(sha256_file(path)))
-        config = json.loads(config_path.read_text(encoding="utf-8"))
         pipeline = json.dumps({
             "model": "chinese-clip-vit-base-patch16",
             "config": hashlib.sha256(config_path.read_bytes()).hexdigest(),
@@ -381,20 +380,50 @@ class TextExtractor:
         self.feature_space_id = settings.text_space_id.strip() or (
             "chinese-clip-vit-b16-" + hashlib.sha256(pipeline.encode("utf-8")).hexdigest()[:24])
         self.text_contract_id = settings.text_contract_id.strip() or f"{self.feature_space_id}-text-v1"
-        self.embedding_dim = int(config.get("projection_dim") or 0)
+        hf_config = ChineseCLIPConfig.from_pretrained(str(self.model_path), local_files_only=True)
+        self.embedding_dim = int(getattr(hf_config, "projection_dim", 0) or 0)
         if self.embedding_dim <= 0:
             raise ValueError("Chinese-CLIP config.json has no valid projection_dim")
-        self.max_tokens = int((config.get("text_config") or {}).get("max_position_embeddings") or 512)
+        self.max_tokens = int(getattr(getattr(hf_config, "text_config", None),
+                                      "max_position_embeddings", 512) or 512)
         if settings.text_max_tokens:
             self.max_tokens = min(self.max_tokens, settings.text_max_tokens)
         self.device = device
         if self.device == "auto":
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.processor = ChineseCLIPProcessor.from_pretrained(str(self.model_path), local_files_only=True)
-        model = ChineseCLIPModel.from_pretrained(str(self.model_path), local_files_only=True)
+        if any(path.suffix == ".safetensors" for path in weight_files):
+            model = ChineseCLIPModel.from_pretrained(str(self.model_path), local_files_only=True)
+        else:
+            model = self._load_bin_model(ChineseCLIPModel, hf_config, weight_files)
         self.model = model.float().to(self.device).eval()
         self.alignment_verified = False
         self._verify_alignment()
+
+    def _load_bin_model(self, model_class, config, weight_files):
+        """Load a trusted local .bin checkpoint when transformers refuses torch<2.6.
+
+        transformers>=5 blocks torch.load even with weights_only=True below torch 2.6
+        (CVE-2025-32434) and only waives the check for safetensors. The shared model
+        directory is a read-only deployment copy, so load its tensors directly instead
+        of upgrading the whole ReID environment. Missing or unexpected keys are still
+        validated; only the harmless position_ids buffers may differ.
+        """
+        model = model_class(config)
+        state = {}
+        for path in weight_files:
+            checkpoint = self.torch.load(str(path), map_location="cpu", weights_only=True)
+            checkpoint = checkpoint.get("state_dict", checkpoint)
+            state.update({key.removeprefix("module."): value for key, value in checkpoint.items()})
+        result = model.load_state_dict(state, strict=False)
+        parameters = dict(model.named_parameters())
+        missing = sorted(key for key in result.missing_keys if key in parameters)
+        if missing:
+            raise ValueError(f"Chinese-CLIP checkpoint is missing parameters: {missing[:5]}")
+        unexpected = [key for key in result.unexpected_keys if not key.endswith("position_ids")]
+        if unexpected:
+            LOG.warning("ignoring unexpected Chinese-CLIP checkpoint keys: %s", unexpected[:5])
+        return model
 
     def _pooled(self, output):
         if isinstance(output, self.torch.Tensor):

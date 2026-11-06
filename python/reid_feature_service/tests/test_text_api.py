@@ -1,12 +1,14 @@
 """Chinese-CLIP text API tests use an injected extractor; real weights are opt-in only."""
 
 import os
+import tempfile
 import unittest
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
+import torch
 from fastapi.testclient import TestClient
 from PIL import Image
 
@@ -170,6 +172,33 @@ class TextApiTests(unittest.TestCase):
             self.assertEqual(block["error"], "disabled")
             self.assertEqual(client.post("/v1/reid/text-reid-image-features", files={
                 "file": ("person.png", picture(), "image/png")}).status_code, 503)
+
+
+class BinLoaderTests(unittest.TestCase):
+    class TinyModel(torch.nn.Module):
+        def __init__(self, config):
+            super().__init__()
+            self.linear = torch.nn.Linear(2, 2, bias=False)
+
+    def extractor(self):
+        instance = TextExtractor.__new__(TextExtractor)
+        instance.torch = torch
+        return instance
+
+    def test_loads_trusted_bin_and_ignores_position_ids_buffers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "pytorch_model.bin"
+            torch.save({"module.linear.weight": torch.eye(2),
+                        "text_model.embeddings.position_ids": torch.arange(2)}, path)
+            model = self.extractor()._load_bin_model(self.TinyModel, object(), [path])
+        self.assertTrue(torch.equal(model.linear.weight, torch.eye(2)))
+
+    def test_missing_parameters_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "pytorch_model.bin"
+            torch.save({"text_model.embeddings.position_ids": torch.arange(2)}, path)
+            with self.assertRaises(ValueError):
+                self.extractor()._load_bin_model(self.TinyModel, object(), [path])
 
 
 class TextSettingsTests(unittest.TestCase):
