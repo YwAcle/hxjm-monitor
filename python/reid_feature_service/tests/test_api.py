@@ -38,7 +38,7 @@ class FakeExtractor:
 class ApiTests(unittest.TestCase):
     def setUp(self):
         FakeExtractor.loads = 0
-        self.app = create_app(Settings(sample_frames=2), FakeExtractor)
+        self.app = create_app(Settings(sample_frames=2), FakeExtractor, text_extractor_factory=None)
         self.client = TestClient(self.app)
         self.client.__enter__()
 
@@ -104,7 +104,7 @@ class ApiTests(unittest.TestCase):
 
     def test_per_image_pixel_and_request_limits(self):
         settings = Settings(max_image_bytes=100, max_pixels=600, max_request_bytes=2000)
-        with TestClient(create_app(settings, FakeExtractor)) as client:
+        with TestClient(create_app(settings, FakeExtractor, text_extractor_factory=None)) as client:
             response = client.post("/v1/reid/image-features", files={"file": ("a.png", b"x" * 101)})
             self.assertEqual(response.status_code, 413)
             response = client.post("/v1/reid/image-features", files={"file": ("a.png", picture(size=(30, 30)))})
@@ -135,7 +135,7 @@ class ConcurrentApiTests(unittest.IsolatedAsyncioTestCase):
                     raise RuntimeError("test did not release extractor")
                 return super().extract_features(images)
 
-        app = create_app(Settings(max_requests=1), BlockingExtractor)
+        app = create_app(Settings(max_requests=1), BlockingExtractor, text_extractor_factory=None)
         async with app.router.lifespan_context(app):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
                 first = asyncio.create_task(client.post("/v1/reid/image-features", files={"file": ("a.png", picture())}))
@@ -151,7 +151,7 @@ class ConcurrentApiTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((await client.post("/v1/reid/image-features", files={"file": ("c.png", picture())})).status_code, 200)
 
     async def test_chunked_upload_obeys_request_limit(self):
-        app = create_app(Settings(max_request_bytes=20), FakeExtractor)
+        app = create_app(Settings(max_request_bytes=20), FakeExtractor, text_extractor_factory=None)
         async def chunks():
             yield b'--example\r\nContent-Disposition: form-data; name="file"; filename="a.png"\r\n\r\n'
             yield b"y" * 15
@@ -223,7 +223,7 @@ class ScreenshotApiTests(unittest.TestCase):
                 outer.extracted_images.extend(np.asarray(image).copy() for image in images)
                 return super().extract_features(images)
 
-        self.app = create_app(Settings(), RecordingExtractor, load_detector)
+        self.app = create_app(Settings(), RecordingExtractor, load_detector, text_extractor_factory=None)
         self.client = TestClient(self.app)
         self.client.__enter__()
         image = Image.new("RGB", (40, 60), "red")
@@ -344,7 +344,7 @@ class ScreenshotApiTests(unittest.TestCase):
         def broken_detector(settings, device):
             raise FileNotFoundError("missing weights")
 
-        with TestClient(create_app(Settings(), FakeExtractor, broken_detector)) as client:
+        with TestClient(create_app(Settings(), FakeExtractor, broken_detector, text_extractor_factory=None)) as client:
             with self.assertLogs("reid_feature_service.server", level="ERROR"):
                 response = client.post("/v1/reid/person-crops", files={"file": ("a.png", self.screenshot)})
             self.assertEqual(response.status_code, 503)

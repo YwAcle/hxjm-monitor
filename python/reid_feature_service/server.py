@@ -1,4 +1,4 @@
-"""Standalone CLIP-ReID feature API; no database or video tracking dependencies."""
+"""Standalone CLIP-ReID image and Chinese-CLIP text feature API; no database or tracking dependencies."""
 
 import asyncio
 import hashlib
@@ -6,6 +6,7 @@ import importlib
 import json
 import logging
 import os
+import re
 import sys
 import types
 import uuid
@@ -25,6 +26,12 @@ from starlette.responses import JSONResponse
 
 LOG = logging.getLogger(__name__)
 REID_ROOT = Path(__file__).resolve().parents[1] / "reid"
+# Shared, read-only deployment copy; override with REID_FEATURE_TEXT_MODEL.
+DEFAULT_TEXT_MODEL = Path("/data/nfs_storage/hxjm_datas/models/reid/chinese-clip-vit-base-patch16")
+
+_PATH_FIELDS = {"weights", "config", "yolo_weights", "text_model"}
+_STRING_FIELDS = {"device", "text_space_id", "text_contract_id"}
+_OPTIONAL_BLANK_FIELDS = {"text_model", "text_space_id", "text_contract_id"}
 
 
 @dataclass(frozen=True)
@@ -32,6 +39,7 @@ class Settings:
     weights: Path = REID_ROOT / "weights/MSMT17_clipreid_RN50_120.pth"
     config: Path = REID_ROOT / "config/cnn_base.yml"
     yolo_weights: Path = REID_ROOT / "weights/yolov8n.pt"
+    text_model: Path = DEFAULT_TEXT_MODEL
     detection_confidence: float = 0.4
     device: str = "auto"
     cpu_threads: int = 2
@@ -41,12 +49,18 @@ class Settings:
     max_frames: int = 32
     sample_frames: int = 8
     max_requests: int = 8
+    text_max_chars: int = 200
+    text_max_tokens: int = 0  # 0 derives the limit from the model configuration
+    text_space_id: str = ""  # optional pinned override of the derived feature space
+    text_contract_id: str = ""  # optional pinned override of the derived text contract
 
     def __post_init__(self):
         for name in ("cpu_threads", "max_image_bytes", "max_request_bytes", "max_pixels",
-                     "max_frames", "sample_frames", "max_requests"):
+                     "max_frames", "sample_frames", "max_requests", "text_max_chars"):
             if getattr(self, name) <= 0:
                 raise ValueError(f"{name} must be positive")
+        if self.text_max_tokens < 0:
+            raise ValueError("text_max_tokens must not be negative")
         if self.sample_frames > self.max_frames:
             raise ValueError("sample_frames must not exceed max_frames")
         if not 0 < self.detection_confidence <= 1:
@@ -56,11 +70,19 @@ class Settings:
     def from_env(cls):
         values = {}
         for name in cls.__dataclass_fields__:
-            value = os.getenv(f"REID_FEATURE_{name.upper()}")
-            if value is not None:
-                values[name] = Path(value).expanduser() if name in {"weights", "config", "yolo_weights"} else (
-                    value if name == "device" else float(value) if name == "detection_confidence" else int(value)
-                )
+            raw = os.getenv(f"REID_FEATURE_{name.upper()}")
+            if raw is None:
+                continue
+            if name in _OPTIONAL_BLANK_FIELDS and not raw.strip():
+                continue
+            if name in _PATH_FIELDS:
+                values[name] = Path(raw).expanduser()
+            elif name in _STRING_FIELDS:
+                values[name] = raw
+            elif name == "detection_confidence":
+                values[name] = float(raw)
+            else:
+                values[name] = int(raw)
         return cls(**values)
 
 
@@ -73,6 +95,32 @@ class Metadata(BaseModel):
     track_id: str | None = Field(default=None, max_length=128)
     segment_id: str | None = Field(default=None, max_length=128)
     frame_ids: list[str] | None = None
+
+
+class TextRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    text: str
+    language: str = "auto"
+    template_id: str = Field(default="", max_length=128)
+    metadata: dict = Field(default_factory=dict)
+
+
+class TextTooLongError(ValueError):
+    """The text cannot be encoded without truncation."""
+
+
+_CJK = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+_LATIN = re.compile(r"[A-Za-z]")
+
+
+def detect_language(text, requested):
+    if requested and requested != "auto":
+        return requested
+    if _CJK.search(text):
+        return "zh"
+    if _LATIN.search(text):
+        return "en"
+    return "unknown"
 
 
 def fail(status, code, message):
@@ -190,6 +238,14 @@ def pool_features(features):
     return normalize_features(normalize_features(features).mean(axis=0, keepdims=True))[0]
 
 
+def sha256_file(path):
+    hasher = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
 def legacy_modules():
     # An isolated package name avoids collisions with other modules named config/model.
     name = "_hxjm_feature_clipreid"
@@ -266,14 +322,7 @@ class Extractor:
             T.Resize(tuple(cfg.INPUT.SIZE_TEST)), T.ToTensor(),
             T.Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD),
         ])
-        with settings.weights.open("rb") as weights_file:
-            digest = hashlib.file_digest(weights_file, "sha256").hexdigest() if hasattr(hashlib, "file_digest") else None
-        if digest is None:  # Python 3.10, used by the existing ReID environment.
-            hasher = hashlib.sha256()
-            with settings.weights.open("rb") as weights_file:
-                for chunk in iter(lambda: weights_file.read(1024 * 1024), b""):
-                    hasher.update(chunk)
-            digest = hasher.hexdigest()
+        digest = sha256_file(settings.weights)
         code_digest = hashlib.sha256((REID_ROOT / "CLIP-ReID/model/make_model.py").read_bytes()
                                      + (REID_ROOT / "CLIP-ReID/model/clip/model.py").read_bytes()).hexdigest()
         pipeline = json.dumps({"weights": digest, "model_code": code_digest, "config": cfg.dump(),
@@ -289,6 +338,112 @@ class Extractor:
         if result.shape != (len(images), self.embedding_dim):
             raise ValueError("unexpected CLIP-ReID output shape")
         return normalize_features(result)
+
+
+class TextExtractor:
+    """Chinese-CLIP text and image encoders sharing one projected feature space.
+
+    This space is deliberately separate from CLIP-ReID: vectors from the two models are
+    never compared or mixed. The model is loaded from a local directory only, so the
+    service never downloads weights at runtime.
+    """
+
+    model_profile = "chinese_clip_text_reid"
+    model_name = "Chinese-CLIP-ViT-B-16"
+
+    def __init__(self, settings, device="auto"):
+        import torch
+        from transformers import ChineseCLIPModel, ChineseCLIPProcessor
+
+        self.torch = torch
+        self.model_path = Path(settings.text_model).expanduser()
+        if not self.model_path.is_dir():
+            raise FileNotFoundError(f"Chinese-CLIP model directory is missing: {self.model_path}")
+        config_path = self.model_path / "config.json"
+        if not config_path.is_file():
+            raise FileNotFoundError(f"Chinese-CLIP config.json is missing: {config_path}")
+        weight_files = sorted(path for path in self.model_path.iterdir()
+                              if path.is_file() and path.suffix in {".bin", ".safetensors"})
+        if not weight_files:
+            raise FileNotFoundError(f"Chinese-CLIP weights are missing: {self.model_path}")
+        weights_digest = hashlib.sha256()
+        for path in weight_files:
+            weights_digest.update(path.name.encode("utf-8"))
+            weights_digest.update(bytes.fromhex(sha256_file(path)))
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        pipeline = json.dumps({
+            "model": "chinese-clip-vit-base-patch16",
+            "config": hashlib.sha256(config_path.read_bytes()).hexdigest(),
+            "weights": weights_digest.hexdigest(),
+            "preprocess": "rgb_resize_224_v1",
+            "text_contract": "single_text_projection_l2_v1",
+        }, sort_keys=True)
+        self.feature_space_id = settings.text_space_id.strip() or (
+            "chinese-clip-vit-b16-" + hashlib.sha256(pipeline.encode("utf-8")).hexdigest()[:24])
+        self.text_contract_id = settings.text_contract_id.strip() or f"{self.feature_space_id}-text-v1"
+        self.embedding_dim = int(config.get("projection_dim") or 0)
+        if self.embedding_dim <= 0:
+            raise ValueError("Chinese-CLIP config.json has no valid projection_dim")
+        self.max_tokens = int((config.get("text_config") or {}).get("max_position_embeddings") or 512)
+        if settings.text_max_tokens:
+            self.max_tokens = min(self.max_tokens, settings.text_max_tokens)
+        self.device = device
+        if self.device == "auto":
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.processor = ChineseCLIPProcessor.from_pretrained(str(self.model_path), local_files_only=True)
+        model = ChineseCLIPModel.from_pretrained(str(self.model_path), local_files_only=True)
+        self.model = model.float().to(self.device).eval()
+        self.alignment_verified = False
+        self._verify_alignment()
+
+    def _pooled(self, output):
+        if isinstance(output, self.torch.Tensor):
+            return output
+        vector = getattr(output, "pooler_output", None)
+        if not isinstance(vector, self.torch.Tensor):
+            raise ValueError("Chinese-CLIP did not return a projected embedding")
+        return vector
+
+    def encode_text(self, text):
+        """Return the normalized text vector and token count; never truncates silently."""
+        inputs = self.processor(text=[text], return_tensors="pt", padding=True, truncation=False)
+        inputs = {key: value.to(self.device) for key, value in dict(inputs).items()}
+        if inputs["input_ids"].shape[1] > self.max_tokens:
+            raise TextTooLongError("text exceeds the model's token limit")
+        with self.torch.inference_mode():
+            vector = self._pooled(self.model.get_text_features(**inputs)).float().cpu().numpy()
+        features = normalize_features(vector)
+        if features.shape != (1, self.embedding_dim):
+            raise ValueError("unexpected Chinese-CLIP text output shape")
+        return features[0], int(inputs["attention_mask"].sum().item())
+
+    def encode_image(self, image):
+        inputs = self.processor(images=image, return_tensors="pt")
+        pixel_values = inputs["pixel_values"].to(self.device)
+        with self.torch.inference_mode():
+            vector = self._pooled(self.model.get_image_features(pixel_values=pixel_values)).float().cpu().numpy()
+        features = normalize_features(vector)
+        if features.shape != (1, self.embedding_dim):
+            raise ValueError("unexpected Chinese-CLIP image output shape")
+        return features[0]
+
+    def _verify_alignment(self):
+        """Probe both encoders before advertising readiness.
+
+        This is a structural smoke check, not an accuracy evaluation: both projections
+        must produce finite unit vectors of the configured dimension in one shared space.
+        """
+        probe_image = Image.new("RGB", (224, 224), (128, 128, 128))
+        try:
+            text_vector, _ = self.encode_text("一名穿着深色外套的行人")
+            image_vector = self.encode_image(probe_image)
+        finally:
+            probe_image.close()
+        if text_vector.shape != image_vector.shape or text_vector.shape != (self.embedding_dim,):
+            raise ValueError("Chinese-CLIP text and image embeddings use different dimensions")
+        if not np.isfinite(np.dot(text_vector, image_vector)):
+            raise ValueError("Chinese-CLIP alignment probe produced a non-finite similarity")
+        self.alignment_verified = True
 
 
 class RequestLimits:
@@ -326,7 +481,8 @@ class RequestLimits:
             self.active -= 1
 
 
-def create_app(settings=None, extractor_factory=Extractor, detector_factory=PersonDetector):
+def create_app(settings=None, extractor_factory=Extractor, detector_factory=PersonDetector,
+               text_extractor_factory=TextExtractor):
     settings = settings or Settings.from_env()
 
     @asynccontextmanager
@@ -335,17 +491,39 @@ def create_app(settings=None, extractor_factory=Extractor, detector_factory=Pers
         app.state.ready = False
         app.state.executor = executor
         app.state.detector = None
+        app.state.text_extractor = None
+        app.state.text_ready = False
+        app.state.text_error = None
         try:
             app.state.extractor = await asyncio.get_running_loop().run_in_executor(
                 executor, extractor_factory, settings)
             app.state.ready = True
+            if text_extractor_factory is not None:
+                # Text ReID is optional: a missing or broken Chinese-CLIP model must not
+                # take down the existing CLIP-ReID image endpoints.
+                try:
+                    app.state.text_extractor = await asyncio.get_running_loop().run_in_executor(
+                        executor, text_extractor_factory, settings, app.state.extractor.device)
+                except Exception:
+                    LOG.exception("Chinese-CLIP text model initialization failed; "
+                                  "text ReID endpoints will be unavailable")
+                    app.state.text_error = "initialization_failed"
+                else:
+                    app.state.text_ready = True
+            else:
+                app.state.text_error = "disabled"
             yield
         finally:
             app.state.ready = False
+            app.state.text_ready = False
             executor.shutdown(wait=True, cancel_futures=True)
 
-    app = FastAPI(title="CLIP-ReID feature service", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(title="CLIP-ReID and Chinese-CLIP feature service", version="1.1.0",
+                  lifespan=lifespan)
     app.state.ready = False
+    app.state.text_extractor = None
+    app.state.text_ready = False
+    app.state.text_error = None
     app.add_middleware(RequestLimits, settings=settings)
 
     def feature_response(images, metadata, count, selected, aggregate):
@@ -447,15 +625,87 @@ def create_app(settings=None, extractor_factory=Extractor, detector_factory=Pers
             for file in files:
                 await file.close()
 
+    def text_feature_response(extractor, text, language, metadata):
+        vector, token_count = extractor.encode_text(text)
+        if vector.shape != (extractor.embedding_dim,):
+            raise ValueError("unexpected text embedding dimension")
+        return {
+            "request_id": str(uuid.uuid4()),
+            "feature_type": "text",
+            "model_profile": extractor.model_profile,
+            "embedding": vector.tolist(),
+            "embedding_dim": extractor.embedding_dim,
+            "feature_space_id": extractor.feature_space_id,
+            "text_contract_id": extractor.text_contract_id,
+            "normalized": True,
+            "dtype": "float32",
+            "truncated": False,
+            "language": language,
+            "token_count": token_count,
+            "text_chars": len(text),
+            "source": metadata,
+            "persistence_status": "not_requested",
+        }
+
+    def text_image_response(extractor, image):
+        vector = extractor.encode_image(image)
+        if vector.shape != (extractor.embedding_dim,):
+            raise ValueError("unexpected image embedding dimension")
+        return {
+            "request_id": str(uuid.uuid4()),
+            "feature_type": "image",
+            "model_profile": extractor.model_profile,
+            "embedding": vector.tolist(),
+            "embedding_dim": extractor.embedding_dim,
+            "feature_space_id": extractor.feature_space_id,
+            "normalized": True,
+            "dtype": "float32",
+            "image_width": image.width,
+            "image_height": image.height,
+            "source": {},
+            "persistence_status": "not_requested",
+        }
+
+    async def await_text_job(future):
+        try:
+            return await asyncio.shield(future)
+        except TextTooLongError:
+            fail(422, "TEXT_TOO_LONG", "text exceeds the model's encodable length; shorten the description")
+        except asyncio.CancelledError:
+            try:
+                await asyncio.shield(future)
+            except Exception:
+                LOG.exception("cancelled text request's extraction failed")
+            raise
+        except HTTPException:
+            raise
+        except Exception:
+            LOG.exception("Chinese-CLIP feature extraction failed")
+            fail(500, "TEXT_EXTRACTION_FAILED", "text feature extraction failed; consult service logs")
+
     @app.get("/health")
     async def health():
         extractor = getattr(app.state, "extractor", None)
+        text = getattr(app.state, "text_extractor", None)
+        text_ready = bool(getattr(app.state, "text_ready", False) and text is not None)
+        text_block = {
+            "ready": text_ready,
+            "alignment_verified": bool(getattr(text, "alignment_verified", False)) if text_ready else False,
+            "model": getattr(text, "model_name", "Chinese-CLIP-ViT-B-16"),
+            "feature_space_id": getattr(text, "feature_space_id", None),
+            "embedding_dim": getattr(text, "embedding_dim", None),
+            "text_contract_id": getattr(text, "text_contract_id", None),
+            "device": getattr(text, "device", None),
+        }
+        if not text_ready and getattr(app.state, "text_error", None):
+            text_block["error"] = app.state.text_error
         return JSONResponse({"ready": app.state.ready,
                              "model": "CLIP-ReID-RN50",
                              "feature_space_id": getattr(extractor, "feature_space_id", None),
                              "embedding_dim": getattr(extractor, "embedding_dim", None),
                              "device": getattr(extractor, "device", None),
-                             "detector_loaded": getattr(app.state, "detector", None) is not None},
+                             "detector_loaded": getattr(app.state, "detector", None) is not None,
+                             "text_reid": text_block},
                             status_code=200 if app.state.ready else 503)
 
     @app.post("/v1/reid/person-crops")
@@ -477,6 +727,41 @@ def create_app(settings=None, extractor_factory=Extractor, detector_factory=Pers
     async def tracklet_features(files: list[UploadFile] = File(...), metadata: str = Form("{}")):
         """Pool one person's crops; files and frame_ids must be in chronological order."""
         return await extract(files, metadata, True)
+
+    @app.post("/v1/reid/text-features")
+    async def text_features(request: TextRequest):
+        """Encode a search description; vectors are comparable only within this text space."""
+        if not app.state.text_ready:
+            fail(503, "TEXT_MODEL_NOT_READY", "Chinese-CLIP text model is not ready; consult service logs")
+        text = request.text.strip()
+        if not text:
+            fail(422, "TEXT_EMPTY", "text must not be empty")
+        if len(text) > settings.text_max_chars:
+            fail(422, "TEXT_TOO_LONG", f"text must not exceed {settings.text_max_chars} characters")
+        language = detect_language(text, request.language)
+        future = asyncio.get_running_loop().run_in_executor(
+            app.state.executor, text_feature_response, app.state.text_extractor, text,
+            language, request.metadata)
+        return await await_text_job(future)
+
+    @app.post("/v1/reid/text-reid-image-features")
+    async def text_reid_image_features(file: UploadFile = File(...)):
+        """Encode an enrolled-person image into the same space as the text encoder."""
+        if not app.state.text_ready:
+            fail(503, "TEXT_MODEL_NOT_READY", "Chinese-CLIP text model is not ready; consult service logs")
+        try:
+            data = await file.read(settings.max_image_bytes + 1)
+            if len(data) > settings.max_image_bytes:
+                fail(413, "IMAGE_TOO_LARGE", "image exceeds the configured byte limit")
+            image = decode_image(data, settings)
+            try:
+                future = asyncio.get_running_loop().run_in_executor(
+                    app.state.executor, text_image_response, app.state.text_extractor, image)
+                return await await_text_job(future)
+            finally:
+                image.close()
+        finally:
+            await file.close()
 
     return app
 
