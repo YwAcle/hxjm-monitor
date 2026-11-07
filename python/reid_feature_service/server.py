@@ -246,6 +246,22 @@ def sha256_file(path):
     return hasher.hexdigest()
 
 
+def canonical_definition_text(definition):
+    """Serialize a feature-space definition exactly as it is hashed for its ID."""
+    return json.dumps(definition, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def space_identity(definition_text, prefix, version, *, digest_chars=64):
+    """Derive the feature-space ID from the complete definition digest.
+
+    The business API only accepts ``fs-<sha256>`` for new spaces (and the legacy
+    ``clipreid-rn50-<first 24 hex>`` for the existing CLIP-ReID space), so the ID is
+    always derived from the exact text that is returned as ``definition_text``.
+    """
+    digest = hashlib.sha256(definition_text.encode("utf-8")).hexdigest()
+    return prefix + digest[:digest_chars], digest, version
+
+
 def legacy_modules():
     # An isolated package name avoids collisions with other modules named config/model.
     name = "_hxjm_feature_clipreid"
@@ -325,9 +341,14 @@ class Extractor:
         digest = sha256_file(settings.weights)
         code_digest = hashlib.sha256((REID_ROOT / "CLIP-ReID/model/make_model.py").read_bytes()
                                      + (REID_ROOT / "CLIP-ReID/model/clip/model.py").read_bytes()).hexdigest()
-        pipeline = json.dumps({"weights": digest, "model_code": code_digest, "config": cfg.dump(),
-                               "preprocess": "rgb_resize_tensor_v1"}, sort_keys=True)
-        self.feature_space_id = "clipreid-rn50-" + hashlib.sha256(pipeline.encode()).hexdigest()[:24]
+        # Keep the legacy serialization (Python json defaults, sort_keys) so the derived
+        # space ID remains clipreid-rn50-<24 hex> and existing 3072-d features stay valid.
+        self.definition_text = json.dumps({"weights": digest, "model_code": code_digest,
+                                           "config": cfg.dump(),
+                                           "preprocess": "rgb_resize_tensor_v1"}, sort_keys=True)
+        (self.feature_space_id, self.definition_sha256,
+         self.definition_version) = space_identity(
+            self.definition_text, "clipreid-rn50-", "legacy_python_json_v1", digest_chars=24)
         self.embedding_dim = 3072
         self.extract_features([Image.new("RGB", (128, 256))])
 
@@ -370,20 +391,36 @@ class TextExtractor:
         for path in weight_files:
             weights_digest.update(path.name.encode("utf-8"))
             weights_digest.update(bytes.fromhex(sha256_file(path)))
-        pipeline = json.dumps({
-            "model": "chinese-clip-vit-base-patch16",
-            "config": hashlib.sha256(config_path.read_bytes()).hexdigest(),
-            "weights": weights_digest.hexdigest(),
-            "preprocess": "rgb_resize_224_v1",
-            "text_contract": "single_text_projection_l2_v1",
-        }, sort_keys=True)
-        self.feature_space_id = settings.text_space_id.strip() or (
-            "chinese-clip-vit-b16-" + hashlib.sha256(pipeline.encode("utf-8")).hexdigest()[:24])
-        self.text_contract_id = settings.text_contract_id.strip() or f"{self.feature_space_id}-text-v1"
         hf_config = ChineseCLIPConfig.from_pretrained(str(self.model_path), local_files_only=True)
         self.embedding_dim = int(getattr(hf_config, "projection_dim", 0) or 0)
         if self.embedding_dim <= 0:
             raise ValueError("Chinese-CLIP config.json has no valid projection_dim")
+        # The business API registers a new space only when its ID is fs-<full digest>
+        # and the same digest is returned as definition_sha256. Keep this definition
+        # independent of runtime knobs (device, request limits, token caps) so a
+        # restart cannot silently move the space.
+        self.definition_text = canonical_definition_text({
+            "schema": "hxjm.feature-space.v1",
+            "object_type": "person",
+            "feature_kind": "text_reid",
+            "model": "chinese-clip-vit-base-patch16",
+            "config_sha256": hashlib.sha256(config_path.read_bytes()).hexdigest(),
+            "weights_sha256": weights_digest.hexdigest(),
+            "preprocess": "rgb_resize_224_v1",
+            "text_contract": "single_text_projection_l2_v1",
+            "dimensions": self.embedding_dim,
+            "normalization": "l2",
+            "metric": "cosine",
+        })
+        (derived_space, self.definition_sha256,
+         self.definition_version) = space_identity(
+            self.definition_text, "fs-", "canonical_json_v1")
+        pinned_space = settings.text_space_id.strip()
+        self.feature_space_id = pinned_space or derived_space
+        if pinned_space and pinned_space != derived_space:
+            LOG.warning("pinned text feature space %s does not match the definition digest %s",
+                        pinned_space, derived_space)
+        self.text_contract_id = settings.text_contract_id.strip() or f"{self.feature_space_id}-text-v1"
         self.max_tokens = int(getattr(getattr(hf_config, "text_config", None),
                                       "max_position_embeddings", 512) or 512)
         if settings.text_max_tokens:
@@ -724,6 +761,9 @@ def create_app(settings=None, extractor_factory=Extractor, detector_factory=Pers
             "feature_space_id": getattr(text, "feature_space_id", None),
             "embedding_dim": getattr(text, "embedding_dim", None),
             "text_contract_id": getattr(text, "text_contract_id", None),
+            "definition_text": getattr(text, "definition_text", None),
+            "definition_sha256": getattr(text, "definition_sha256", None),
+            "definition_version": getattr(text, "definition_version", None),
             "device": getattr(text, "device", None),
         }
         if not text_ready and getattr(app.state, "text_error", None):
@@ -732,6 +772,9 @@ def create_app(settings=None, extractor_factory=Extractor, detector_factory=Pers
                              "model": "CLIP-ReID-RN50",
                              "feature_space_id": getattr(extractor, "feature_space_id", None),
                              "embedding_dim": getattr(extractor, "embedding_dim", None),
+                             "definition_text": getattr(extractor, "definition_text", None),
+                             "definition_sha256": getattr(extractor, "definition_sha256", None),
+                             "definition_version": getattr(extractor, "definition_version", None),
                              "device": getattr(extractor, "device", None),
                              "detector_loaded": getattr(app.state, "detector", None) is not None,
                              "text_reid": text_block},

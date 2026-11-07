@@ -219,11 +219,13 @@ def build_default_registry(service: ReidService, gallery_search: GallerySearchSe
         registry.register(ToolSpec(
             "search_pedestrians_by_description",
             "用户主动按衣着、颜色、背包等外观描述找登记人员时使用。调用远端 Chinese-CLIP 文本特征接口，"
-            "把描述编码为与登记照片同一特征空间的向量，在旧登记照片库中按余弦相似度返回候选姓名、ID、照片和相似度。"
-            "该工具不检索新历史轨迹特征，因为新表当前只有 CLIP-ReID 图片特征，没有兼容的文本空间。"
-            "结果是相似度排序，不是身份确认；没有校准阈值，不能把首位当作命中。gallery_truncated=true表示只搜索了部分登记记录。"
+            "把描述编码为与登记身份外观特征同一空间的向量，在样本管线写入的 identity/feature/sample 表中"
+            "按余弦相似度返回候选姓名、身份ID、登记照片素材和相似度。"
+            "结果为已登记身份，不包含临时身份和轨迹出现记录；候选照片通过 access_url 读取。"
+            "结果是相似度排序，不是身份确认；没有校准阈值，不能把首位当作命中。"
+            "特征库为空或文本服务不可用时说明未完成检索，不得说没有匹配。"
             "不支持按时间、摄像头筛选，不查历史出现记录；登记照片外观可能不同于当前外观。"
-            "文本服务不可用时说明未完成检索，不得说没有匹配。普通图片描述、读图或数人无需调用。",
+            "普通图片描述、读图或数人无需调用。",
             DescriptionSearchArgs, lambda a: gallery_search.search_description(a.description, a.top_k),
         ))
     return registry

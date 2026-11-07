@@ -1,14 +1,9 @@
 """Chinese-CLIP 文本→图像检索客户端；与 CLIP-ReID 图片特征空间严格隔离。"""
 
-import hashlib
-import json
 import math
-from io import BytesIO
 from threading import Lock
 
 import httpx
-
-from llm_report_service.llm.vision import decode_base64_image
 
 
 class TextTooLongError(ValueError):
@@ -19,7 +14,6 @@ class TextReIDClient:
     method = "remote_chinese_clip_text"
     profile = "chinese_clip_text_reid"
     text_path = "/v1/reid/text-features"
-    image_path = "/v1/reid/text-reid-image-features"
 
     def __init__(self, base_url: str, timeout_s: float = 30, feature_space_id: str = "",
                  text_contract_id: str = "", max_text_chars: int = 200):
@@ -28,7 +22,6 @@ class TextReIDClient:
         self.expected_space = feature_space_id
         self.expected_contract = text_contract_id
         self.max_text_chars = max_text_chars
-        self._cache = {}
         self._lock = Lock()
 
     @staticmethod
@@ -114,14 +107,8 @@ class TextReIDClient:
             raise ValueError("Chinese-CLIP 文本编码信息无效")
         return vector, {"language": language, "token_count": token_count, "text_chars": text_chars}
 
-    def _encode_image(self, image, space, dim):
-        buffer = BytesIO()
-        image.convert("RGB").save(buffer, format="PNG")
-        data = self._request("POST", self.image_path,
-                             files={"file": ("person.png", buffer.getvalue(), "image/png")})
-        return self._feature(data, space, dim, "image")
-
-    def query_gallery(self, text: str, rows):
+    def query_text(self, text: str):
+        """Encode one appearance description in the registered-identity text space."""
         text = (text or "").strip()
         if not text:
             raise ValueError("文本描述为空")
@@ -131,24 +118,8 @@ class TextReIDClient:
             info = self.health()
             space, dim, contract = (info["feature_space_id"], info["embedding_dim"],
                                     info["text_contract_id"])
-            # 先编码文本，超长或契约不符时不会浪费登记图编码。
             query, text_info = self._encode_text(text, space, dim, contract)
-            current, vectors = {}, {}
-            for row in rows:
-                if not row.image_base64:
-                    continue
-                key = (space, row.id, hashlib.sha256(row.image_base64.encode()).hexdigest())
-                vector = self._cache.get(key)
-                if vector is None:
-                    picture = decode_base64_image(row.image_base64)
-                    if picture is None:
-                        continue
-                    vector = self._encode_image(picture, space, dim)
-                current[key] = vector
-                vectors[row.id] = vector
-            # 只保留本轮有效登记图；任一失败都中止，避免返回不完整排序。
-            self._cache = current
-            return query, vectors, {
+            return query, {
                 "feature_space_id": space, "embedding_dim": dim,
                 "text_contract_id": contract, **text_info,
             }

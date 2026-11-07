@@ -83,7 +83,7 @@ ssh -N -L 28024:127.0.0.1:28024 <用户名>@<开发服务器地址>
 | `REID_FEATURE_TEXT_MODEL` | `/data/nfs_storage/hxjm_datas/models/reid/chinese-clip-vit-base-patch16` | Chinese-CLIP 本地模型目录，只读加载，不联网下载 |
 | `REID_FEATURE_TEXT_MAX_CHARS` | 200 | 文字描述字符上限，超出返回 422 `TEXT_TOO_LONG` |
 | `REID_FEATURE_TEXT_MAX_TOKENS` | 0 | 文字 token 上限；0 使用模型位置编码上限（本模型为 512），设置后只能调小 |
-| `REID_FEATURE_TEXT_SPACE_ID` | 空 | 可选，固定文字特征空间 ID；留空时按模型文件摘要生成 |
+| `REID_FEATURE_TEXT_SPACE_ID` | 空 | 可选，固定文字特征空间 ID；留空时按规范化定义文本的 SHA-256 生成 `fs-<64 位摘要>` |
 | `REID_FEATURE_TEXT_CONTRACT_ID` | 空 | 可选，固定文本契约 ID；留空时为 `<feature_space_id>-text-v1` |
 | `REID_FEATURE_DETECTION_CONFIDENCE` | 0.4 | 行人检测置信度阈值，范围 (0, 1] |
 | `REID_FEATURE_DEVICE` | `auto` | `cpu`、`cuda`、`cuda:0` 等；auto 检测 CUDA 并尝试初始化，失败时使用 CPU |
@@ -287,8 +287,8 @@ curl -sS http://127.0.0.1:28024/v1/reid/text-features \
   "model_profile": "chinese_clip_text_reid",
   "embedding": [0.01, 0.02],
   "embedding_dim": 512,
-  "feature_space_id": "chinese-clip-vit-b16-<摘要>",
-  "text_contract_id": "chinese-clip-vit-b16-<摘要>-text-v1",
+  "feature_space_id": "fs-<定义摘要>",
+  "text_contract_id": "fs-<定义摘要>-text-v1",
   "normalized": true,
   "dtype": "float32",
   "truncated": false,
@@ -324,12 +324,39 @@ curl -sS http://127.0.0.1:28024/v1/reid/text-reid-image-features \
 `TEXT_EXTRACTION_FAILED`；图片校验沿用 `INVALID_IMAGE` / `IMAGE_TOO_LARGE` /
 `UNSUPPORTED_IMAGE_FORMAT`。
 
+### 登记身份特征写入
+
+文本检索只读取数据库 `feature` 表中与文字空间 `feature_space_id` 相同的向量，
+因此登记照片必须预先用 `/v1/reid/text-reid-image-features` 编码并写入。
+仓库提供独立的 `python/video_analysis/enrollment_text_worker.py`（与既有样本管线
+共用业务接口，仅消费 `purpose=enrollment` 的待处理样本，不处理实时帧和查询）：
+
+```bash
+cd /data/nfs_storage/hxjm-zwd/python
+ENROLLMENT_TEXT_BUSINESS_URL=http://127.0.0.1:8080/api/v1/business \
+ENROLLMENT_TEXT_SERVICE_ID=video-analysis \
+ENROLLMENT_TEXT_SERVICE_TOKEN=<service-token> \
+ENROLLMENT_TEXT_INSTANCE_ID=<feature-capability-instance-uuid> \
+ENROLLMENT_TEXT_FEATURE_URL=http://127.0.0.1:28024 \
+python -m video_analysis.enrollment_text_worker
+```
+
+该进程先读取 `/health.text_reid`，用 `definition_text` / `definition_sha256`
+注册或核对特征空间，再为每条 enrollment 样本写入 `feature`（`aggregation_method=single`、
+关联 `sample_id` 与 `identity_id`）和对应的 `feature_contribution`。它不会把
+Chinese-CLIP 向量写入 CLIP-ReID 的 3072 维空间，也不会写入轨迹实时特征。
+停止使用 Ctrl+C / SIGTERM，进程会等待当前批次后退出。
+
 ### `GET /health`
 
 就绪时 HTTP 200，返回 ready、model、embedding_dim、feature_space_id、device。
 额外的 `detector_loaded` 表示 YOLO 是否已完成构造，不代表截图检测准确率。
 `text_reid` 块描述 Chinese-CLIP：`ready`、`alignment_verified`、
 `feature_space_id`、`embedding_dim`、`text_contract_id`、`model`、`device`；
+顶层的图片空间和 `text_reid` 块都额外返回 `definition_text`、`definition_sha256`、
+`definition_version`。`definition_text` 是注册特征空间时原样提交和计算 ID 的
+JSON 文本，校验方式为 `sha256(definition_text) == definition_sha256`；
+文字空间 ID 必须是 `fs-` 加完整的 64 位摘要，不能只截取前 24 位。
 未就绪时附 `error`（`disabled` 表示启动时未启用，`initialization_failed` 表示
 加载失败，详见服务日志）。整体 `ready` 只反映 CLIP-ReID 图片模型，文字模型
 失败不会把 HTTP 状态改为 503，避免影响已有图片链路；调用文字接口前应检查

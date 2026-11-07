@@ -15,10 +15,9 @@ from PIL import Image
 from llm_agent_service.agent.executor import AgentExecutor
 from llm_agent_service.app import create_app
 from llm_agent_service.config import DbConfig, ServiceConfig
-from llm_agent_service.db.gallery_repo import GalleryTarget, list_gallery
 from llm_agent_service.db.identity_repo import (
-    FeatureSpaceInfo, IdentityCandidate, IdentityOccurrence,
-    get_feature_space, list_occurrences,
+    FeatureSpaceInfo, IdentityCandidate, IdentityOccurrence, TextIdentityCandidate,
+    count_text_identities, get_feature_space, list_occurrences, search_text_identities,
 )
 from llm_agent_service.service.gallery_search import GallerySearchService
 from llm_agent_service.service.text_reid_client import TextTooLongError
@@ -31,9 +30,18 @@ def image_data():
     return "data:image/png;base64," + base64.b64encode(output.getvalue()).decode()
 
 
-def target(person_id, image=None):
-    return GalleryTarget(person_id, "登记" + person_id, "E" + person_id,
-                         image if image is not None else image_data())
+def text_candidate(identity_id="A", name="登记A", score=1.0):
+    return TextIdentityCandidate(
+        identity_id, "registered", 7, name, "E" + identity_id, score,
+        "feature-" + identity_id, "sample-" + identity_id, "asset-" + identity_id,
+        datetime(2026, 10, 1, tzinfo=timezone.utc),
+        datetime(2026, 11, 3, tzinfo=timezone.utc), 1)
+
+
+def text_info(space="chinese-clip-test", dim=2):
+    return {"feature_space_id": space, "embedding_dim": dim,
+            "text_contract_id": "text-v1", "language": "zh",
+            "token_count": 4, "text_chars": 5}
 
 
 class GallerySearchTests(unittest.TestCase):
@@ -189,107 +197,127 @@ class GallerySearchTests(unittest.TestCase):
             self.assertIsNone(service._preview_data_url(
                 SimpleNamespace(storage_key="images/history/a.jpg", content_type="image/jpeg")))
 
-    @patch("llm_agent_service.service.gallery_search.list_gallery")
-    def test_text_search_ranks_chinese_clip_features(self, gallery):
-        gallery.return_value = [target("B"), target("A"), target("C", image="")]
-        self.text_features.query_gallery.return_value = (
-            [1, 0], {"A": [1, 0], "B": [0, 1]},
-            {"feature_space_id": "chinese-clip-test", "embedding_dim": 2,
-             "text_contract_id": "text-v1", "language": "zh",
-             "token_count": 4, "text_chars": 5},
-        )
-        result = self.service.search_description("红衣服的人", 1)
+    @patch("llm_agent_service.service.gallery_search.count_text_identities")
+    @patch("llm_agent_service.service.gallery_search.search_text_identities")
+    @patch("llm_agent_service.service.gallery_search.get_feature_space")
+    def test_text_search_ranks_registered_identity_features(self, space, search, count):
+        space.return_value = FeatureSpaceInfo("chinese-clip-test", "person", 2, "cosine", True)
+        count.return_value = 3
+        self.text_features.health.return_value = text_info()
+        self.text_features.query_text.return_value = ([1.0, 0.0], text_info())
+        search.return_value = [text_candidate("A", "张三", 0.9),
+                               text_candidate("B", None, 0.7)]
+        result = self.service.search_description("红衣服的人", 2)
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["search_type"], "text")
+        self.assertEqual(result["scope"], "registered_identity")
         self.assertEqual(result["method"], "remote_chinese_clip_text")
         self.assertEqual(result["embedding_model"], "chinese-clip-test")
         self.assertEqual(result["text_contract_id"], "text-v1")
         self.assertEqual(result["feature_dimension"], 2)
         self.assertEqual(result["scanned_count"], 3)
-        self.assertEqual(result["compatible_count"], 2)
-        self.assertEqual(result["skipped_count"], 1)
+        self.assertEqual(result["compatible_count"], 1)
         self.assertEqual(result["token_count"], 4)
-        self.assertEqual(result["candidates"][0]["person_id"], "A")
-        self.assertAlmostEqual(result["candidates"][0]["similarity"], 1)
-        self.assertNotIn("match_reason", result["candidates"][0])
-        self.text_features.query_gallery.assert_called_once()
-        self.assertEqual(self.text_features.query_gallery.call_args.args[0], "红衣服的人")
+        candidate = result["candidates"][0]
+        self.assertEqual(candidate["person_id"], "A")
+        self.assertEqual(candidate["identity_id"], "A")
+        self.assertEqual(candidate["name"], "张三")
+        self.assertEqual(candidate["asset_id"], "asset-A")
+        self.assertEqual(candidate["access_url"],
+                         "/api/v1/business/assets/asset-A/content")
+        self.assertNotIn("image_base64", candidate)
+        self.assertNotIn("match_reason", candidate)
+        self.assertEqual(result["candidates"][1]["label"], "登记身份 #7")
+        self.assertIsNone(result["candidates"][1]["name"])
+        self.text_features.query_text.assert_called_once_with("红衣服的人")
+        search.assert_called_once_with(
+            self.service.engine, "public", "chinese-clip-test", "[1.0,0.0]", 2)
 
-    @patch("llm_agent_service.service.gallery_search.list_gallery")
-    def test_text_search_gallery_limit_and_tie_order(self, gallery):
-        self.service.candidate_limit = 2
-        gallery.return_value = [target("B"), target("A"), target("C")]
-        self.text_features.query_gallery.return_value = (
-            [1, 0], {"A": [1, 0], "B": [1, 0]},
-            {"feature_space_id": "chinese-clip-test", "embedding_dim": 2,
-             "text_contract_id": "text-v1", "language": "zh",
-             "token_count": 2, "text_chars": 2},
-        )
-        result = self.service.search_description("红衣", 5)
-        self.assertTrue(result["gallery_truncated"])
-        self.assertEqual(result["scanned_count"], 2)
-        self.assertEqual([item["person_id"] for item in result["candidates"]], ["A", "B"])
-        gallery.assert_called_once_with(self.service.engine, "public", 3)
-        self.assertEqual(self.text_features.query_gallery.call_args.args[1], gallery.return_value[:2])
+    @patch("llm_agent_service.service.gallery_search.get_feature_space")
+    def test_text_space_is_checked_before_encoding(self, space):
+        self.text_features.health.return_value = text_info()
+        space.return_value = None
+        self.assertEqual(self.service.search_description("红衣服", 5)["status"],
+                         "feature_space_missing")
+        self.text_features.query_text.assert_not_called()
+        for info in (
+            FeatureSpaceInfo("chinese-clip-test", "person", 2, "l2", True),
+            FeatureSpaceInfo("chinese-clip-test", "car", 2, "cosine", True),
+            FeatureSpaceInfo("chinese-clip-test", "person", 3, "cosine", True),
+            FeatureSpaceInfo("chinese-clip-test", "person", 2, "cosine", False),
+        ):
+            with self.subTest(info=info):
+                space.return_value = info
+                self.assertEqual(self.service.search_description("红衣服", 5)["status"],
+                                 "feature_space_incompatible")
+        self.text_features.query_text.assert_not_called()
 
-    @patch("llm_agent_service.service.gallery_search.list_gallery")
-    def test_empty_or_too_long_description_is_not_searched(self, gallery):
-        self.assertEqual(self.service.search_description("  ", 5)["status"], "missing_description")
-        self.assertEqual(self.service.search_description("红" * 21, 5)["status"],
-                         "description_too_long")
-        gallery.assert_not_called()
-        self.text_features.query_gallery.assert_not_called()
+    @patch("llm_agent_service.service.gallery_search.count_text_identities")
+    @patch("llm_agent_service.service.gallery_search.get_feature_space")
+    def test_empty_feature_gallery_skips_text_encoding(self, space, count):
+        self.text_features.health.return_value = text_info()
+        space.return_value = FeatureSpaceInfo("chinese-clip-test", "person", 2, "cosine", True)
+        count.return_value = 0
+        result = self.service.search_description("红衣服", 5)
+        self.assertEqual(result["status"], "empty_gallery")
+        self.assertEqual(result["candidates"], [])
+        self.text_features.query_text.assert_not_called()
 
-    @patch("llm_agent_service.service.gallery_search.list_gallery")
-    def test_remote_text_too_long_is_reported_without_partial_results(self, gallery):
-        gallery.return_value = [target("A")]
-        self.text_features.query_gallery.side_effect = TextTooLongError("too long")
+    @patch("llm_agent_service.service.gallery_search.count_text_identities")
+    @patch("llm_agent_service.service.gallery_search.get_feature_space")
+    def test_remote_text_too_long_is_reported_without_partial_results(self, space, count):
+        self.text_features.health.return_value = text_info()
+        space.return_value = FeatureSpaceInfo("chinese-clip-test", "person", 2, "cosine", True)
+        count.return_value = 1
+        self.text_features.query_text.side_effect = TextTooLongError("too long")
         result = self.service.search_description("红衣服", 5)
         self.assertEqual(result["status"], "description_too_long")
         self.assertEqual(result["candidates"], [])
 
-    @patch("llm_agent_service.service.gallery_search.list_gallery")
-    def test_empty_gallery_skips_remote_text_encoding(self, gallery):
-        gallery.return_value = []
+    @patch("llm_agent_service.service.gallery_search.count_text_identities")
+    @patch("llm_agent_service.service.gallery_search.search_text_identities")
+    @patch("llm_agent_service.service.gallery_search.get_feature_space")
+    def test_no_linked_registered_identity_is_not_reported_as_no_match(
+            self, space, search, count):
+        self.text_features.health.return_value = text_info()
+        space.return_value = FeatureSpaceInfo("chinese-clip-test", "person", 2, "cosine", True)
+        count.return_value = 1
+        self.text_features.query_text.return_value = ([1.0, 0.0], text_info())
+        search.return_value = []
         result = self.service.search_description("红衣服", 5)
-        self.assertEqual(result["status"], "empty_gallery")
-        self.text_features.query_gallery.assert_not_called()
-
-    @patch("llm_agent_service.service.gallery_search.list_gallery")
-    def test_unusable_photos_are_not_reported_as_no_match(self, gallery):
-        gallery.return_value = [target("A", image="invalid image")]
-        self.text_features.query_gallery.return_value = (
-            [1, 0], {},
-            {"feature_space_id": "chinese-clip-test", "embedding_dim": 2,
-             "text_contract_id": "text-v1", "language": "zh",
-             "token_count": 2, "text_chars": 2},
-        )
-        result = self.service.search_description("红衣服", 5)
-        self.assertEqual(result["status"], "no_valid_images")
+        self.assertEqual(result["status"], "no_identity_candidates")
         self.assertNotIn(result["status"], {"no_match", "no_person", "selection_required"})
 
-    @patch("llm_agent_service.service.gallery_search.list_gallery")
-    def test_text_service_failure_is_not_reported_as_no_match(self, gallery):
-        gallery.return_value = [target("A")]
-        self.text_features.query_gallery.side_effect = ValueError("Chinese-CLIP 服务请求失败")
+    def test_empty_or_too_long_description_is_not_searched(self):
+        self.assertEqual(self.service.search_description("  ", 5)["status"], "missing_description")
+        self.assertEqual(self.service.search_description("红" * 21, 5)["status"],
+                         "description_too_long")
+        self.text_features.health.assert_not_called()
+        self.text_features.query_text.assert_not_called()
+
+    def test_text_service_failure_is_not_reported_as_no_match(self):
+        self.text_features.health.side_effect = ValueError("Chinese-CLIP 服务请求失败")
         with self.assertRaisesRegex(ValueError, "请求失败"):
             self.service.search_description("红衣服", 5)
 
-    def test_repository_reads_active_photos_without_old_embeddings(self):
+    def test_text_repository_filters_enrollment_features_and_rejects_unsafe_schema(self):
         engine = MagicMock()
-        engine.connect.return_value.__enter__.return_value.execute.return_value.mappings.return_value.all.return_value = [{
-            "id": "A", "name": "登记A", "employee_id": "E1", "image_base64": image_data(),
-            "embedding_model": "model-v1", "embedding": "[1, 0]",
-        }]
-        rows = list_gallery(engine, "public", 3)
-        self.assertEqual(rows[0].image_base64, image_data())
-        self.assertFalse(hasattr(rows[0], "embedding"))
-        execute = engine.connect.return_value.__enter__.return_value.execute
-        self.assertIn("WHERE is_active = true", str(execute.call_args.args[0]))
-        self.assertNotIn("embedding", str(execute.call_args.args[0]))
-        self.assertEqual(execute.call_args.args[1], {"limit": 3})
+        conn = engine.connect.return_value.__enter__.return_value
+        conn.execute.return_value.mappings.return_value.all.return_value = []
+        search_text_identities(engine, "public", "space", "[1.0,0.0]", 5)
+        sql = str(conn.execute.call_args.args[0])
+        self.assertIn("s.purpose = 'enrollment'", sql)
+        self.assertIn("i.identity_kind = 'registered'", sql)
+        self.assertIn("f.feature_space_id = :space", sql)
+        self.assertIn("f.embedding <=> CAST(:query AS vector)", sql)
+        self.assertEqual(conn.execute.call_args.args[1],
+                         {"query": "[1.0,0.0]", "space": "space", "limit": 5})
+        conn.execute.return_value.scalar_one.return_value = 0
+        self.assertEqual(count_text_identities(engine, "public", "space"), 0)
         with self.assertRaises(ValueError):
-            list_gallery(engine, 'public"; DROP TABLE x', 3)
+            search_text_identities(engine, 'public"; DROP TABLE x', "space", "[1.0]", 5)
+        with self.assertRaises(ValueError):
+            count_text_identities(engine, 'public"; DROP TABLE x', "space")
 
 
 class GalleryChatTests(unittest.TestCase):

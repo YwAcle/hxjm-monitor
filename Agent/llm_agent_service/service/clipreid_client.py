@@ -2,15 +2,12 @@
 
 import base64
 import json
-import hashlib
 from io import BytesIO
 import math
 from threading import Lock
 
 import httpx
 from PIL import Image, ImageOps
-
-from llm_report_service.llm.vision import decode_base64_image
 
 
 class ClipReIDClient:
@@ -20,7 +17,6 @@ class ClipReIDClient:
         self.base_url = base_url.rstrip("/")
         self.timeout_s = timeout_s
         self.expected_space = feature_space_id
-        self._cache = {}
         self._lock = Lock()
 
     def _request(self, method, path, **kwargs):
@@ -87,24 +83,3 @@ class ClipReIDClient:
             space = self.health()["feature_space_id"]
             query = self._feature(feature, space) if feature is not None else self._encode(image, space, bbox)
             return query, space
-
-    def query_gallery(self, image, rows, *, bbox=None, feature=None):
-        with self._lock:
-            space = self.health()["feature_space_id"]
-            query = self._feature(feature, space) if feature is not None else self._encode(image, space, bbox)
-            current, vectors = {}, {}
-            for row in rows:
-                if not row.image_base64:
-                    continue
-                key = (space, row.id, hashlib.sha256(row.image_base64.encode()).hexdigest())
-                vector = self._cache.get(key)
-                if vector is None:
-                    picture = decode_base64_image(row.image_base64)
-                    if picture is None:
-                        continue
-                    vector = self._encode(picture, space)
-                current[key] = vector
-                vectors[row.id] = vector
-            # 只保留本轮有效登记数据；任何接口失败都中止，避免返回不完整排序。
-            self._cache = current
-            return query, vectors, space

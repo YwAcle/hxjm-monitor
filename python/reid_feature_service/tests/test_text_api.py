@@ -1,5 +1,6 @@
 """Chinese-CLIP text API tests use an injected extractor; real weights are opt-in only."""
 
+import hashlib
 import os
 import tempfile
 import unittest
@@ -12,7 +13,8 @@ import torch
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from reid_feature_service.server import Settings, TextExtractor, TextTooLongError, create_app
+from reid_feature_service.server import (Settings, TextExtractor, TextTooLongError,
+                                         canonical_definition_text, create_app, space_identity)
 
 
 def picture(color="red", size=(16, 32), format="PNG"):
@@ -40,6 +42,9 @@ class FakeTextExtractor:
     model_profile = "chinese_clip_text_reid"
     model_name = "Fake-Chinese-CLIP"
     alignment_verified = True
+    definition_text = '{"model":"fake-chinese-clip","dimensions":4}'
+    definition_sha256 = hashlib.sha256(definition_text.encode()).hexdigest()
+    definition_version = "canonical_json_v1"
     loads = 0
     token_limit = 32
 
@@ -82,6 +87,9 @@ class TextApiTests(unittest.TestCase):
         self.assertEqual(block["feature_space_id"], "text-space")
         self.assertEqual(block["embedding_dim"], 4)
         self.assertEqual(block["text_contract_id"], "text-space-text-v1")
+        self.assertEqual(block["definition_text"], FakeTextExtractor.definition_text)
+        self.assertEqual(block["definition_sha256"], FakeTextExtractor.definition_sha256)
+        self.assertEqual(block["definition_version"], "canonical_json_v1")
         self.assertEqual(FakeTextExtractor.loads, 1)
 
     def test_text_features_response_contract(self):
@@ -201,6 +209,19 @@ class BinLoaderTests(unittest.TestCase):
                 self.extractor()._load_bin_model(self.TinyModel, object(), [path])
 
 
+class DefinitionTests(unittest.TestCase):
+    def test_space_id_is_derived_from_the_exact_definition_text(self):
+        text = canonical_definition_text({"b": 1, "a": [1, 2]})
+        self.assertEqual(text, '{"a":[1,2],"b":1}')
+        space, digest, version = space_identity(text, "fs-", "canonical_json_v1")
+        self.assertEqual(space, "fs-" + digest)
+        self.assertEqual(digest, hashlib.sha256(text.encode()).hexdigest())
+        self.assertEqual(version, "canonical_json_v1")
+        legacy, legacy_digest, _ = space_identity(text, "clipreid-rn50-",
+                                                  "legacy_python_json_v1", digest_chars=24)
+        self.assertEqual(legacy, "clipreid-rn50-" + legacy_digest[:24])
+
+
 class TextSettingsTests(unittest.TestCase):
     def test_environment_types_and_optional_overrides(self):
         env = {
@@ -246,7 +267,12 @@ class RealTextModelTests(unittest.TestCase):
         self.assertEqual(image_vector.shape, (512,))
         self.assertAlmostEqual(float(np.linalg.norm(image_vector)), 1, places=5)
         self.assertIs(self.extractor.alignment_verified, True)
-        self.assertTrue(self.extractor.feature_space_id.startswith("chinese-clip-vit-b16-"))
+        self.assertTrue(self.extractor.feature_space_id.startswith("fs-"))
+        self.assertEqual(self.extractor.feature_space_id,
+                         "fs-" + self.extractor.definition_sha256)
+        self.assertEqual(hashlib.sha256(self.extractor.definition_text.encode()).hexdigest(),
+                         self.extractor.definition_sha256)
+        self.assertEqual(self.extractor.definition_version, "canonical_json_v1")
         self.assertEqual(self.extractor.text_contract_id,
                          self.extractor.feature_space_id + "-text-v1")
 

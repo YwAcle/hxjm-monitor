@@ -10,8 +10,9 @@ import uuid
 
 import numpy as np
 
-from video_analysis.business_client import BusinessUnavailable
-from video_analysis.sample_pipeline import FirstObservedPerson, LocalSamplePipeline, ReIDFeatureClient
+from video_analysis.business_client import BusinessRequestError, BusinessUnavailable
+from video_analysis.sample_pipeline import (FirstObservedPerson, LocalSamplePipeline,
+                                            ReIDFeatureClient, TextReIDFeatureClient)
 
 
 def identifier():
@@ -21,6 +22,7 @@ def identifier():
 class FakeClient:
     def __init__(self):
         self.calls = []
+        self.paths = []
         self.done = threading.Event()
         self.sample_payloads = []
         self.feature_payloads = []
@@ -28,6 +30,7 @@ class FakeClient:
         self.fail_feature_once = False
 
     def get(self, path, parameters=None):
+        self.paths.append(path)
         return {'items': []}
 
     def upload_image(self, payload, image):
@@ -243,6 +246,91 @@ class SamplePipelineTests(unittest.TestCase):
             'definition_text': text, 'definition_sha256': hashlib.sha256(text.encode()).hexdigest(),
             'embedding_dim': 3})
         self.assertEqual(client.definition()['definition_text'], text)
+
+    def test_text_extractor_uses_the_text_health_block_and_endpoint(self):
+        client = TextReIDFeatureClient('http://localhost:28024')
+        text = json.dumps({'schema': 'hxjm.feature-space.v1'})
+        health = {'ready': True, 'text_reid': {
+            'ready': True, 'alignment_verified': True, 'feature_space_id': 'fs-fixture',
+            'embedding_dim': 512, 'definition_text': text,
+            'definition_sha256': hashlib.sha256(text.encode()).hexdigest(),
+            'definition_version': 'canonical_json_v1'}}
+        requests = []
+        client._request = Mock(side_effect=lambda path, *args: (
+            requests.append((path, args)), health if path == '/health'
+            else {'feature_space_id': 'fs-fixture', 'embedding_dim': 512,
+                  'normalized': True, 'embedding': [1.0]})[1])
+        definition = client.definition()
+        self.assertEqual(definition['feature_space_id'], 'fs-fixture')
+        self.assertEqual(definition['feature_kind'], 'text_reid')
+        self.assertEqual(definition['dimensions'], 512)
+        client.extract(b'\xff\xd8image', {'request_id': identifier()})
+        self.assertEqual(requests[0][0], '/health')
+        self.assertEqual(requests[1][0], '/v1/reid/text-reid-image-features')
+
+    def test_text_extractor_rejects_unready_or_unaligned_health(self):
+        client = TextReIDFeatureClient('http://localhost:28024')
+        text = json.dumps({'schema': 'hxjm.feature-space.v1'})
+        base = {'ready': True, 'alignment_verified': True, 'feature_space_id': 'fs-fixture',
+                'embedding_dim': 512, 'definition_text': text,
+                'definition_sha256': hashlib.sha256(text.encode()).hexdigest()}
+        for changes in ({'ready': False}, {'alignment_verified': False},
+                        {'definition_sha256': '0' * 64}, {'embedding_dim': 0},
+                        {'feature_space_id': ''}):
+            client._request = Mock(return_value={'text_reid': dict(base, **changes)})
+            with self.subTest(changes=changes), \
+                    self.assertRaises((BusinessRequestError, BusinessUnavailable)):
+                client.definition()
+        client._request = Mock(return_value={'ready': True})
+        with self.assertRaises(BusinessUnavailable):
+            client.definition()
+
+    def test_enrollment_only_pipeline_ignores_live_frames_and_queries(self):
+        client = FakeClient()
+        pipeline = LocalSamplePipeline(client, threshold=0.88, instance_id=identifier(),
+                                       extractor=FakeExtractor(), poll_interval_seconds=0.05,
+                                       enrollment_only=True)
+        frame = SimpleNamespace(frame=np.zeros((30, 20, 3), dtype=np.uint8),
+                                frame_ts_ms=int(time.time() * 1000), source_width=20, source_height=30,
+                                public_frame_ref=SimpleNamespace(source_id=identifier(),
+                                                                 stream_session_id=identifier(), frame_id=identifier()))
+        detection = {'label': 'person', 'track_id': 7, 'bbox': [0.1, 0.1, 0.8, 0.9],
+                     'confidence': 0.9, 'is_prediction': False}
+        context = identifier()
+        self.assertEqual(pipeline.offer(frame, [detection], tracking_context_id=context), 0)
+        pipeline.confirmed({'source_id': frame.public_frame_ref.source_id, 'results': []},
+                           {'accepted_result_ids': [], 'duplicate_result_ids': [],
+                            'tracklets': [{'tracking_context_id': context, 'local_track_id': 7,
+                                           'tracklet_id': identifier()}]})
+        pipeline.start()
+        deadline = time.time() + 2
+        while '/samples/pending' not in client.paths and time.time() < deadline:
+            time.sleep(0.01)
+        self.assertTrue(pipeline.stop())
+        self.assertIn('/samples/pending', client.paths)
+        self.assertNotIn('/queries/pending', client.paths)
+        self.assertIsNone(pipeline._thread)
+        self.assertEqual(pipeline.status()['mode'], 'enrollment_only')
+        self.assertEqual(pipeline.status()['queued_samples'], 0)
+
+
+class EnrollmentWorkerConfigTests(unittest.TestCase):
+    def test_requires_credentials_origin_and_canonical_instance(self):
+        from video_analysis.enrollment_text_worker import config_from_env
+        base = {'ENROLLMENT_TEXT_BUSINESS_URL': 'http://127.0.0.1:8080/api/v1/business',
+                'ENROLLMENT_TEXT_SERVICE_ID': 'video-analysis',
+                'ENROLLMENT_TEXT_SERVICE_TOKEN': 'fixture-token',
+                'ENROLLMENT_TEXT_INSTANCE_ID': identifier()}
+        config = config_from_env(base)
+        self.assertEqual(config['feature_url'], 'http://127.0.0.1:28024')
+        self.assertEqual(config['capability_code'], 'person.reidentification')
+        for name, value in (('ENROLLMENT_TEXT_SERVICE_TOKEN', ''),
+                            ('ENROLLMENT_TEXT_BUSINESS_URL', ''),
+                            ('ENROLLMENT_TEXT_INSTANCE_ID', str(uuid.uuid4()).upper()),
+                            ('ENROLLMENT_TEXT_INSTANCE_ID',
+                             '00000000-0000-0000-0000-000000000000')):
+            with self.subTest(name=name, value=value), self.assertRaises(ValueError):
+                config_from_env(dict(base, **{name: value}))
 
 
 if __name__ == '__main__':
