@@ -13,7 +13,11 @@ done
 COMMON_GIT_DIR="$(git -C "$ROOT_DIR" rev-parse --path-format=absolute --git-common-dir)"
 PRIMARY_ROOT="$(dirname "$COMMON_GIT_DIR")"
 # A copied Git repository is not automatically an algorithm owner.
-if [[ -f "$ROOT_DIR/local-video.env" ]]; then source "$ROOT_DIR/local-video.env"; fi
+# An ignored local-video.local.env only changes this checkout's owner and mode.
+for _hxjm_video_env in "$ROOT_DIR/local-video.env" "$ROOT_DIR/local-video.local.env"; do
+    if [[ -f "$_hxjm_video_env" ]]; then source "$_hxjm_video_env"; fi
+done
+unset _hxjm_video_env
 ANALYSIS_ROOT="${HXJM_ANALYSIS_ROOT:-$PRIMARY_ROOT}"
 [[ "$ANALYSIS_ROOT" == /* ]] || { echo 'HXJM_ANALYSIS_ROOT must be an absolute path.' >&2; exit 1; }
 ANALYSIS_ROOT="$(realpath -m -- "$ANALYSIS_ROOT")"
