@@ -72,6 +72,35 @@ hxjm:
 共享管理器保留生产端配置以启动算法进程；MediaMTX不会继承`VIDEO_RESULTS_*`凭据，
 算法进程通过服务身份访问后端。
 
+## 轨迹样本与双特征空间
+
+在可靠持久化之上可显式开启样本管线：`VIDEO_SAMPLES_ENABLED=true`，并提供
+特征服务地址`VIDEO_SAMPLES_FEATURE_URL`、特征能力实例
+`VIDEO_SAMPLES_INSTANCE_ID`及可选阈值/队列/轮询参数，见
+`deploy/botsort/video-results.env.example`。样本管线随`video_analysis.app`
+的lifespan启动和停止，`/health`的`sample_pipeline`字段报告队列和两个特征空间的状态。
+它只消费后端已确认的帧：`/results/register`确认后才复制该帧的整身裁剪图，
+不经过展示JPEG或展示TTL过滤。
+
+默认同时写两个互不比较的特征空间：
+
+- CLIP-ReID图片空间（3072维）：写入`feature`并按阈值产生身份关联，与原有图片
+  ReID检索一致。
+- Chinese-CLIP文本空间（512维）：写入同一批历史裁剪图，保留`tracklet_id`但不写
+  身份关联，供“全部历史图像”文本检索。登记照片也会在该空间编码并关联
+  `identity_id`。
+
+两个空间各自登记、各自建任务/run，特征按`(run_id, producer_feature_key)`去重，
+互不覆盖。文本空间只支持整身裁剪图，不传bbox。设置
+`VIDEO_SAMPLES_TEXT_ENABLED=false`可回到只写CLIP-ReID图片空间。
+
+样本轮询同时覆盖`purpose=enrollment`（图片空间和文本空间各一次）和
+`purpose=history`（文本空间，用于补齐此前未编码的历史裁剪图）；同一空间已有ready
+特征的样本不会重复编码。因此不再需要单独运行
+`python -m video_analysis.enrollment_text_worker`，该worker仍可作为纯文本空间的
+独立后端使用。文本编码与图片编码在同一后台线程执行；特征服务不可用时样本按可重试
+错误退避，不影响跟踪与轨迹入库。
+
 ## 标识与时间
 
 算法解码连接作为明确的输入接入实例登记，`session_key`以`analysis:`开头。

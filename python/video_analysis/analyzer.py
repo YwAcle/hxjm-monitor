@@ -75,9 +75,12 @@ class Analyzer:
                  worker_count=WORKER_COUNT, grabber_factory=LatestFrameGrabber,
                  worker_factory=ModelWorker, worker_retry=WORKER_RETRY_SECONDS,
                  worker_idle=WORKER_IDLE_SECONDS, algorithm=ALGORITHM,
-                 worker_retry_max=WORKER_RETRY_MAX_SECONDS, result_publisher=None):
+                 worker_retry_max=WORKER_RETRY_MAX_SECONDS, result_publisher=None,
+                 sample_pipeline=None):
         if not math.isfinite(inference_interval) or inference_interval <= 0:
             raise ValueError('Inference interval must be finite and positive')
+        if sample_pipeline is not None and result_publisher is None:
+            raise ValueError('Sample pipeline requires the reliable result publisher')
         if not 1 <= worker_count <= 4:
             raise ValueError('Worker count must be 1 to 4')
         if not math.isfinite(worker_idle) or worker_idle <= 0:
@@ -89,6 +92,7 @@ class Analyzer:
         self._inference_interval = inference_interval
         self.algorithm = algorithm
         self.result_publisher = result_publisher
+        self._sample_pipeline = sample_pipeline
         self._worker_retry = worker_retry
         self._worker_retry_max = worker_retry_max
         self._loading_lock = asyncio.Lock()
@@ -361,10 +365,18 @@ class Analyzer:
                 detections, inference_ms = await worker.infer(captured.frame, metadata)
             else:
                 detections, inference_ms = await worker.infer(captured.frame)
+            frame_reference = None
             if self.result_publisher:
                 # Persist facts before JPEG encoding, session/TTL checks or coalescing for display.
-                await self.result_publisher.record(ticket, captured, detections, time.time_ns() // 1_000_000,
-                                                   getattr(worker, 'last_removed_tracks', ()))
+                frame_reference = await self.result_publisher.record(
+                    ticket, captured, detections, time.time_ns() // 1_000_000,
+                    getattr(worker, 'last_removed_tracks', ()))
+            if self._sample_pipeline is not None and frame_reference is not None:
+                # Copy selected crops from this exact analyzed frame; never from the
+                # encoded/display copy, which may be truncated or dropped later.
+                captured.public_frame_ref = frame_reference
+                self._sample_pipeline.offer(captured, detections,
+                                            tracking_context_id=ticket, algorithm=self.algorithm)
             self._retry_delays.pop(worker.slot, None)
             frame = None
             if frame_task is not None:
