@@ -332,16 +332,28 @@ class LocalSamplePipeline:
         else:
             created = self._once(job, 'task', lambda: {
                 'task_kind': self.capability_code,
-                'business_key': 'sample:' + job.sample_id + ':instance:' + self.instance_id,
+                # One sample yields one feature per run, and features are unique by
+                # (run_id, producer_feature_key): each feature space needs its own task.
+                'business_key': ('sample:' + job.sample_id + ':space:' + self._space['feature_space_id']
+                                 + ':instance:' + self.instance_id),
                 'capability_code': self.capability_code, 'task_mode': 'once',
                 'input': {'kind': 'image', 'asset_ids': [job.asset_id]},
                 'requested_outputs': ['feature.embedding'], 'instance_id': self.instance_id,
                 **({'expires_at': expiry} if expiry is not None else {}),
             }, self.client.create_task)
-            execution = self._once(job, 'execution', lambda: {
-                'task_id': created['task_id'], 'expected_revision': created['revision'],
-                'instance_id': self.instance_id,
-            }, self.client.start_task)
+            if created.get('state') == 'pending':
+                execution = self._once(job, 'execution', lambda: {
+                    'task_id': created['task_id'], 'expected_revision': created['revision'],
+                    'instance_id': self.instance_id,
+                }, self.client.start_task)
+            elif created.get('state') == 'running' and created.get('run_id'):
+                # A previous worker already started this key and stopped mid-run;
+                # resume that run instead of asking the backend to start it again.
+                execution = job.responses.setdefault('execution', {
+                    'task_id': created['task_id'], 'run_id': created['run_id'],
+                    'revision': created['revision']})
+            else:
+                raise BusinessRequestError('BUSINESS_TASK_' + str(created.get('state')).upper())
         if 'embedding' not in job.responses:
             metadata = {'request_id': job.feature_id, 'source_asset_id': job.asset_id,
                         **({'stream_session_id': job.session_id} if job.session_id else {}),
