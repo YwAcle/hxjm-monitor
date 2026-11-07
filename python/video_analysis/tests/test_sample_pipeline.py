@@ -23,6 +23,7 @@ class FakeClient:
     def __init__(self):
         self.calls = []
         self.paths = []
+        self.parameters = []
         self.done = threading.Event()
         self.sample_payloads = []
         self.feature_payloads = []
@@ -33,6 +34,7 @@ class FakeClient:
 
     def get(self, path, parameters=None):
         self.paths.append(path)
+        self.parameters.append((path, parameters))
         return {'items': []}
 
     def upload_image(self, payload, image):
@@ -177,6 +179,30 @@ class SamplePipelineTests(unittest.TestCase):
         self.assertNotIn('identity', client.calls)
         # A second feature space must not reuse the task key of another one.
         self.assertIn(':space:test-space:', client.task_payloads[0]['business_key'])
+
+    def test_history_sample_keeps_tracklet_without_identity_association(self):
+        client, pipeline, _, _, _ = self.fixture()
+        client.image_content = Mock(return_value=b'fixture-image')
+        row = {'sample_id': identifier(), 'asset_id': identifier(),
+               'tracklet_id': identifier(), 'identity_id': None,
+               'occurred_at': datetime.now(timezone.utc).isoformat(),
+               'expires_at': (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()}
+        pipeline._history_sample(row)
+        feature = client.feature_payloads[0]
+        self.assertEqual(feature['sample_id'], row['sample_id'])
+        self.assertEqual(feature['tracklet_id'], row['tracklet_id'])
+        self.assertIsNone(feature['identity_id'])
+        self.assertEqual(feature['expires_at'], row['expires_at'])
+        self.assertEqual(feature['contributions'], [{'sample_id': row['sample_id']}])
+        # History text features never create a CLIP-ReID identity assignment.
+        self.assertNotIn('identity', client.calls)
+        self.assertIn(':space:test-space:', client.task_payloads[0]['business_key'])
+
+    def test_invalid_sample_purpose_is_rejected(self):
+        for purpose in ('query', '', 'History'):
+            with self.subTest(purpose=purpose), self.assertRaises(ValueError):
+                LocalSamplePipeline(FakeClient(), threshold=0.88, instance_id=identifier(),
+                                    extractor=FakeExtractor(), sample_purpose=purpose)
 
     def test_restarted_worker_resumes_an_already_started_task(self):
         client, pipeline, _, _, _ = self.fixture()
@@ -332,6 +358,25 @@ class SamplePipelineTests(unittest.TestCase):
         self.assertEqual(pipeline.status()['mode'], 'enrollment_only')
         self.assertEqual(pipeline.status()['queued_samples'], 0)
 
+    def test_history_worker_polls_history_samples_in_the_text_space(self):
+        client = FakeClient()
+        pipeline = LocalSamplePipeline(client, threshold=0.88, instance_id=identifier(),
+                                       extractor=FakeExtractor(), poll_interval_seconds=0.05,
+                                       enrollment_only=True, sample_purpose='history')
+        pipeline.start()
+        deadline = time.time() + 2
+        while '/samples/pending' not in client.paths and time.time() < deadline:
+            time.sleep(0.01)
+        self.assertTrue(pipeline.stop())
+        pending = [parameters for path, parameters in client.parameters
+                   if path == '/samples/pending']
+        self.assertTrue(pending)
+        self.assertEqual(pending[0]['purpose'], 'history')
+        self.assertEqual(pending[0]['feature_space_id'], 'test-space')
+        self.assertNotIn('/queries/pending', client.paths)
+        self.assertEqual(pipeline.status()['sample_purpose'], 'history')
+        self.assertEqual(pipeline.status()['mode'], 'history_only')
+
 
 class EnrollmentWorkerConfigTests(unittest.TestCase):
     def test_requires_credentials_origin_and_canonical_instance(self):
@@ -350,6 +395,22 @@ class EnrollmentWorkerConfigTests(unittest.TestCase):
                              '00000000-0000-0000-0000-000000000000')):
             with self.subTest(name=name, value=value), self.assertRaises(ValueError):
                 config_from_env(dict(base, **{name: value}))
+
+    def test_sample_purpose_defaults_to_enrollment_and_accepts_history(self):
+        from video_analysis.enrollment_text_worker import build_pipeline, config_from_env
+        base = {'ENROLLMENT_TEXT_BUSINESS_URL': 'http://127.0.0.1:8080/api/v1/business',
+                'ENROLLMENT_TEXT_SERVICE_ID': 'video-analysis',
+                'ENROLLMENT_TEXT_SERVICE_TOKEN': 'fixture-token',
+                'ENROLLMENT_TEXT_INSTANCE_ID': identifier()}
+        self.assertEqual(config_from_env(base)['sample_purpose'], 'enrollment')
+        history = config_from_env(dict(base, ENROLLMENT_TEXT_SAMPLE_PURPOSE='history'))
+        self.assertEqual(history['sample_purpose'], 'history')
+        pipeline = build_pipeline(history)
+        self.assertEqual(pipeline.sample_purpose, 'history')
+        self.assertTrue(pipeline.enrollment_only)
+        for value in ('', 'query', 'History'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                config_from_env(dict(base, ENROLLMENT_TEXT_SAMPLE_PURPOSE=value))
 
 
 if __name__ == '__main__':

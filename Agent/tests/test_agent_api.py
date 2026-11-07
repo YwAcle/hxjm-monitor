@@ -23,8 +23,10 @@ class AgentToolsApiTests(unittest.TestCase):
         response = app.test_client().get("/tools")
         self.assertEqual(response.status_code, 200)
         tools = response.get_json()["tools"]
-        self.assertEqual(len(tools), 11)
-        self.assertIn("search_pedestrians_in_screenshot", {item["name"] for item in tools})
+        self.assertEqual(len(tools), 12)
+        names = {item["name"] for item in tools}
+        self.assertIn("search_pedestrians_in_screenshot", names)
+        self.assertIn("search_pedestrians_by_description_in_history", names)
         self.assertTrue(all("handler" not in item for item in tools))
         self.assertTrue(all(item["read_only"] for item in tools))
 

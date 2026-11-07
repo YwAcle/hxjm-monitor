@@ -1,8 +1,9 @@
-"""Encode registered-person photos into the Chinese-CLIP text feature space.
+"""Encode stored crops into the Chinese-CLIP text feature space.
 
 Run this as a separate, long-lived worker next to the existing sample pipeline.
-It only consumes backend-owned ``purpose=enrollment`` samples and never touches
-live frames, queries or the CLIP-ReID image space.
+It consumes backend-owned samples (``purpose=enrollment`` by default, or
+``purpose=history`` when ``ENROLLMENT_TEXT_SAMPLE_PURPOSE=history``) and never
+touches live frames, queries or the CLIP-ReID image space.
 
 Required environment:
   ENROLLMENT_TEXT_BUSINESS_URL   e.g. http://127.0.0.1:8080/api/v1/business
@@ -14,6 +15,9 @@ Optional:
   ENROLLMENT_TEXT_CAPABILITY_CODE default person.reidentification
   ENROLLMENT_TEXT_POLL_SECONDS   default 5
   ENROLLMENT_TEXT_TIMEOUT_SECONDS default 30
+  ENROLLMENT_TEXT_SAMPLE_PURPOSE default enrollment; history encodes stored
+                                 tracklet crops into the same text space so text
+                                 search can rank all retained images
 """
 import logging
 import os
@@ -52,6 +56,9 @@ def config_from_env(env=None):
     if str(parsed) != instance_id or parsed.int == 0:
         raise ValueError('ENROLLMENT_TEXT_INSTANCE_ID must be a canonical nonzero UUID')
     token = _required(env, 'ENROLLMENT_TEXT_SERVICE_TOKEN')
+    purpose = env.get('ENROLLMENT_TEXT_SAMPLE_PURPOSE', 'enrollment').strip()
+    if purpose not in ('enrollment', 'history'):
+        raise ValueError('Invalid ENROLLMENT_TEXT_SAMPLE_PURPOSE')
     return {
         'business_url': _required(env, 'ENROLLMENT_TEXT_BUSINESS_URL'),
         'service_id': _required(env, 'ENROLLMENT_TEXT_SERVICE_ID'),
@@ -62,6 +69,7 @@ def config_from_env(env=None):
                                    'person.reidentification').strip(),
         'poll_seconds': _positive_float(env, 'ENROLLMENT_TEXT_POLL_SECONDS', 5),
         'timeout': _positive_float(env, 'ENROLLMENT_TEXT_TIMEOUT_SECONDS', 30),
+        'sample_purpose': purpose,
     }
 
 
@@ -80,6 +88,7 @@ def build_pipeline(config):
         extractor=TextReIDFeatureClient(config['feature_url'], timeout=config['timeout']),
         poll_interval_seconds=config['poll_seconds'],
         enrollment_only=True,
+        sample_purpose=config['sample_purpose'],
     )
 
 
@@ -103,8 +112,9 @@ def main(argv=None):
     signal.signal(signal.SIGTERM, _stop)
 
     pipeline.start()
-    LOG.info('Enrollment text worker started (feature=%s, space is registered on first poll)',
-             config['feature_url'])
+    LOG.info('Text sample worker started (purpose=%s, feature=%s, '
+             'space is registered on first poll)',
+             config['sample_purpose'], config['feature_url'])
     try:
         while not stopped.wait(1):
             pass

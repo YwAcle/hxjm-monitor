@@ -96,8 +96,10 @@ class ReIDFeatureClient:
 class TextReIDFeatureClient(ReIDFeatureClient):
     """Chinese-CLIP image encoder whose vectors share the text search space.
 
-    Enrollment photos are encoded here so text queries and registered identities
-    live in one feature space; live-tracklet crops stay on the CLIP-ReID client.
+    Enrollment photos and, in history mode, stored tracklet crops are encoded here
+    so text queries can rank both registered identities and all retained tracklets
+    in one space. The CLIP-ReID client keeps encoding live history crops for the
+    identity space; the two spaces are never compared.
     """
     def definition(self):
         health = self._request('/health')
@@ -159,9 +161,11 @@ class LocalSamplePipeline:
     def __init__(self, client, *, feature_url=None, threshold, instance_id=None,
                  capability_code='person.reidentification', queue_size=16,
                  selector=None, extractor=None, execution_for=None, finish_tasks=False,
-                 poll_interval_seconds=2, enrollment_only=False):
+                 poll_interval_seconds=2, enrollment_only=False, sample_purpose='enrollment'):
         if type(queue_size) is not int or queue_size <= 0:
             raise ValueError('Sample queue size must be positive')
+        if sample_purpose not in ('enrollment', 'history'):
+            raise ValueError('Sample purpose must be enrollment or history')
         if type(threshold) not in (int, float) or not math.isfinite(threshold) or not 0 <= threshold <= 1:
             raise ValueError('Identity threshold must be in [0,1]')
         if execution_for is None:
@@ -175,6 +179,7 @@ class LocalSamplePipeline:
         self.execution_for = execution_for
         self.poll_interval_seconds = poll_interval_seconds
         self.enrollment_only = bool(enrollment_only)
+        self.sample_purpose = sample_purpose
         self._condition = threading.Condition()
         self._jobs, self._selected = {}, {}
         self._selection_cleanup_at = 0
@@ -197,7 +202,7 @@ class LocalSamplePipeline:
                 self._thread = threading.Thread(target=self._run, name='history-samples', daemon=True)
                 self._thread.start()
             self._material_thread = threading.Thread(target=self._poll_materials,
-                                                     name='query-enrollment-features', daemon=True)
+                                                     name='material-samples', daemon=True)
             self._material_thread.start()
 
     def offer(self, captured, detections, *, tracking_context_id, algorithm='botsort'):
@@ -270,7 +275,8 @@ class LocalSamplePipeline:
                                   'last_error': self._material_error,
                                   'thread_alive': self._material_thread is not None and self._material_thread.is_alive()},
                     'strategy': self.selector.name,
-                    'mode': 'enrollment_only' if self.enrollment_only else 'history'}
+                    'sample_purpose': self.sample_purpose,
+                    'mode': (self.sample_purpose + '_only') if self.enrollment_only else 'history'}
 
     def stop(self, timeout=5):
         with self._condition:
@@ -387,15 +393,18 @@ class LocalSamplePipeline:
             }, self.client.finish_task)
 
     def _material_job(self, kind, row):
-        identifier = row['sample_id'] if kind == 'enrollment' else row['query_id']
+        sample = kind in ('enrollment', 'history')
+        identifier = row['sample_id'] if sample else row['query_id']
         key = kind, identifier, 0
         if key not in self._material_cache:
-            asset = row['asset_id'] if kind == 'enrollment' else row['input_asset_id']
+            asset = row['asset_id'] if sample else row['input_asset_id']
             occurred = row.get('occurred_at') or datetime.now(timezone.utc).isoformat()
             job = _Sample(key, None, None, None, occurred, row.get('expires_at'), {}, None,
                           asset_id=asset)
-            if kind == 'enrollment':
+            if sample:
                 job.sample_id = identifier
+                if kind == 'history':
+                    job.tracklet_id = row.get('tracklet_id')
             job.responses['_pending_row'] = dict(row)
             self._material_cache[key] = job
         return self._material_cache[key]
@@ -405,6 +414,18 @@ class LocalSamplePipeline:
         if job.image is None:
             job.image = self.client.image_content(job.asset_id)
         self._register_embedding(job, job.expires_at, identity_id=row['identity_id'], associate=False)
+        return job
+
+    def _history_sample(self, row):
+        """Encode a stored history crop into the text space for all-image search.
+
+        The feature keeps the sample's tracklet so text candidates can be linked to
+        a real trajectory, but no identity association is created here.
+        """
+        job = self._material_job('history', row)
+        if job.image is None:
+            job.image = self.client.image_content(job.asset_id)
+        self._register_embedding(job, job.expires_at, identity_id=None, associate=False)
         return job
 
     def _query(self, row):
@@ -460,32 +481,35 @@ class LocalSamplePipeline:
         return job
 
     def _poll_materials(self):
-        """Consume backend-owned enrollment/query work; keep the original user owner."""
+        """Consume backend-owned sample/query work; keep the original user owner."""
         blocked = set()
         while not self._material_stop.is_set():
             try:
                 self._ensure_space()
-                enrolled = self.client.get('/samples/pending', {
-                    'purpose': 'enrollment', 'feature_space_id': self._space['feature_space_id'], 'limit': 4})
+                pending = self.client.get('/samples/pending', {
+                    'purpose': self.sample_purpose,
+                    'feature_space_id': self._space['feature_space_id'], 'limit': 4})
                 queries = (None if self.enrollment_only
                            else self.client.get('/queries/pending', {'limit': 4}))
-                batches = [('enrollment', enrolled)]
+                batches = [(self.sample_purpose, pending)]
                 if queries is not None:
                     batches.append(('query', queries))
                 for kind, response in batches:
-                    name = 'sample_id' if kind == 'enrollment' else 'query_id'
+                    name = 'query_id' if kind == 'query' else 'sample_id'
                     present = {row[name] for row in response['items']}
                     response['items'].extend(job.responses['_pending_row']
                                              for key, job in list(self._material_cache.items())
                                              if key[0] == kind and key[1] not in present)
-                processors = [('enrollment', enrolled['items'], self._enrollment)]
+                sample_processor = (self._enrollment if self.sample_purpose == 'enrollment'
+                                    else self._history_sample)
+                processors = [(self.sample_purpose, pending['items'], sample_processor)]
                 if queries is not None:
                     processors.append(('query', queries['items'], self._query))
                 for kind, rows, processor in processors:
                     for row in rows:
                         if self._material_stop.is_set():
                             return
-                        identifier = row['sample_id'] if kind == 'enrollment' else row['query_id']
+                        identifier = row['sample_id'] if kind != 'query' else row['query_id']
                         key = kind, identifier, row.get('revision', 0)
                         if key in blocked:
                             continue

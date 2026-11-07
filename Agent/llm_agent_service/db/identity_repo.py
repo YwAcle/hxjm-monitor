@@ -1,7 +1,8 @@
 """只读检索轨迹身份表和登记身份的文本检索特征。
 
 图片检索读取样本管线写入的轨迹 ``feature`` 向量；文本检索读取同一管线为
-登记照片写入的 enrollment ``feature`` 向量。本模块不写数据库，也不创建身份或轨迹。
+登记照片写入的 enrollment ``feature`` 向量，或为历史轨迹裁剪图写入的
+history ``feature`` 向量。本模块不写数据库，也不创建身份或轨迹。
 """
 
 from __future__ import annotations
@@ -66,6 +67,29 @@ class TextIdentityCandidate:
     asset_id: str | None
     first_seen_at: datetime | None
     last_seen_at: datetime | None
+    compatible_count: int
+
+
+@dataclass(frozen=True)
+class TextSampleCandidate:
+    """文本空间里的一条历史轨迹裁剪图特征；来源不限于已登记身份。"""
+    feature_id: str
+    sample_id: str
+    tracklet_id: str
+    asset_id: str | None
+    storage_key: str | None
+    content_type: str | None
+    source_id: str | None
+    camera_name: str | None
+    occurred_at: datetime | None
+    first_observed_at: datetime | None
+    last_observed_at: datetime | None
+    similarity: float
+    identity_id: str | None
+    identity_kind: str | None
+    display_no: int | None
+    display_name: str | None
+    employee_id: str | None
     compatible_count: int
 
 
@@ -311,6 +335,132 @@ def search_text_identities(engine, schema: str, feature_space_id: str, query_vec
             asset_id=(str(row["asset_id"]) if row["asset_id"] is not None else None),
             first_seen_at=row["first_seen_at"],
             last_seen_at=row["last_seen_at"],
+            compatible_count=int(row["compatible_count"]),
+        )
+        for row in rows
+    ]
+
+
+def count_text_samples(engine, schema: str, feature_space_id: str) -> int:
+    """统计文本特征空间中可用于全量图片检索的历史轨迹裁剪图数量。"""
+    schema = _schema(schema)
+    with engine.connect() as conn:
+        value = conn.execute(text(f'''
+            SELECT count(*)
+            FROM "{schema}".feature f
+            JOIN "{schema}".sample s
+              ON s.id = f.sample_id
+             AND s.purpose = 'history'
+             AND s.available
+             AND (s.expires_at IS NULL OR s.expires_at > now())
+            JOIN "{schema}".tracklet t
+              ON t.id = s.tracklet_id
+             AND t.expires_at > now()
+            WHERE f.feature_space_id = :space
+              AND f.state = 'ready'
+              AND f.embedding IS NOT NULL
+              AND (f.expires_at IS NULL OR f.expires_at > now())
+        '''), {"space": feature_space_id}).scalar_one()
+    return int(value or 0)
+
+
+def search_text_samples(engine, schema: str, feature_space_id: str, query_vector: str,
+                        limit: int) -> list[TextSampleCandidate]:
+    """按余弦相似度检索全部历史轨迹裁剪图，每条轨迹保留最相似的一张。
+
+    ``query_vector`` 是 pgvector 文本字面量。结果不要求轨迹已关联身份：
+    identity 字段有值时是已确认身份，为空时是未识别轨迹。
+    """
+    schema = _schema(schema)
+    sql = text(f'''
+        WITH scored AS (
+            SELECT f.id AS feature_id,
+                   s.id AS sample_id,
+                   t.id AS tracklet_id,
+                   s.asset_id,
+                   s.occurred_at,
+                   t.source_id,
+                   c.name AS camera_name,
+                   t.first_observed_at,
+                   t.last_observed_at,
+                   a.identity_id,
+                   1 - (f.embedding <=> CAST(:query AS vector)) AS similarity
+            FROM "{schema}".feature f
+            JOIN "{schema}".sample s
+              ON s.id = f.sample_id
+             AND s.purpose = 'history'
+             AND s.available
+             AND (s.expires_at IS NULL OR s.expires_at > now())
+            JOIN "{schema}".tracklet t
+              ON t.id = s.tracklet_id
+             AND t.expires_at > now()
+            LEFT JOIN "{schema}".camera c ON c.id = t.source_id
+            LEFT JOIN LATERAL (
+                SELECT ta.identity_id
+                FROM "{schema}".track_identity_assignment ta
+                WHERE ta.tracklet_id = t.id
+                  AND ta.valid_to IS NULL
+                  AND ta.expires_at > now()
+                ORDER BY ta.valid_from DESC, ta.id
+                LIMIT 1
+            ) a ON true
+            WHERE f.feature_space_id = :space
+              AND f.state = 'ready'
+              AND f.embedding IS NOT NULL
+              AND (f.expires_at IS NULL OR f.expires_at > now())
+        ), best AS (
+            SELECT DISTINCT ON (tracklet_id)
+                   feature_id, sample_id, tracklet_id, asset_id, occurred_at,
+                   source_id, camera_name, first_observed_at, last_observed_at,
+                   identity_id, similarity
+            FROM scored
+            ORDER BY tracklet_id, similarity DESC, feature_id
+        )
+        SELECT b.feature_id::text AS feature_id,
+               b.sample_id::text AS sample_id,
+               b.tracklet_id::text AS tracklet_id,
+               b.asset_id::text AS asset_id,
+               m.storage_key, m.content_type,
+               b.source_id::text AS source_id,
+               b.camera_name,
+               b.occurred_at, b.first_observed_at, b.last_observed_at,
+               b.similarity,
+               b.identity_id::text AS identity_id,
+               i.identity_kind, i.display_no, i.display_name, i.employee_id,
+               count(*) OVER () AS compatible_count
+        FROM best b
+        LEFT JOIN "{schema}".media_asset m
+          ON m.id = b.asset_id AND m.state = 'available'
+        LEFT JOIN "{schema}".identity i ON i.id = b.identity_id
+        WHERE b.similarity IS NOT NULL
+        ORDER BY b.similarity DESC, b.tracklet_id
+        LIMIT :limit
+    ''')
+    with engine.connect() as conn:
+        rows = conn.execute(sql, {
+            "query": query_vector,
+            "space": feature_space_id,
+            "limit": int(limit),
+        }).mappings().all()
+    return [
+        TextSampleCandidate(
+            feature_id=str(row["feature_id"]),
+            sample_id=str(row["sample_id"]),
+            tracklet_id=str(row["tracklet_id"]),
+            asset_id=(str(row["asset_id"]) if row["asset_id"] is not None else None),
+            storage_key=row["storage_key"],
+            content_type=row["content_type"],
+            source_id=(str(row["source_id"]) if row["source_id"] is not None else None),
+            camera_name=row["camera_name"],
+            occurred_at=row["occurred_at"],
+            first_observed_at=row["first_observed_at"],
+            last_observed_at=row["last_observed_at"],
+            similarity=max(-1.0, min(1.0, float(row["similarity"]))),
+            identity_id=(str(row["identity_id"]) if row["identity_id"] is not None else None),
+            identity_kind=row["identity_kind"],
+            display_no=(int(row["display_no"]) if row["display_no"] is not None else None),
+            display_name=row["display_name"],
+            employee_id=row["employee_id"],
             compatible_count=int(row["compatible_count"]),
         )
         for row in rows

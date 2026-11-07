@@ -122,9 +122,9 @@ public class SampleFeatureService {
         for(Map<String,Object> row:rows){clean(row);}return values("items",rows);
     }
     public Map<String,Object> pending(BusinessActor actor,String purpose,String space,int limit){
-        if(!"enrollment".equals(purpose)||limit<1||limit>100){throw BusinessException.invalid("待处理样本当前支持enrollment且limit为1至100");}
+        if(!("enrollment".equals(purpose)||"history".equals(purpose))||limit<1||limit>100){throw BusinessException.invalid("待处理样本支持enrollment或history且limit为1至100");}
         actor.requireOperation("samples.process");
-        List<Map<String,Object>> rows=data.store().jdbc().queryForList("SELECT s.id AS sample_id,s.asset_id,s.identity_id,i.object_type,s.occurred_at,s.expires_at FROM public.sample s JOIN public.identity i ON i.id=s.identity_id JOIN public.media_asset a ON a.id=s.asset_id WHERE s.purpose='enrollment' AND s.available AND i.enabled AND a.state='available' AND (s.expires_at IS NULL OR s.expires_at>now()) AND NOT EXISTS(SELECT 1 FROM public.feature f WHERE f.sample_id=s.id AND f.state='ready' AND (f.expires_at IS NULL OR f.expires_at>now()) AND (?::text IS NULL OR f.feature_space_id=?)) ORDER BY s.created_at,s.id LIMIT ?",space,space,limit);
+        List<Map<String,Object>> rows=data.store().jdbc().queryForList("SELECT s.id AS sample_id,s.asset_id,s.tracklet_id,s.identity_id,i.object_type,s.occurred_at,s.expires_at FROM public.sample s LEFT JOIN public.identity i ON i.id=s.identity_id JOIN public.media_asset a ON a.id=s.asset_id WHERE s.purpose=? AND s.available AND (s.purpose<>'enrollment' OR (s.identity_id IS NOT NULL AND i.enabled)) AND a.state='available' AND (s.expires_at IS NULL OR s.expires_at>now()) AND NOT EXISTS(SELECT 1 FROM public.feature f WHERE f.sample_id=s.id AND f.state='ready' AND (f.expires_at IS NULL OR f.expires_at>now()) AND (?::text IS NULL OR f.feature_space_id=?)) ORDER BY s.created_at,s.id LIMIT ?",purpose,space,space,limit);
         for(Map<String,Object> row:rows){data.recordings().asset(actor,row.get("asset_id").toString());clean(row);}return values("items",rows);
     }
 

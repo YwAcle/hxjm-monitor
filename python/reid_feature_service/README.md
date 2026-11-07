@@ -329,7 +329,9 @@ curl -sS http://127.0.0.1:28024/v1/reid/text-reid-image-features \
 文本检索只读取数据库 `feature` 表中与文字空间 `feature_space_id` 相同的向量，
 因此登记照片必须预先用 `/v1/reid/text-reid-image-features` 编码并写入。
 仓库提供独立的 `python/video_analysis/enrollment_text_worker.py`（与既有样本管线
-共用业务接口，仅消费 `purpose=enrollment` 的待处理样本，不处理实时帧和查询）：
+共用业务接口，不处理实时帧和查询）。它默认消费 `purpose=enrollment` 的待处理样本；
+设置 `ENROLLMENT_TEXT_SAMPLE_PURPOSE=history` 后改为消费 `purpose=history` 的
+历史轨迹裁剪图，使文本描述可以在全部保留期图像中检索：
 
 ```bash
 cd /data/nfs_storage/hxjm-zwd/python
@@ -338,13 +340,16 @@ ENROLLMENT_TEXT_SERVICE_ID=video-analysis \
 ENROLLMENT_TEXT_SERVICE_TOKEN=<service-token> \
 ENROLLMENT_TEXT_INSTANCE_ID=<feature-capability-instance-uuid> \
 ENROLLMENT_TEXT_FEATURE_URL=http://127.0.0.1:28024 \
+ENROLLMENT_TEXT_SAMPLE_PURPOSE=history \
 python -m video_analysis.enrollment_text_worker
 ```
 
 该进程先读取 `/health.text_reid`，用 `definition_text` / `definition_sha256`
-注册或核对特征空间，再为每条 enrollment 样本写入 `feature`（`aggregation_method=single`、
-关联 `sample_id` 与 `identity_id`）和对应的 `feature_contribution`。它不会把
+注册或核对特征空间，再为每条样本写入 `feature`（`aggregation_method=single`、
+关联 `sample_id`）和对应的 `feature_contribution`。enrollment 样本额外关联
+`identity_id`；history 样本保留 `tracklet_id`、不写身份关联。它不会把
 Chinese-CLIP 向量写入 CLIP-ReID 的 3072 维空间，也不会写入轨迹实时特征。
+两种用途可各启一个进程并行运行，互不争抢同一批样本。
 停止使用 Ctrl+C / SIGTERM，进程会等待当前批次后退出。
 
 ### `GET /health`
