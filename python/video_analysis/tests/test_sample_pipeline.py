@@ -26,8 +26,10 @@ class FakeClient:
         self.done = threading.Event()
         self.sample_payloads = []
         self.feature_payloads = []
+        self.finish_payloads = []
         self.task_payloads = []
         self.fail_feature_once = False
+        self.running_task = None
 
     def get(self, path, parameters=None):
         self.paths.append(path)
@@ -52,6 +54,8 @@ class FakeClient:
         self.calls.append('task')
         self.task_payloads.append(dict(payload))
         assert payload['task_mode'] == 'once' and payload['input']['kind'] == 'image'
+        if self.running_task is not None:
+            return dict(self.running_task, duplicate=True)
         return {'task_id': identifier(), 'revision': 1, 'state': 'pending'}
 
     def start_task(self, payload):
@@ -73,6 +77,7 @@ class FakeClient:
 
     def finish_task(self, payload):
         self.calls.append('finish')
+        self.finish_payloads.append(dict(payload))
         assert len(payload['feature_ids']) == 1
         return {'state': 'succeeded'}
 
@@ -170,6 +175,20 @@ class SamplePipelineTests(unittest.TestCase):
         self.assertEqual(feature['identity_id'], row['identity_id'])
         self.assertIsNone(feature['expires_at'])
         self.assertNotIn('identity', client.calls)
+        # A second feature space must not reuse the task key of another one.
+        self.assertIn(':space:test-space:', client.task_payloads[0]['business_key'])
+
+    def test_restarted_worker_resumes_an_already_started_task(self):
+        client, pipeline, _, _, _ = self.fixture()
+        client.image_content = Mock(return_value=b'fixture-image')
+        client.running_task = {'task_id': identifier(), 'run_id': identifier(),
+                               'state': 'running', 'revision': 2}
+        row = {'sample_id': identifier(), 'asset_id': identifier(), 'identity_id': identifier(),
+               'occurred_at': datetime.now(timezone.utc).isoformat(), 'expires_at': None}
+        pipeline._enrollment(row)
+        self.assertNotIn('start', client.calls)
+        self.assertEqual(client.feature_payloads[0]['run_id'], client.running_task['run_id'])
+        self.assertEqual(client.finish_payloads[0]['run_id'], client.running_task['run_id'])
 
     def test_same_sample_with_new_instance_creates_distinct_business_task(self):
         client, pipeline, _, _, _ = self.fixture()
