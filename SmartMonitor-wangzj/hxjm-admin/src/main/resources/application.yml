@@ -175,8 +175,20 @@ hxjm:
             - streams.close
             - tasks.submit
             - tasks.start
+            - tasks.finish
             - results.register
             - tracking.close
+            - assets.upload
+            - media.resolve
+            - samples.register
+            - samples.process
+            - feature_spaces.register
+            - features.register
+            - identities.associate
+            - queries.process
+            - queries.get
+            - queries.candidates
+            - search.execute
           source-ids:
             - "3180e74c-e18c-4288-97ea-ddc394efc15d"
             - "b01796f4-14ef-4125-b0bd-9f21419bd4e5"
