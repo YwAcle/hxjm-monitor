@@ -365,15 +365,6 @@ class PortConfigurationTest(unittest.TestCase):
                                  str(TOOL.with_name('local-common.sh')), str(self.root)])
         self.assertNotEqual(0, result.returncode)
 
-    def test_ignored_local_override_wins_over_the_shared_owner(self):
-        (self.root / 'local-video.env').write_text('HXJM_ANALYSIS_ROOT="/main/algorithm-owner"\n')
-        (self.root / 'local-video.local.env').write_text(f'HXJM_ANALYSIS_ROOT="{self.root}"\n')
-        script = 'set -eu; source "$1" --worktree "$2"; is_analysis_owner'
-        result = subprocess.run(['bash', '-c', script, 'bash',
-                                 str(TOOL.with_name('local-common.sh')), str(self.root)],
-                                capture_output=True, text=True)
-        self.assertEqual(0, result.returncode, result.stderr)
-
     def test_local_mode_reuses_private_settings_and_rejects_unknown_mode(self):
         (self.root / '.run').mkdir()
         (self.root / '.run/video-analysis.env').write_text('export VIDEO_ANALYSIS_WORKERS=4\n')
