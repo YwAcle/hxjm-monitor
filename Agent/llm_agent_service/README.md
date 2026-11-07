@@ -2,7 +2,7 @@
 
 Agent 与 Report 共用根目录 `.env` 中的 `LLM_BASE_URL`、`LLM_MODEL_ID` 和 `LLM_API_KEY`。模型部署、API 切换与引擎配置见 [模型与推理配置说明](../模型与推理配置说明.md)。
 
-聊天主动行人检索使用远端服务：图片和截图通过 CLIP-ReID 提取查询图特征；文字描述通过 Chinese-CLIP 文本接口编码，直接检索样本管线已写入 `feature`/`sample`/`identity` 的登记照片特征，不在查询时重新编码照片。两套特征空间严格隔离，不读取或修改原库向量。只需配置 `REID_FEATURE_BASE_URL`、`REID_TIMEOUT_S`，以及可选的 `REID_FEATURE_SPACE_ID`、`REID_TEXT_FEATURE_SPACE_ID`、`REID_TEXT_CONTRACT_ID`、`REID_TEXT_MAX_CHARS` 和 `AGENT_MEDIA_ROOT`（候选卡片预览图根目录），不需要本地模型权重或后端切换；登记照片特征需由 `python/video_analysis/enrollment_text_worker.py` 预先写入。接口配置见 [CLIP-ReID接入说明](开发文档/CLIP-ReID接入说明.md)，验证、候选返回及文字检索的边界见 [登记库主动行人检索](开发文档/登记库主动行人检索最小接入.md)。
+聊天主动行人检索使用远端服务：图片和截图通过 CLIP-ReID 提取查询图特征；文字描述通过 Chinese-CLIP 文本接口编码，直接检索样本管线已写入 `feature`/`sample`/`identity` 的登记照片特征，不在查询时重新编码照片。两套特征空间严格隔离，不读取或修改原库向量。只需配置 `REID_FEATURE_BASE_URL`、`REID_TIMEOUT_S`，以及可选的 `REID_FEATURE_SPACE_ID`、`REID_TEXT_FEATURE_SPACE_ID`、`REID_TEXT_CONTRACT_ID`、`REID_TEXT_MAX_CHARS` 和 `AGENT_MEDIA_ROOT`（候选卡片预览图根目录），不需要本地模型权重或后端切换；登记照片和历史裁剪图特征由 `video_analysis` 样本管线在 `VIDEO_SAMPLES_ENABLED=true` 时写入（默认 `VIDEO_SAMPLES_TEXT_ENABLED=true`，同时写 CLIP-ReID 与 Chinese-CLIP 两个空间）；也可单独运行 `python/video_analysis/enrollment_text_worker.py` 只写文本空间。接口配置见 [CLIP-ReID接入说明](开发文档/CLIP-ReID接入说明.md)，验证、候选返回及文字检索的边界见 [登记库主动行人检索](开发文档/登记库主动行人检索最小接入.md)。
 
 面向智慧监控大屏的规则路由、数据检索和大模型总结服务。当前实现不是通用 ReAct Agent；它根据异常关键词和熟人姓名选择确定的业务查询流程，并通过 LangChain 调用共享的 SGLang InternVL 服务。
 

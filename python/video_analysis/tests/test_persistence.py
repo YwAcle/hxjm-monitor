@@ -321,6 +321,36 @@ class PersistenceTests(unittest.TestCase):
         with patch.object(self.publisher.spool, 'snapshot', side_effect=OSError('unavailable')):
             self.assertEqual(self.publisher.health()['state'], 'degraded')
 
+    def test_record_returns_public_ids_and_confirms_samples_after_ack(self):
+        seen = []
+        self.publisher.on_confirmed = lambda payload, result: seen.append((payload, result))
+        frame = capture(1)
+        context = self.publisher._begin_frame('camera_1', frame, 'service-a', 'component-a')
+        reference = self.publisher._record(context, frame, [detection()], frame.frame_ts_ms + 10, [])
+        self.assertEqual(reference.source_id, self.config.sources['camera_1']['source_id'])
+        self.assertEqual(reference.stream_session_id,
+                         self.publisher.spool.load_state(context)['input_id'])
+        stored = [job['payload']['frame'] for _, job in self.publisher.spool.lane_entries('camera_1')
+                  if job['kind'] == 'frame']
+        self.assertEqual(reference.frame_id, stored[0]['frame_id'])
+        self.drain()
+        self.assertEqual(len(seen), 1)
+        payload, result = seen[0]
+        self.assertEqual(payload['source_id'], reference.source_id)
+        self.assertEqual(payload['results'][0]['frame_id'], reference.frame_id)
+        self.assertEqual(set(result['accepted_result_ids']),
+                         {payload['results'][0]['result_id']})
+
+    def test_confirmed_callback_failure_does_not_reopen_the_batch(self):
+        def fail(_payload, _result):
+            raise RuntimeError('sample pipeline unavailable')
+        self.publisher.on_confirmed = fail
+        with self.assertLogs('video_analysis.result_publisher', level='ERROR'):
+            self.frame()
+            self.drain()
+        self.assertEqual(len(self.api.frames), 1)
+        self.assertEqual(self.publisher.spool.lane_entries('camera_1'), [])
+
     def test_service_identity_change_makes_no_api_request(self):
         self.frame()
         self.config.service_id = 'other-owner'
@@ -332,6 +362,37 @@ class PersistenceTests(unittest.TestCase):
 class ClientAndConfigTests(unittest.TestCase):
     def test_opt_in_is_disabled_without_config_or_files(self):
         self.assertFalse(PersistenceConfig({}).enabled)
+
+    def test_video_samples_are_opt_in_and_encode_both_spaces_by_default(self):
+        self.assertIsNone(PersistenceConfig._samples({}))
+        samples = PersistenceConfig._samples({
+            'VIDEO_SAMPLES_ENABLED': 'true',
+            'VIDEO_SAMPLES_FEATURE_URL': 'http://127.0.0.1:28024',
+            'VIDEO_SAMPLES_INSTANCE_ID': new_id()})
+        self.assertTrue(samples['text_enabled'])
+        self.assertEqual(samples['feature_url'], 'http://127.0.0.1:28024')
+        self.assertEqual(samples['poll_interval_seconds'], 5)
+        self.assertFalse(PersistenceConfig._samples({
+            'VIDEO_SAMPLES_ENABLED': 'true',
+            'VIDEO_SAMPLES_FEATURE_URL': 'http://127.0.0.1:28024',
+            'VIDEO_SAMPLES_INSTANCE_ID': new_id(),
+            'VIDEO_SAMPLES_TEXT_ENABLED': 'false'})['text_enabled'])
+        for changes in ({'VIDEO_SAMPLES_FEATURE_URL': 'http://127.0.0.1:28024/feature'},
+                        {'VIDEO_SAMPLES_FEATURE_URL': ''},
+                        {'VIDEO_SAMPLES_INSTANCE_ID': '0' * 36},
+                        {'VIDEO_SAMPLES_THRESHOLD': '2'},
+                        {'VIDEO_SAMPLES_QUEUE_SIZE': '0'},
+                        {'VIDEO_SAMPLES_TEXT_ENABLED': 'maybe'},
+                        {'VIDEO_SAMPLES_POLL_SECONDS': '0'}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                PersistenceConfig._samples(dict({
+                    'VIDEO_SAMPLES_ENABLED': 'true',
+                    'VIDEO_SAMPLES_FEATURE_URL': 'http://127.0.0.1:28024',
+                    'VIDEO_SAMPLES_INSTANCE_ID': new_id()}, **changes))
+
+    def test_samples_require_persistence(self):
+        with self.assertRaisesRegex(ValueError, 'require'):
+            PersistenceConfig({'VIDEO_SAMPLES_ENABLED': 'true'})
 
     def test_redirect_and_legacy_success_are_not_acknowledgements(self):
         for data in (b'{"code":200}', b'[]', b'<html>login</html>'):

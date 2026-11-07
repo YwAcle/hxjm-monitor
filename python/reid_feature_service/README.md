@@ -328,10 +328,15 @@ curl -sS http://127.0.0.1:28024/v1/reid/text-reid-image-features \
 
 文本检索只读取数据库 `feature` 表中与文字空间 `feature_space_id` 相同的向量，
 因此登记照片必须预先用 `/v1/reid/text-reid-image-features` 编码并写入。
-仓库提供独立的 `python/video_analysis/enrollment_text_worker.py`（与既有样本管线
-共用业务接口，不处理实时帧和查询）。它默认消费 `purpose=enrollment` 的待处理样本；
-设置 `ENROLLMENT_TEXT_SAMPLE_PURPOSE=history` 后改为消费 `purpose=history` 的
-历史轨迹裁剪图，使文本描述可以在全部保留期图像中检索：
+常规部署中，`video_analysis` 的样本管线在 `VIDEO_SAMPLES_ENABLED=true` 时
+（默认 `VIDEO_SAMPLES_TEXT_ENABLED=true`）会同时写 CLIP-ReID 图片空间和本文字空间：
+实时历史裁剪图、`purpose=enrollment` 登记照片都在同一后台线程编码，登记照片额外关联
+`identity_id`，历史裁剪图保留 `tracklet_id`、不写身份关联。此时不需要单独启动worker。
+
+如果只想让文本空间在独立进程中写入（例如跳开实时帧线程的推理负载），仍可使用
+`python/video_analysis/enrollment_text_worker.py`。它默认消费 `purpose=enrollment`
+的待处理样本；设置 `ENROLLMENT_TEXT_SAMPLE_PURPOSE=history` 后改为消费
+`purpose=history` 的历史轨迹裁剪图，使文本描述可以在全部保留期图像中检索：
 
 ```bash
 cd /data/nfs_storage/hxjm-zwd/python

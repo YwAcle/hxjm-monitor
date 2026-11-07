@@ -29,6 +29,8 @@ class CapturedFrame:
     decode_ts_ms: int = 0
     media_pts_ms: float = None
     timestamp_kind: str = 'decode_wall_clock'
+    # Public IDs assigned by ResultPublisher once the frame is durably enqueued.
+    public_frame_ref: object = None
 
 
 class MediaClockMapper:

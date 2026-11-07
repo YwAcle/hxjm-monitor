@@ -42,6 +42,37 @@ class ProducerBoundaryTests(unittest.IsolatedAsyncioTestCase):
                                  infer=AsyncMock(return_value=([], 1)))
         return module, analyzer, publisher, camera, worker, frame
 
+    def test_sample_pipeline_requires_result_publisher(self):
+        module = load_analyzer()
+        with self.assertRaisesRegex(ValueError, 'result publisher'):
+            module.Analyzer(cameras={'camera_1': 'rtsp://unused'}, worker_count=1,
+                            sample_pipeline=SimpleNamespace())
+
+    async def test_sample_pipeline_gets_public_ids_after_durable_record(self):
+        module = load_analyzer()
+        offered = []
+        sample_pipeline = SimpleNamespace(offer=lambda *a, **k: offered.append((a, k)))
+        reference = SimpleNamespace(source_id='source', stream_session_id='session',
+                                    frame_id='public-frame')
+        publisher = SimpleNamespace(begin_frame=AsyncMock(return_value='stable-context'),
+                                    record=AsyncMock(return_value=reference), failure=AsyncMock())
+        analyzer = module.Analyzer(cameras={'camera_1': 'rtsp://unused'}, worker_count=1,
+                                   result_publisher=publisher, sample_pipeline=sample_pipeline)
+        frame = SimpleNamespace(frame=object(), frame_id=9, stream_epoch=1,
+                                frame_ts_ms=time.time_ns() // 1_000_000,
+                                source_width=1920, source_height=1080)
+        camera = analyzer._order[0]
+        camera.grabber = SimpleNamespace(latest_frame=lambda: frame,
+                                         snapshot=lambda: {'stream_epoch': frame.stream_epoch})
+        worker = SimpleNamespace(slot=0, generation=1, ready=True, last_removed_tracks=[],
+                                 infer=AsyncMock(return_value=([], 1)))
+        await analyzer._analyze(worker, camera, frame)
+        captured, detections = offered[0][0]
+        self.assertIs(captured, frame)
+        self.assertIs(frame.public_frame_ref, reference)
+        self.assertEqual(offered[0][1]['tracking_context_id'], 'stable-context')
+        self.assertEqual(offered[0][1]['algorithm'], 'botsort')
+
     async def test_expired_display_result_is_still_enqueued(self):
         _, analyzer, publisher, camera, worker, frame = self.setup_case()
         frame.frame_ts_ms -= 60000

@@ -3,6 +3,8 @@ import asyncio
 import logging
 import math
 import time
+from copy import deepcopy
+from types import SimpleNamespace
 from urllib.parse import urlencode
 
 from .tracking_client import BusinessClient, BusinessError
@@ -18,8 +20,11 @@ class PersistenceError(Exception):
 
 
 class ResultPublisher:
-    def __init__(self, config, client=None, spool=None):
+    def __init__(self, config, client=None, spool=None, on_confirmed=None):
+        if on_confirmed is not None and not callable(on_confirmed):
+            raise ValueError('on_confirmed must be callable')
         self.config = config
+        self.on_confirmed = on_confirmed
         self.client = client or BusinessClient(config.business_base_url, config.service_id,
                                                config.service_token, config.timeout)
         reserve = min(config.max_bytes // 2, max(4 * 1024 ** 2, config.batch_bytes * (len(config.sources) + 1) * 2))
@@ -165,7 +170,7 @@ class ResultPublisher:
             return context_id
 
     async def record(self, context_id, captured, detections, completed_ms, removed_tracks=()):
-        await self._durable(self._record, context_id, captured, detections, completed_ms, removed_tracks)
+        return await self._durable(self._record, context_id, captured, detections, completed_ms, removed_tracks)
 
     def _record(self, context_id, captured, detections, completed_ms, removed_tracks):
         with self.spool.mutex:
@@ -195,6 +200,11 @@ class ResultPublisher:
                 for local in known:
                     tracks.pop(str(local), None)
                 self.spool.merge_state(context_id, {'tracks': tracks})
+            # The sample pipeline needs the public IDs that appear in /results/register,
+            # not the decoder-local frame counter.
+            return SimpleNamespace(source_id=input_state['source'],
+                                   stream_session_id=context['input_id'],
+                                   frame_id=fact['frame_id'])
 
     async def interrupt(self, camera, reason='inference_error', input_ended=False):
         await self._durable(self._interrupt, camera, reason, input_ended)
@@ -351,6 +361,15 @@ class ResultPublisher:
             result = self.client.call('/results/register', body)
             expected = {f['result_id'] for f in body['results']}
             accepted, rejected, failed = self._acknowledgement(result, expected)
+            if self.on_confirmed is not None:
+                try:
+                    # Confirm before a partial retry mutates the frozen request. The
+                    # sample pipeline filters by accepted/duplicate ids itself.
+                    self.on_confirmed(deepcopy(body), deepcopy(result))
+                except Exception:
+                    # Sampling is downstream of confirmed persistence; a failure there
+                    # must not resurrect or re-send an already acknowledged batch.
+                    logger.exception('Confirmed-result callback failed')
             delivery['confirmed'] = sorted(set(delivery['confirmed']) | accepted)
             self.spool.update(path, job)
             if rejected:
