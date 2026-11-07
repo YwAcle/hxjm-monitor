@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import math
 import os
 from collections import defaultdict
 from datetime import tzinfo
@@ -12,12 +11,13 @@ from uuid import uuid4
 
 from PIL import Image
 
-from llm_agent_service.db.gallery_repo import GalleryTarget, list_gallery
 from llm_agent_service.db.identity_repo import (
     count_searchable_features,
+    count_text_identities,
     get_feature_space,
     list_occurrences,
     search_identities,
+    search_text_identities,
 )
 from llm_agent_service.service.clipreid_client import ClipReIDClient
 from llm_agent_service.service.text_reid_client import TextReIDClient, TextTooLongError
@@ -30,24 +30,18 @@ _PREVIEW_MAX_BYTES = 200 * 1024
 class GallerySearchService:
     def __init__(self, *, engine, schema: str, feature_client: ClipReIDClient,
                  text_feature_client: TextReIDClient,
-                 candidate_limit: int = 2000, text_max_chars: int = 200,
+                 text_max_chars: int = 200,
                  occurrence_limit: int = 5, timezone: tzinfo | None = None,
                  media_root: str | Path | None = None):
         self.engine = engine
         self.schema = schema
         self.feature_client = feature_client
         self.text_feature_client = text_feature_client
-        self.candidate_limit = candidate_limit
         self.text_max_chars = text_max_chars
         self.occurrence_limit = occurrence_limit
         self.timezone = timezone if isinstance(timezone, tzinfo) else None
         root = media_root if media_root is not None else os.getenv("AGENT_MEDIA_ROOT", "")
         self.media_root = Path(root).expanduser().resolve() if str(root).strip() else None
-
-    @staticmethod
-    def _candidate(row: GalleryTarget) -> dict:
-        return {"person_id": row.id, "name": row.name, "employee_id": row.employee_id,
-                "image_base64": row.image_base64}
 
     def search_image(self, image_base64: str, top_k: int) -> dict:
         base = {"type": "pedestrian_search", "search_type": "image", "scope": "active_reid_target",
@@ -101,17 +95,6 @@ class GallerySearchService:
 
     def search_selected(self, image_base64, bbox, top_k):
         return self._search_with_features(self.feature_client.screenshot_image(image_base64), top_k, bbox=bbox)
-
-    @staticmethod
-    def _rank(rows, query, vectors):
-        ranked = []
-        for row in rows:
-            vector = vectors.get(row.id)
-            if vector is not None:
-                score = max(-1.0, min(1.0, math.fsum(a * b for a, b in zip(query, vector))))
-                ranked.append((score, row))
-        ranked.sort(key=lambda item: (-item[0], item[1].id))
-        return ranked
 
     def _search_with_features(self, image: Image.Image, top_k: int, *, bbox=None, feature=None) -> dict:
         # 查询图仍由 CLIP-ReID 编码；候选向量直接读取样本管线已写入的 feature 表。
@@ -232,43 +215,79 @@ class GallerySearchService:
         }
 
     def search_description(self, description: str, top_k: int) -> dict:
-        """按外观描述在登记库中做文本→图像向量检索。"""
-        base = {"type": "pedestrian_search", "search_type": "text", "scope": "active_reid_target",
-                "count": 0, "candidates": []}
+        """按外观描述检索登记身份在 Chinese-CLIP 空间中的外观特征。"""
+        base = {"type": "pedestrian_search", "search_type": "text",
+                "scope": "registered_identity", "count": 0, "candidates": []}
         text = (description or "").strip()
         if not text:
             return dict(base, status="missing_description", message="请提供衣着、颜色、携带物品等外观描述。")
         if len(text) > self.text_max_chars:
             return dict(base, status="description_too_long",
                         message=f"外观描述过长，请精简到{self.text_max_chars}个字符以内。")
-        rows = list_gallery(self.engine, self.schema, self.candidate_limit + 1)
-        truncated = len(rows) > self.candidate_limit
-        rows = rows[:self.candidate_limit]
-        if not rows:
+        info = self.text_feature_client.health()
+        space = info["feature_space_id"]
+        db_space = get_feature_space(self.engine, self.schema, space)
+        if db_space is None:
+            return dict(base, status="feature_space_missing",
+                        message="数据库中还没有登记身份文本检索特征空间，未执行检索。")
+        if (not db_space.enabled or db_space.metric != "cosine"
+                or db_space.object_type != "person"
+                or db_space.dimensions != info["embedding_dim"]):
+            return dict(base, status="feature_space_incompatible",
+                        message="登记身份文本检索特征空间与当前 Chinese-CLIP 不兼容，未执行检索。")
+        scanned = count_text_identities(self.engine, self.schema, space)
+        if scanned == 0:
             return dict(base, status="empty_gallery", scanned_count=0, compatible_count=0,
-                        skipped_count=0, gallery_truncated=False,
-                        message="登记库中没有有效登记照片，未执行文本检索。")
+                        message="登记身份还没有可用的中文图文检索特征，未执行文本检索。")
         try:
-            query, vectors, info = self.text_feature_client.query_gallery(text, rows)
+            query, info = self.text_feature_client.query_text(text)
         except TextTooLongError:
             return dict(base, status="description_too_long",
                         message=f"外观描述超过模型可编码长度，请精简到{self.text_max_chars}个字符以内。")
-        ranked = self._rank(rows, query, vectors)
+        candidates = search_text_identities(
+            self.engine, self.schema, space, self._vector_literal(query), top_k)
+        if not candidates:
+            return dict(base, status="no_identity_candidates", scanned_count=scanned,
+                        compatible_count=0,
+                        message="登记身份外观特征存在，但没有关联到有效登记身份，无法返回候选。")
         return dict(
             base,
-            status="ok" if ranked else "no_valid_images",
+            status="ok",
             method=self.text_feature_client.method,
-            embedding_model=info["feature_space_id"],
+            embedding_model=space,
             text_contract_id=info["text_contract_id"],
             feature_dimension=info["embedding_dim"],
             score_type="cosine_similarity",
             text_chars=info["text_chars"], token_count=info["token_count"],
             language=info["language"],
-            scanned_count=len(rows), compatible_count=len(ranked),
-            skipped_count=len(rows) - len(ranked), gallery_truncated=truncated,
-            count=min(top_k, len(ranked)),
-            message="按文本描述与登记照片在 Chinese-CLIP 同一特征空间中的余弦相似度排序；"
+            scanned_count=scanned, compatible_count=candidates[0].compatible_count,
+            count=len(candidates),
+            message="按文本描述与登记身份照片在 Chinese-CLIP 同一特征空间中的余弦相似度排序；"
                     "没有校准阈值，候选仅用于外观筛选，不确认身份或在场情况。",
-            candidates=[dict(self._candidate(row), similarity=score)
-                        for score, row in ranked[:top_k]],
+            candidates=[self._text_candidate(candidate) for candidate in candidates],
         )
+
+    def _text_candidate(self, candidate) -> dict:
+        kind = "登记身份"
+        label = candidate.display_name or (
+            f"{kind} #{candidate.display_no}"
+            if candidate.display_no is not None else kind)
+        return {
+            "identity_id": candidate.identity_id,
+            # 保留 person_id 字段供现有前端候选卡片复用；它不是旧登记库 ID。
+            "person_id": candidate.identity_id,
+            "identity_kind": candidate.identity_kind,
+            "display_no": candidate.display_no,
+            "name": candidate.display_name,
+            "label": label,
+            "employee_id": candidate.employee_id,
+            "similarity": candidate.similarity,
+            "sample_id": candidate.sample_id,
+            "feature_id": candidate.feature_id,
+            # 登记照片由素材接口读取，避免把数据库中的 Base64 大字段放进检索响应。
+            "asset_id": candidate.asset_id,
+            "access_url": (f"/api/v1/business/assets/{candidate.asset_id}/content"
+                           if candidate.asset_id else None),
+            "first_seen_at": self._time(candidate.first_seen_at),
+            "last_seen_at": self._time(candidate.last_seen_at),
+        }

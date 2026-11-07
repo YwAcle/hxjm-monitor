@@ -1,4 +1,4 @@
-"""真实 multipart 序列化、版本隔离缓存和登记候选映射。"""
+"""真实 multipart 序列化、版本校验和登记候选映射。"""
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -11,7 +11,7 @@ from llm_agent_service.db.identity_repo import FeatureSpaceInfo, IdentityCandida
 from llm_agent_service.service.clipreid_client import ClipReIDClient
 from llm_agent_service.service.gallery_search import GallerySearchService
 from llm_report_service.llm.vision import decode_base64_image
-from tests.test_gallery_search import image_data, target
+from tests.test_gallery_search import image_data
 
 
 class ClipReIDTests(unittest.TestCase):
@@ -40,33 +40,17 @@ class ClipReIDTests(unittest.TestCase):
         self.assertFalse(kwargs["trust_env"])
         return self.client_class(transport=httpx.MockTransport(self.handler), **kwargs)
 
-    def test_cache_version_and_image_invalidation(self):
-        client = ClipReIDClient("http://reid.test:28024")
-        image = decode_base64_image(image_data())
-        with patch("llm_agent_service.service.clipreid_client.httpx.Client", self.client):
-            query, vectors, space = client.query_gallery(image, [target("A")])
-            self.assertEqual(query, vectors["A"])
-            self.assertEqual(space, self.space)
-            self.assertEqual(len(self.calls), 3)
-            client.query_gallery(image, [target("A")])
-            self.assertEqual(len(self.calls), 5)  # health + query only
-            self.space = "new-version"
-            client.query_gallery(image, [target("A")])
-            self.assertEqual(len(self.calls), 8)
-            client.query_gallery(image, [])
-            self.assertEqual(client._cache, {})
-
     def test_rejects_mixed_feature_space_and_invalid_vectors(self):
         client = ClipReIDClient("http://reid.test")
         with patch("llm_agent_service.service.clipreid_client.httpx.Client", self.client):
             self.response_space = "wrong"
             with self.assertRaisesRegex(ValueError, "特征空间"):
-                client.query_gallery(decode_base64_image(image_data()), [])
+                client.query_feature(decode_base64_image(image_data()))
             self.response_space = None
             for vector in ([0.0] * 3072, [True] * 3072, [1.0, 0.0], [2.0] + [0.0] * 3071):
                 self.vector = vector
                 with self.assertRaises(ValueError):
-                    client.query_gallery(decode_base64_image(image_data()), [])
+                    client.query_feature(decode_base64_image(image_data()))
             self.health_ready = False
             with self.assertRaisesRegex(ValueError, "未就绪"):
                 client.health()
@@ -127,34 +111,6 @@ class ClipReIDTests(unittest.TestCase):
                     self.assertIn("event: done", body)
                 else:
                     self.assertEqual(response.get_json()["data"]["candidates"][0]["person_id"], "A")
-
-    def test_changed_and_removed_photos_refresh_cache(self):
-        client = ClipReIDClient("http://reid.test")
-        image = decode_base64_image(image_data())
-        with patch("llm_agent_service.service.clipreid_client.httpx.Client", self.client):
-            client.query_gallery(image, [target("A"), target("B")])
-            self.assertEqual(len(self.calls), 4)
-            client.query_gallery(image, [target("A", image=image_data() + "\n")])
-            self.assertEqual(len(self.calls), 7)  # health + query + changed photo
-            self.assertEqual(len(client._cache), 1)
-            self.assertEqual(next(iter(client._cache))[1], "A")
-
-    def test_missing_or_invalid_photos_are_skipped(self):
-        client = ClipReIDClient("http://reid.test")
-        with patch("llm_agent_service.service.clipreid_client.httpx.Client", self.client):
-            _, vectors, _ = client.query_gallery(decode_base64_image(image_data()), [
-                target("missing", image=""), target("invalid", image="invalid image"),
-            ])
-        self.assertEqual(vectors, {})
-        self.assertEqual(len(self.calls), 2)  # health + query, no gallery encode
-
-    def test_gallery_encode_failure_aborts_instead_of_returning_partial_results(self):
-        client = ClipReIDClient("http://reid.test")
-        with patch.object(client, "health", return_value={"feature_space_id": self.space}), \
-             patch.object(client, "_encode", side_effect=[self.vector, self.vector, ValueError("请求失败")]):
-            with self.assertRaisesRegex(ValueError, "请求失败"):
-                client.query_gallery(decode_base64_image(image_data()), [target("A"), target("B")])
-        self.assertEqual(client._cache, {})
 
     def test_http_errors_fail_without_leaking_response(self):
         with patch("llm_agent_service.service.clipreid_client.httpx.Client") as factory:

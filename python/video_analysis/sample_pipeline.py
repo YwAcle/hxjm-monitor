@@ -93,6 +93,42 @@ class ReIDFeatureClient:
         return self._request('/v1/reid/person-crops', data, content_type)
 
 
+class TextReIDFeatureClient(ReIDFeatureClient):
+    """Chinese-CLIP image encoder whose vectors share the text search space.
+
+    Enrollment photos are encoded here so text queries and registered identities
+    live in one feature space; live-tracklet crops stay on the CLIP-ReID client.
+    """
+    def definition(self):
+        health = self._request('/health')
+        block = health.get('text_reid')
+        if not isinstance(block, dict):
+            raise BusinessUnavailable('FEATURE_SERVICE_NOT_READY')
+        if block.get('ready') is not True or block.get('alignment_verified') is not True:
+            raise BusinessUnavailable('FEATURE_SERVICE_NOT_READY')
+        text = block.get('definition_text')
+        if not isinstance(text, str) or hashlib.sha256(text.encode()).hexdigest() != block.get('definition_sha256'):
+            raise BusinessRequestError('FEATURE_DEFINITION_MISSING')
+        dimensions = block.get('embedding_dim')
+        if type(dimensions) is not int or not 1 <= dimensions <= 16000:
+            raise BusinessRequestError('INVALID_FEATURE_DIMENSIONS')
+        space = block.get('feature_space_id')
+        if not isinstance(space, str) or not space:
+            raise BusinessRequestError('FEATURE_SPACE_MISSING')
+        return {
+            'feature_space_id': space, 'definition_text': text,
+            'definition_sha256': block['definition_sha256'],
+            'definition_version': block.get('definition_version', '1'),
+            'object_type': 'person', 'feature_kind': 'text_reid', 'dimensions': dimensions,
+            'dtype': 'float32', 'normalization': 'l2', 'metric': 'cosine',
+        }
+
+    def extract(self, image, metadata, bbox=None):
+        # The text-space encoder always accepts a whole person crop; bbox is unused.
+        data, content_type = image_multipart({}, image)
+        return self._request('/v1/reid/text-reid-image-features', data, content_type)
+
+
 @dataclass
 class _Sample:
     key: tuple
@@ -123,7 +159,7 @@ class LocalSamplePipeline:
     def __init__(self, client, *, feature_url=None, threshold, instance_id=None,
                  capability_code='person.reidentification', queue_size=16,
                  selector=None, extractor=None, execution_for=None, finish_tasks=False,
-                 poll_interval_seconds=2):
+                 poll_interval_seconds=2, enrollment_only=False):
         if type(queue_size) is not int or queue_size <= 0:
             raise ValueError('Sample queue size must be positive')
         if type(threshold) not in (int, float) or not math.isfinite(threshold) or not 0 <= threshold <= 1:
@@ -138,6 +174,7 @@ class LocalSamplePipeline:
         self.extractor = extractor or ReIDFeatureClient(feature_url)
         self.execution_for = execution_for
         self.poll_interval_seconds = poll_interval_seconds
+        self.enrollment_only = bool(enrollment_only)
         self._condition = threading.Condition()
         self._jobs, self._selected = {}, {}
         self._selection_cleanup_at = 0
@@ -156,14 +193,17 @@ class LocalSamplePipeline:
         with self._condition:
             if self._thread is not None or self._stopping:
                 raise RuntimeError('Sample worker cannot be restarted')
-            self._thread = threading.Thread(target=self._run, name='history-samples', daemon=True)
-            self._thread.start()
+            if not self.enrollment_only:
+                self._thread = threading.Thread(target=self._run, name='history-samples', daemon=True)
+                self._thread.start()
             self._material_thread = threading.Thread(target=self._poll_materials,
                                                      name='query-enrollment-features', daemon=True)
             self._material_thread.start()
 
     def offer(self, captured, detections, *, tracking_context_id, algorithm='botsort'):
         """Copy selected crops only; no encoding, extraction or network on this path."""
+        if self.enrollment_only:
+            return 0
         reference = getattr(captured, 'public_frame_ref', None)
         if reference is None or algorithm != 'botsort' or not tracking_context_id:
             return 0
@@ -205,6 +245,8 @@ class LocalSamplePipeline:
 
     def confirmed(self, payload, response):
         """Called after results.register confirms each accepted or duplicate frame."""
+        if self.enrollment_only:
+            return
         confirmed = set(response.get('accepted_result_ids', [])) | set(response.get('duplicate_result_ids', []))
         frames = {result['frame_id'] for result in payload.get('results', [])
                   if result.get('result_id') in confirmed}
@@ -227,7 +269,8 @@ class LocalSamplePipeline:
                     'materials': {'completed': self._material_completed, 'failed': self._material_failed,
                                   'last_error': self._material_error,
                                   'thread_alive': self._material_thread is not None and self._material_thread.is_alive()},
-                    'strategy': self.selector.name}
+                    'strategy': self.selector.name,
+                    'mode': 'enrollment_only' if self.enrollment_only else 'history'}
 
     def stop(self, timeout=5):
         with self._condition:
@@ -412,15 +455,21 @@ class LocalSamplePipeline:
                 self._ensure_space()
                 enrolled = self.client.get('/samples/pending', {
                     'purpose': 'enrollment', 'feature_space_id': self._space['feature_space_id'], 'limit': 4})
-                queries = self.client.get('/queries/pending', {'limit': 4})
-                for kind, response in (('enrollment', enrolled), ('query', queries)):
+                queries = (None if self.enrollment_only
+                           else self.client.get('/queries/pending', {'limit': 4}))
+                batches = [('enrollment', enrolled)]
+                if queries is not None:
+                    batches.append(('query', queries))
+                for kind, response in batches:
                     name = 'sample_id' if kind == 'enrollment' else 'query_id'
                     present = {row[name] for row in response['items']}
                     response['items'].extend(job.responses['_pending_row']
                                              for key, job in list(self._material_cache.items())
                                              if key[0] == kind and key[1] not in present)
-                for kind, rows, processor in (('enrollment', enrolled['items'], self._enrollment),
-                                              ('query', queries['items'], self._query)):
+                processors = [('enrollment', enrolled['items'], self._enrollment)]
+                if queries is not None:
+                    processors.append(('query', queries['items'], self._query))
+                for kind, rows, processor in processors:
                     for row in rows:
                         if self._material_stop.is_set():
                             return

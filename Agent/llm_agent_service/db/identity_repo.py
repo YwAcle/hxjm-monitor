@@ -1,7 +1,7 @@
-"""只读检索新轨迹身份表：历史特征、临时身份和真实轨迹记录。
+"""只读检索轨迹身份表和登记身份的文本检索特征。
 
-检索对象是样本管线写入的 ``feature`` 向量，而不是登记照片重新编码的结果。
-本模块不写数据库，也不创建身份或轨迹。
+图片检索读取样本管线写入的轨迹 ``feature`` 向量；文本检索读取同一管线为
+登记照片写入的 enrollment ``feature`` 向量。本模块不写数据库，也不创建身份或轨迹。
 """
 
 from __future__ import annotations
@@ -51,6 +51,22 @@ class IdentityOccurrence:
     last_seen_at: datetime
     storage_key: str | None = None
     content_type: str | None = None
+
+
+@dataclass(frozen=True)
+class TextIdentityCandidate:
+    identity_id: str
+    identity_kind: str
+    display_no: int | None
+    display_name: str | None
+    employee_id: str | None
+    similarity: float
+    feature_id: str
+    sample_id: str
+    asset_id: str | None
+    first_seen_at: datetime | None
+    last_seen_at: datetime | None
+    compatible_count: int
 
 
 def _schema(schema: str) -> str:
@@ -193,6 +209,106 @@ def search_identities(engine, schema: str, feature_space_id: str, query_vector: 
             display_name=row["display_name"],
             employee_id=row["employee_id"],
             similarity=max(-1.0, min(1.0, float(row["similarity"]))),
+            first_seen_at=row["first_seen_at"],
+            last_seen_at=row["last_seen_at"],
+            compatible_count=int(row["compatible_count"]),
+        )
+        for row in rows
+    ]
+
+
+def count_text_identities(engine, schema: str, feature_space_id: str) -> int:
+    """统计文本特征空间中拥有可用登记照片特征的身份数量。"""
+    schema = _schema(schema)
+    with engine.connect() as conn:
+        value = conn.execute(text(f'''
+            SELECT count(DISTINCT i.id)
+            FROM "{schema}".feature f
+            JOIN "{schema}".sample s
+              ON s.id = f.sample_id
+             AND s.purpose = 'enrollment'
+             AND s.available
+             AND (s.expires_at IS NULL OR s.expires_at > now())
+            JOIN "{schema}".identity i
+              ON i.id = COALESCE(s.identity_id, f.identity_id)
+             AND i.identity_kind = 'registered'
+             AND i.enabled
+             AND (i.expires_at IS NULL OR i.expires_at > now())
+            WHERE f.feature_space_id = :space
+              AND f.state = 'ready'
+              AND f.embedding IS NOT NULL
+              AND (f.expires_at IS NULL OR f.expires_at > now())
+        '''), {"space": feature_space_id}).scalar_one()
+    return int(value or 0)
+
+
+def search_text_identities(engine, schema: str, feature_space_id: str, query_vector: str,
+                           limit: int) -> list[TextIdentityCandidate]:
+    """按余弦相似度检索登记身份的外观特征，每个身份只保留最相似的一张登记照片。
+
+    ``query_vector`` 是 pgvector 文本字面量，例如 ``[0.1,0.2,...]``。检索对象是样本
+    管线为同一 Chinese-CLIP 空间写入的 enrollment 特征，不在查询时重新编码照片。
+    """
+    schema = _schema(schema)
+    sql = text(f'''
+        WITH scored AS (
+            SELECT i.id AS identity_id,
+                   f.id AS feature_id,
+                   s.id AS sample_id,
+                   s.asset_id,
+                   1 - (f.embedding <=> CAST(:query AS vector)) AS similarity
+            FROM "{schema}".feature f
+            JOIN "{schema}".sample s
+              ON s.id = f.sample_id
+             AND s.purpose = 'enrollment'
+             AND s.available
+             AND (s.expires_at IS NULL OR s.expires_at > now())
+            JOIN "{schema}".identity i
+              ON i.id = COALESCE(s.identity_id, f.identity_id)
+             AND i.identity_kind = 'registered'
+             AND i.enabled
+             AND (i.expires_at IS NULL OR i.expires_at > now())
+            WHERE f.feature_space_id = :space
+              AND f.state = 'ready'
+              AND f.embedding IS NOT NULL
+              AND (f.expires_at IS NULL OR f.expires_at > now())
+        ), best AS (
+            SELECT DISTINCT ON (identity_id)
+                   identity_id, feature_id, sample_id, asset_id, similarity
+            FROM scored
+            ORDER BY identity_id, similarity DESC, feature_id
+        )
+        SELECT b.identity_id::text AS identity_id,
+               b.feature_id::text AS feature_id,
+               b.sample_id::text AS sample_id,
+               b.asset_id::text AS asset_id,
+               b.similarity,
+               i.identity_kind, i.display_no, i.display_name, i.employee_id,
+               i.first_seen_at, i.last_seen_at,
+               count(*) OVER () AS compatible_count
+        FROM best b
+        JOIN "{schema}".identity i ON i.id = b.identity_id
+        WHERE b.similarity IS NOT NULL
+        ORDER BY b.similarity DESC, b.identity_id
+        LIMIT :limit
+    ''')
+    with engine.connect() as conn:
+        rows = conn.execute(sql, {
+            "query": query_vector,
+            "space": feature_space_id,
+            "limit": int(limit),
+        }).mappings().all()
+    return [
+        TextIdentityCandidate(
+            identity_id=str(row["identity_id"]),
+            identity_kind=str(row["identity_kind"]),
+            display_no=(int(row["display_no"]) if row["display_no"] is not None else None),
+            display_name=row["display_name"],
+            employee_id=row["employee_id"],
+            similarity=max(-1.0, min(1.0, float(row["similarity"]))),
+            feature_id=str(row["feature_id"]),
+            sample_id=str(row["sample_id"]),
+            asset_id=(str(row["asset_id"]) if row["asset_id"] is not None else None),
             first_seen_at=row["first_seen_at"],
             last_seen_at=row["last_seen_at"],
             compatible_count=int(row["compatible_count"]),
