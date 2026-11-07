@@ -63,6 +63,12 @@ class DescriptionSearchArgs(BaseModel):
     top_k: int = Field(default=5, ge=1, le=10, description="最多返回的相似登记照片数，不是全库统计。")
 
 
+class HistoryDescriptionSearchArgs(BaseModel):
+    description: str = Field(min_length=1, max_length=200,
+                             description="用户明确提供的衣着、颜色、携带物品等外观条件，压缩为简短短语，不翻译、不扩写、不补姓名/时间/地点；不得编造。")
+    top_k: int = Field(default=5, ge=1, le=10, description="最多返回的相似历史轨迹图像数，不是全库统计。")
+
+
 def _display_time(service: ReidService, value: datetime | None) -> str | None:
     """将数据库时间转成面向中文用户展示的北京时间，保留秒级精度。"""
     if value is None:
@@ -225,8 +231,22 @@ def build_default_registry(service: ReidService, gallery_search: GallerySearchSe
             "结果是相似度排序，不是身份确认；没有校准阈值，不能把首位当作命中。"
             "特征库为空或文本服务不可用时说明未完成检索，不得说没有匹配。"
             "不支持按时间、摄像头筛选，不查历史出现记录；登记照片外观可能不同于当前外观。"
-            "普通图片描述、读图或数人无需调用。",
+            "普通图片描述、读图或数人无需调用。该工具只在已登记人员中检索；"
+            "用户要在全部历史画面中找相似图像时使用 search_pedestrians_by_description_in_history。",
             DescriptionSearchArgs, lambda a: gallery_search.search_description(a.description, a.top_k),
+        ))
+        registry.register(ToolSpec(
+            "search_pedestrians_by_description_in_history",
+            "用户按衣着、颜色、背包等外观描述，要求在所有已入库历史监控轨迹图像中找最相似画面时使用。"
+            "调用远端 Chinese-CLIP 文本接口编码描述，在样本管线为 history 样本写入的同一特征空间中"
+            "按余弦相似度返回轨迹裁剪图候选；结果不限于已登记身份，已关联身份的候选带姓名，"
+            "未识别轨迹没有姓名，不得编造。候选通过 access_url 或 image_base64 读取，并带出现时间和摄像头。"
+            "结果是外观相似度排序，不是身份确认；没有校准阈值，不能把首位当作命中。"
+            "只覆盖当前保留期内的历史轨迹，不支持按时间、摄像头筛选，不查实时摄像头。"
+            "历史轨迹还没有文本特征或文本服务不可用时说明未完成检索，不得说没有匹配人员。"
+            "与 search_pedestrians_by_description 的区别：后者只在已登记人员中检索。",
+            HistoryDescriptionSearchArgs,
+            lambda a: gallery_search.search_description_in_history(a.description, a.top_k),
         ))
     return registry
 

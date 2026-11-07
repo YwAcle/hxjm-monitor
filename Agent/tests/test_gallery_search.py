@@ -17,7 +17,8 @@ from llm_agent_service.app import create_app
 from llm_agent_service.config import DbConfig, ServiceConfig
 from llm_agent_service.db.identity_repo import (
     FeatureSpaceInfo, IdentityCandidate, IdentityOccurrence, TextIdentityCandidate,
-    count_text_identities, get_feature_space, list_occurrences, search_text_identities,
+    TextSampleCandidate, count_text_identities, count_text_samples, get_feature_space,
+    list_occurrences, search_text_identities, search_text_samples,
 )
 from llm_agent_service.service.gallery_search import GallerySearchService
 from llm_agent_service.service.text_reid_client import TextTooLongError
@@ -36,6 +37,19 @@ def text_candidate(identity_id="A", name="登记A", score=1.0):
         "feature-" + identity_id, "sample-" + identity_id, "asset-" + identity_id,
         datetime(2026, 10, 1, tzinfo=timezone.utc),
         datetime(2026, 11, 3, tzinfo=timezone.utc), 1)
+
+
+def text_sample_candidate(tracklet_id="t-1", identity_id=None, name=None, score=0.9):
+    return TextSampleCandidate(
+        "feature-" + tracklet_id, "sample-" + tracklet_id, tracklet_id,
+        "asset-" + tracklet_id, "images/history/" + tracklet_id + ".jpg", "image/jpeg",
+        "source-1", "摄像头001",
+        datetime(2026, 11, 3, 1, 0, tzinfo=timezone.utc),
+        datetime(2026, 11, 3, 1, 0, tzinfo=timezone.utc),
+        datetime(2026, 11, 3, 1, 1, tzinfo=timezone.utc), score,
+        identity_id, ("registered" if identity_id else None),
+        (7 if identity_id else None), name,
+        ("E" + identity_id if identity_id else None), 2)
 
 
 def text_info(space="chinese-clip-test", dim=2):
@@ -319,6 +333,80 @@ class GallerySearchTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             count_text_identities(engine, 'public"; DROP TABLE x', "space")
 
+    @patch("llm_agent_service.service.gallery_search.count_text_samples")
+    @patch("llm_agent_service.service.gallery_search.search_text_samples")
+    @patch("llm_agent_service.service.gallery_search.get_feature_space")
+    def test_history_text_search_returns_tracklet_candidates(self, space, search, count):
+        space.return_value = FeatureSpaceInfo("chinese-clip-test", "person", 2, "cosine", True)
+        count.return_value = 4
+        self.text_features.health.return_value = text_info()
+        self.text_features.query_text.return_value = ([1.0, 0.0], text_info())
+        search.return_value = [
+            text_sample_candidate("t-1", "A", "张三", 0.9),
+            text_sample_candidate("t-2", score=0.6),
+        ]
+        result = self.service.search_description_in_history("红衣服的人", 2)
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["search_type"], "text")
+        self.assertEqual(result["scope"], "history_samples")
+        self.assertEqual(result["method"], "remote_chinese_clip_text")
+        self.assertEqual(result["embedding_model"], "chinese-clip-test")
+        self.assertEqual(result["scanned_count"], 4)
+        self.assertEqual(result["compatible_count"], 2)
+        self.assertEqual(result["count"], 2)
+        linked, unlinked = result["candidates"]
+        self.assertEqual(linked["tracklet_id"], "t-1")
+        self.assertEqual(linked["sample_id"], "sample-t-1")
+        self.assertEqual(linked["feature_id"], "feature-t-1")
+        self.assertEqual(linked["identity_id"], "A")
+        self.assertEqual(linked["name"], "张三")
+        self.assertEqual(linked["access_url"],
+                         "/api/v1/business/assets/asset-t-1/content")
+        self.assertEqual(linked["occurrence_count"], 1)
+        self.assertEqual(linked["occurrences"][0]["tracklet_id"], "t-1")
+        self.assertEqual(linked["occurrences"][0]["camera"], "摄像头001")
+        self.assertEqual(linked["occurrences"][0]["access_url"],
+                         "/api/v1/business/assets/asset-t-1/content")
+        self.assertIsNone(unlinked["identity_id"])
+        self.assertIsNone(unlinked["person_id"])
+        self.assertIsNone(unlinked["name"])
+        self.assertEqual(unlinked["label"], "未识别轨迹")
+        # 未配置媒体根目录时不读取本地图片，只返回素材接口地址。
+        self.assertIsNone(unlinked["image_base64"])
+        self.text_features.query_text.assert_called_once_with("红衣服的人")
+        search.assert_called_once_with(
+            self.service.engine, "public", "chinese-clip-test", "[1.0,0.0]", 2)
+
+    @patch("llm_agent_service.service.gallery_search.count_text_samples")
+    @patch("llm_agent_service.service.gallery_search.get_feature_space")
+    def test_empty_text_history_skips_text_encoding(self, space, count):
+        self.text_features.health.return_value = text_info()
+        space.return_value = FeatureSpaceInfo("chinese-clip-test", "person", 2, "cosine", True)
+        count.return_value = 0
+        result = self.service.search_description_in_history("红衣服", 5)
+        self.assertEqual(result["status"], "empty_text_history")
+        self.assertEqual(result["scope"], "history_samples")
+        self.assertEqual(result["candidates"], [])
+        self.text_features.query_text.assert_not_called()
+
+    def test_history_text_repository_filters_history_features_and_rejects_unsafe_schema(self):
+        engine = MagicMock()
+        conn = engine.connect.return_value.__enter__.return_value
+        conn.execute.return_value.mappings.return_value.all.return_value = []
+        search_text_samples(engine, "public", "space", "[1.0,0.0]", 5)
+        sql = str(conn.execute.call_args.args[0])
+        self.assertIn("s.purpose = 'history'", sql)
+        self.assertIn("f.feature_space_id = :space", sql)
+        self.assertIn("f.embedding <=> CAST(:query AS vector)", sql)
+        self.assertEqual(conn.execute.call_args.args[1],
+                         {"query": "[1.0,0.0]", "space": "space", "limit": 5})
+        conn.execute.return_value.scalar_one.return_value = 0
+        self.assertEqual(count_text_samples(engine, "public", "space"), 0)
+        with self.assertRaises(ValueError):
+            search_text_samples(engine, 'public"; DROP TABLE x', "space", "[1.0]", 5)
+        with self.assertRaises(ValueError):
+            count_text_samples(engine, 'public"; DROP TABLE x', "space")
+
 
 class GalleryChatTests(unittest.TestCase):
     def test_description_tool_does_not_receive_uploaded_image(self):
@@ -340,6 +428,23 @@ class GalleryChatTests(unittest.TestCase):
             "找穿红衣服的人", image_base64=image_data())
         gallery.search_description.assert_called_once_with("红色上衣", 2)
         self.assertEqual(result.data["search_type"], "text")
+
+    def test_history_description_tool_is_separate_from_registered_identity_search(self):
+        gallery = MagicMock()
+        gallery.search_description_in_history.return_value = {
+            "type": "pedestrian_search", "search_type": "text",
+            "scope": "history_samples", "status": "ok", "candidates": [],
+        }
+        registry = build_default_registry(MagicMock(), gallery)
+        tool = registry.get("search_pedestrians_by_description_in_history")
+        result = tool.invoke({"description": "红色上衣", "top_k": 3})
+        self.assertTrue(result.ok)
+        self.assertEqual(result.data["scope"], "history_samples")
+        gallery.search_description_in_history.assert_called_once_with("红色上衣", 3)
+        gallery.search_description.assert_not_called()
+        self.assertIn("不限于已登记身份", tool.description)
+        self.assertIn("已登记人员",
+                      registry.get("search_pedestrians_by_description").description)
 
     def test_text_search_returns_candidate_cards(self):
         for streaming in (False, True):

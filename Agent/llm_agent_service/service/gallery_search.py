@@ -7,6 +7,7 @@ import os
 from collections import defaultdict
 from datetime import tzinfo
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import uuid4
 
 from PIL import Image
@@ -14,10 +15,12 @@ from PIL import Image
 from llm_agent_service.db.identity_repo import (
     count_searchable_features,
     count_text_identities,
+    count_text_samples,
     get_feature_space,
     list_occurrences,
     search_identities,
     search_text_identities,
+    search_text_samples,
 )
 from llm_agent_service.service.clipreid_client import ClipReIDClient
 from llm_agent_service.service.text_reid_client import TextReIDClient, TextTooLongError
@@ -266,6 +269,102 @@ class GallerySearchService:
                     "没有校准阈值，候选仅用于外观筛选，不确认身份或在场情况。",
             candidates=[self._text_candidate(candidate) for candidate in candidates],
         )
+
+    def search_description_in_history(self, description: str, top_k: int) -> dict:
+        """按外观描述检索全部历史轨迹裁剪图，不限于已登记身份。
+
+        与 ``search_description`` 使用同一个 Chinese-CLIP 文本空间，但读取样本
+        管线为 history 样本写入的特征，因此候选是真实轨迹而不是登记照片。
+        """
+        base = {"type": "pedestrian_search", "search_type": "text",
+                "scope": "history_samples", "count": 0, "candidates": []}
+        text = (description or "").strip()
+        if not text:
+            return dict(base, status="missing_description", message="请提供衣着、颜色、携带物品等外观描述。")
+        if len(text) > self.text_max_chars:
+            return dict(base, status="description_too_long",
+                        message=f"外观描述过长，请精简到{self.text_max_chars}个字符以内。")
+        info = self.text_feature_client.health()
+        space = info["feature_space_id"]
+        db_space = get_feature_space(self.engine, self.schema, space)
+        if db_space is None:
+            return dict(base, status="feature_space_missing",
+                        message="数据库中还没有登记身份文本检索特征空间，未执行检索。")
+        if (not db_space.enabled or db_space.metric != "cosine"
+                or db_space.object_type != "person"
+                or db_space.dimensions != info["embedding_dim"]):
+            return dict(base, status="feature_space_incompatible",
+                        message="登记身份文本检索特征空间与当前 Chinese-CLIP 不兼容，未执行检索。")
+        scanned = count_text_samples(self.engine, self.schema, space)
+        if scanned == 0:
+            return dict(base, status="empty_text_history", scanned_count=0, compatible_count=0,
+                        message="历史轨迹还没有写入 Chinese-CLIP 特征，未执行文本检索。")
+        try:
+            query, info = self.text_feature_client.query_text(text)
+        except TextTooLongError:
+            return dict(base, status="description_too_long",
+                        message=f"外观描述超过模型可编码长度，请精简到{self.text_max_chars}个字符以内。")
+        candidates = search_text_samples(
+            self.engine, self.schema, space, self._vector_literal(query), top_k)
+        if not candidates:
+            return dict(base, status="no_text_candidates", scanned_count=scanned,
+                        compatible_count=0,
+                        message="历史轨迹文本特征存在，但没有可返回的轨迹候选。")
+        return dict(
+            base,
+            status="ok",
+            method=self.text_feature_client.method,
+            embedding_model=space,
+            text_contract_id=info["text_contract_id"],
+            feature_dimension=info["embedding_dim"],
+            score_type="cosine_similarity",
+            text_chars=info["text_chars"], token_count=info["token_count"],
+            language=info["language"],
+            scanned_count=scanned, compatible_count=candidates[0].compatible_count,
+            count=len(candidates),
+            message="在全部已入库历史轨迹裁剪图中按外观描述的余弦相似度排序；"
+                    "候选是轨迹图像而不是身份确认，已关联身份的会显示姓名，"
+                    "未识别轨迹没有姓名。结果只覆盖当前保留期内的图像。",
+            candidates=[self._text_sample_candidate(candidate) for candidate in candidates],
+        )
+
+    def _text_sample_candidate(self, candidate) -> dict:
+        kind = "登记身份" if candidate.identity_kind == "registered" else "临时身份"
+        label = candidate.display_name or (
+            f"{kind} #{candidate.display_no}"
+            if candidate.display_no is not None else "未识别轨迹")
+        occurrence = {
+            "tracklet_id": candidate.tracklet_id,
+            "source_id": candidate.source_id,
+            "camera": candidate.camera_name or candidate.source_id,
+            "start_at": self._time(candidate.first_observed_at),
+            "end_at": self._time(candidate.last_observed_at),
+            "asset_id": candidate.asset_id,
+            "access_url": (f"/api/v1/business/assets/{candidate.asset_id}/content"
+                           if candidate.asset_id else None),
+        }
+        return {
+            "tracklet_id": candidate.tracklet_id,
+            "sample_id": candidate.sample_id,
+            "feature_id": candidate.feature_id,
+            "asset_id": candidate.asset_id,
+            "access_url": occurrence["access_url"],
+            "image_base64": self._preview_data_url(
+                SimpleNamespace(storage_key=candidate.storage_key,
+                                content_type=candidate.content_type)),
+            "similarity": candidate.similarity,
+            "identity_id": candidate.identity_id,
+            # 保留 person_id 字段供现有前端候选卡片复用；未识别轨迹为 null。
+            "person_id": candidate.identity_id,
+            "identity_kind": candidate.identity_kind,
+            "display_no": candidate.display_no,
+            "name": candidate.display_name,
+            "label": label,
+            "employee_id": candidate.employee_id,
+            "occurred_at": self._time(candidate.occurred_at),
+            "occurrence_count": 1,
+            "occurrences": [occurrence],
+        }
 
     def _text_candidate(self, candidate) -> dict:
         kind = "登记身份"
