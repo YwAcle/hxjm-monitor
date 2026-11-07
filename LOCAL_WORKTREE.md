@@ -31,18 +31,6 @@ HXJM_ANALYSIS_ROOT="${HXJM_ANALYSIS_ROOT:-/data/nfs_storage/hxjm}"
 `http://127.0.0.1:28010`。算法所属目录独立于 Git 主仓库；复制或独立克隆项目
 不会获得算法启动权。只有算法目录允许显式选择 `VIDEO_ANALYSIS_MODE=local`。
 
-某个工作区需要在本目录内验证算法和入库管线时，可在该目录创建被 Git 忽略的
-`local-video.local.env`，覆盖不提交的归属设置：
-
-```bash
-# /data/nfs_storage/hxjm-zwd/local-video.local.env
-HXJM_ANALYSIS_ROOT="/data/nfs_storage/hxjm-zwd"
-```
-
-它覆盖受版本控制的 `local-video.env` 默认值，只作用于本目录，并用本目录的
-端口、队列和 `local-results.env`。同一时间只应有一套 BoT-SORT 占用模型和这些
-来源；切换到本目录前先停止主目录服务，避免两个生产端争用同一特征实例和 GPU。
-
 `/data/nfs_storage/hxjm-wsc/hxjm-monitor` 只通过 WebSocket 订阅检测框、跟踪 ID
 和分析状态，不启动或准备模型，不启动 ReID/VAD/DeepSORT 推理进程。
 即使主算法未运行，也可正常启动个人项目；页面会提示 AI 服务离线并重连，

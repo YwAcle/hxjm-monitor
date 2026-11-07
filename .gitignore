@@ -172,9 +172,6 @@ mtx/mediamtx/mediamtx
 **/build.backup*/
 **/dist.backup*/
 
-# Private per-checkout launcher override (analysis owner and video mode).
-/local-video.local.env
-
 # Private tracking persistence credentials and source IDs
 /local-results.env
 /local-results-sources.json
