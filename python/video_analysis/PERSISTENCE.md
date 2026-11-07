@@ -41,21 +41,8 @@ hxjm:
             - streams.close
             - tasks.submit
             - tasks.start
-            - tasks.finish
             - results.register
             - tracking.close
-            # 开启 VIDEO_SAMPLES_ENABLED 时还需要样本与查询处理权限。
-            - assets.upload
-            - media.resolve
-            - samples.register
-            - samples.process
-            - feature_spaces.register
-            - features.register
-            - identities.associate
-            - queries.process
-            - queries.get
-            - queries.candidates
-            - search.execute
           source-ids:
             - 实际来源UUID
 ```
@@ -90,9 +77,7 @@ hxjm:
 在可靠持久化之上可显式开启样本管线：`VIDEO_SAMPLES_ENABLED=true`，并提供
 特征服务地址`VIDEO_SAMPLES_FEATURE_URL`、特征能力实例
 `VIDEO_SAMPLES_INSTANCE_ID`及可选阈值/队列/轮询参数，见
-`deploy/botsort/video-results.env.example`。样本管线沿用轨迹生产端的服务身份，
-该身份还需具备上面列出的样本、图片、特征和查询操作权限，否则首次登记即被拒绝。
-样本管线随`video_analysis.app`
+`deploy/botsort/video-results.env.example`。样本管线随`video_analysis.app`
 的lifespan启动和停止，`/health`的`sample_pipeline`字段报告队列和两个特征空间的状态。
 它只消费后端已确认的帧：`/results/register`确认后才复制该帧的整身裁剪图，
 不经过展示JPEG或展示TTL过滤。
