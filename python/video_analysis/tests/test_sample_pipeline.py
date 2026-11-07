@@ -93,6 +93,26 @@ class FakeExtractor:
                 'normalized': True, 'embedding': [1.0, 0.0, 0.0]}
 
 
+class FakeTextExtractor(FakeExtractor):
+    def definition(self):
+        return {'feature_space_id': 'text-space', 'dimensions': 3}
+
+    def extract(self, image, metadata, bbox=None):
+        return {'feature_space_id': 'text-space', 'embedding_dim': 3,
+                'normalized': True, 'embedding': [0.0, 1.0, 0.0]}
+
+
+class FlakyTextExtractor(FakeTextExtractor):
+    def __init__(self):
+        self.failures = 1
+
+    def extract(self, image, metadata, bbox=None):
+        if self.failures:
+            self.failures -= 1
+            raise BusinessUnavailable()
+        return super().extract(image, metadata, bbox)
+
+
 class SamplePipelineTests(unittest.TestCase):
     def fixture(self, queue_size=2):
         client = FakeClient()
@@ -197,6 +217,105 @@ class SamplePipelineTests(unittest.TestCase):
         # History text features never create a CLIP-ReID identity assignment.
         self.assertNotIn('identity', client.calls)
         self.assertIn(':space:test-space:', client.task_payloads[0]['business_key'])
+
+    def test_live_pipeline_writes_image_and_text_features_in_one_pass(self):
+        client = FakeClient()
+        pipeline = LocalSamplePipeline(client, threshold=0.88, instance_id=identifier(),
+                                       extractor=FakeExtractor(), text_extractor=FakeTextExtractor(),
+                                       queue_size=2, finish_tasks=True)
+        frame = SimpleNamespace(frame=np.zeros((30, 20, 3), dtype=np.uint8),
+                                frame_ts_ms=int(time.time() * 1000), source_width=20, source_height=30,
+                                public_frame_ref=SimpleNamespace(source_id=identifier(),
+                                                                 stream_session_id=identifier(),
+                                                                 frame_id=identifier()))
+        detection = {'label': 'person', 'track_id': 7, 'bbox': [0.1, 0.1, 0.8, 0.9],
+                     'confidence': 0.9, 'is_prediction': False}
+        context = identifier()
+        pipeline.offer(frame, [detection], tracking_context_id=context)
+        self.acknowledge(pipeline, frame, context)
+        job = next(iter(pipeline._jobs.values()))
+        pipeline._process(job)
+
+        features = {payload['feature_space_id']: payload for payload in client.feature_payloads}
+        self.assertEqual(set(features), {'test-space', 'text-space'})
+        self.assertNotEqual(features['test-space']['feature_id'],
+                            features['text-space']['feature_id'])
+        for payload in features.values():
+            self.assertEqual(payload['sample_id'], job.sample_id)
+            self.assertEqual(payload['tracklet_id'], job.tracklet_id)
+        self.assertIsNone(features['text-space']['identity_id'])
+        # Only the CLIP-ReID space may assign an identity; finishing is per-space.
+        self.assertEqual(client.calls.count('identity'), 1)
+        self.assertEqual(client.calls.count('finish'), 2)
+        self.assertEqual(len(client.task_payloads), 2)
+        self.assertNotEqual(client.task_payloads[0]['business_key'],
+                            client.task_payloads[1]['business_key'])
+        self.assertEqual(pipeline.status()['feature_spaces'],
+                         {'image': 'test-space', 'text': 'text-space'})
+
+    def test_text_space_retry_keeps_the_already_written_image_feature(self):
+        client = FakeClient()
+        pipeline = LocalSamplePipeline(client, threshold=0.88, instance_id=identifier(),
+                                       extractor=FakeExtractor(),
+                                       text_extractor=FlakyTextExtractor(), finish_tasks=True)
+        frame = SimpleNamespace(frame=np.zeros((30, 20, 3), dtype=np.uint8),
+                                frame_ts_ms=int(time.time() * 1000), source_width=20, source_height=30,
+                                public_frame_ref=SimpleNamespace(source_id=identifier(),
+                                                                 stream_session_id=identifier(),
+                                                                 frame_id=identifier()))
+        detection = {'label': 'person', 'track_id': 7, 'bbox': [0.1, 0.1, 0.8, 0.9],
+                     'confidence': 0.9, 'is_prediction': False}
+        context = identifier()
+        pipeline.offer(frame, [detection], tracking_context_id=context)
+        self.acknowledge(pipeline, frame, context)
+        job = next(iter(pipeline._jobs.values()))
+        with self.assertRaises(BusinessUnavailable):
+            pipeline._process(job)
+        self.assertEqual([payload['feature_space_id'] for payload in client.feature_payloads],
+                         ['test-space'])
+        pipeline._process(job)
+        self.assertEqual([payload['feature_space_id'] for payload in client.feature_payloads],
+                         ['test-space', 'text-space'])
+        self.assertEqual(client.calls.count('asset'), 1)
+        self.assertEqual(client.calls.count('sample'), 1)
+        self.assertEqual(client.calls.count('finish'), 2)
+
+    def test_text_lane_enrollment_feature_keeps_identity_without_association(self):
+        client = FakeClient()
+        pipeline = LocalSamplePipeline(client, threshold=0.88, instance_id=identifier(),
+                                       extractor=FakeExtractor(), text_extractor=FakeTextExtractor())
+        client.image_content = Mock(return_value=b'fixture-image')
+        row = {'sample_id': identifier(), 'asset_id': identifier(),
+               'identity_id': identifier(), 'occurred_at': datetime.now(timezone.utc).isoformat(),
+               'expires_at': None}
+        text_encoder = next(encoder for encoder in pipeline._encoders if encoder.role == 'text')
+        pipeline._enrollment(row, text_encoder)
+        feature = client.feature_payloads[0]
+        self.assertEqual(feature['feature_space_id'], 'text-space')
+        self.assertEqual(feature['identity_id'], row['identity_id'])
+        self.assertNotIn('identity', client.calls)
+
+    def test_live_dual_space_polls_enrollment_and_history(self):
+        client = FakeClient()
+        pipeline = LocalSamplePipeline(client, threshold=0.88, instance_id=identifier(),
+                                       extractor=FakeExtractor(), text_extractor=FakeTextExtractor(),
+                                       poll_interval_seconds=0.05)
+        pipeline.start()
+        try:
+            deadline = time.time() + 2
+            while not any(path == '/samples/pending' and parameters.get('feature_space_id') == 'text-space'
+                          and parameters.get('purpose') == 'history'
+                          for path, parameters in client.parameters):
+                if time.time() > deadline:
+                    self.fail('text history lane did not poll')
+                time.sleep(0.01)
+        finally:
+            self.assertTrue(pipeline.stop())
+        pending = {(parameters['purpose'], parameters['feature_space_id'])
+                   for path, parameters in client.parameters if path == '/samples/pending'}
+        self.assertIn(('enrollment', 'test-space'), pending)
+        self.assertIn(('enrollment', 'text-space'), pending)
+        self.assertIn(('history', 'text-space'), pending)
 
     def test_invalid_sample_purpose_is_rejected(self):
         for purpose in ('query', '', 'History'):

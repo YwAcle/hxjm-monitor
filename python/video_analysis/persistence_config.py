@@ -4,6 +4,7 @@ import math
 import os
 import re
 from pathlib import Path
+from urllib.parse import urlsplit
 import uuid
 from zoneinfo import ZoneInfo
 
@@ -22,7 +23,13 @@ class PersistenceConfig:
         if switch not in ('true', 'false'):
             raise ValueError('VIDEO_RESULTS_PERSIST_ENABLED must be true or false')
         self.enabled = switch == 'true'
+        self.samples = None
         if not self.enabled:
+            samples_switch = env.get('VIDEO_SAMPLES_ENABLED', 'false').lower()
+            if samples_switch not in ('true', 'false'):
+                raise ValueError('VIDEO_SAMPLES_ENABLED must be true or false')
+            if samples_switch == 'true':
+                raise ValueError('Video samples require VIDEO_RESULTS_PERSIST_ENABLED=true')
             return
         required = ('BUSINESS_BASE_URL', 'SERVICE_ID', 'SERVICE_TOKEN', 'SPOOL_DIR', 'SOURCE_MAP_FILE',
                     'IMPLEMENTATION_CODE', 'IMPLEMENTATION_VERSION')
@@ -72,6 +79,46 @@ class PersistenceConfig:
         self.flush_seconds = self._seconds(env, 'FLUSH_SECONDS', .5)
         self.timeout = self._seconds(env, 'TIMEOUT_SECONDS', 10)
         self.retry_max = self._seconds(env, 'RETRY_MAX_SECONDS', 60)
+        self.samples = self._samples(env)
+
+    @staticmethod
+    def _samples(env):
+        """Sample extraction is an explicit opt-in on top of reliable persistence."""
+        switch = env.get('VIDEO_SAMPLES_ENABLED', 'false').lower()
+        if switch not in ('true', 'false'):
+            raise ValueError('VIDEO_SAMPLES_ENABLED must be true or false')
+        if switch == 'false':
+            return None
+        text_switch = env.get('VIDEO_SAMPLES_TEXT_ENABLED', 'true').lower()
+        if text_switch not in ('true', 'false'):
+            raise ValueError('VIDEO_SAMPLES_TEXT_ENABLED must be true or false')
+        feature_url = env.get('VIDEO_SAMPLES_FEATURE_URL', '')
+        parts = urlsplit(feature_url)
+        if (parts.scheme not in ('http', 'https') or not parts.hostname
+                or parts.username is not None or parts.password is not None
+                or parts.query or parts.fragment or parts.path not in ('', '/')):
+            raise ValueError('VIDEO_SAMPLES_FEATURE_URL must be an HTTP(S) origin')
+        instance_id = env.get('VIDEO_SAMPLES_INSTANCE_ID', '')
+        try:
+            valid_uuid(instance_id)
+        except (TypeError, ValueError):
+            raise ValueError('VIDEO_SAMPLES_INSTANCE_ID must be a canonical nonzero UUID') from None
+        capability_code = env.get('VIDEO_SAMPLES_CAPABILITY_CODE', 'person.reidentification')
+        if (not capability_code.strip() or len(capability_code) > 64
+                or any(ord(c) < 32 for c in capability_code)):
+            raise ValueError('Invalid VIDEO_SAMPLES_CAPABILITY_CODE')
+        threshold = float(env.get('VIDEO_SAMPLES_THRESHOLD', '0.88'))
+        if not math.isfinite(threshold) or not 0 <= threshold <= 1:
+            raise ValueError('VIDEO_SAMPLES_THRESHOLD must be between 0 and 1')
+        queue_size = int(env.get('VIDEO_SAMPLES_QUEUE_SIZE', '16'))
+        if queue_size <= 0:
+            raise ValueError('VIDEO_SAMPLES_QUEUE_SIZE must be positive')
+        poll_seconds = float(env.get('VIDEO_SAMPLES_POLL_SECONDS', '5'))
+        if not math.isfinite(poll_seconds) or poll_seconds <= 0:
+            raise ValueError('VIDEO_SAMPLES_POLL_SECONDS must be finite and positive')
+        return dict(feature_url=feature_url, instance_id=instance_id,
+                    capability_code=capability_code, threshold=threshold, queue_size=queue_size,
+                    text_enabled=text_switch == 'true', poll_interval_seconds=poll_seconds)
 
     @staticmethod
     def _integer(env, key, default, minimum, maximum):

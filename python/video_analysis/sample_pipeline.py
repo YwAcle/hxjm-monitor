@@ -131,6 +131,18 @@ class TextReIDFeatureClient(ReIDFeatureClient):
         return self._request('/v1/reid/text-reid-image-features', data, content_type)
 
 
+@dataclass(frozen=True)
+class _FeatureEncoder:
+    """One feature space written by this pipeline.
+
+    ``associate`` creates a CLIP-ReID identity assignment for live crops; the
+    Chinese-CLIP text space never assigns identities, it only keeps the tracklet.
+    """
+    role: str
+    extractor: object
+    associate: bool
+
+
 @dataclass
 class _Sample:
     key: tuple
@@ -144,6 +156,8 @@ class _Sample:
     asset_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     sample_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     feature_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    # Feature IDs for additional spaces; the primary space keeps ``feature_id``.
+    feature_ids: dict = field(default_factory=dict)
     tracklet_id: str = None
     image: bytes = None
     calls: dict = field(default_factory=dict)
@@ -160,7 +174,8 @@ class LocalSamplePipeline:
     """
     def __init__(self, client, *, feature_url=None, threshold, instance_id=None,
                  capability_code='person.reidentification', queue_size=16,
-                 selector=None, extractor=None, execution_for=None, finish_tasks=False,
+                 selector=None, extractor=None, text_extractor=None, text_enabled=False,
+                 execution_for=None, finish_tasks=False,
                  poll_interval_seconds=2, enrollment_only=False, sample_purpose='enrollment'):
         if type(queue_size) is not int or queue_size <= 0:
             raise ValueError('Sample queue size must be positive')
@@ -176,6 +191,15 @@ class LocalSamplePipeline:
         self.queue_size, self.finish_tasks = queue_size, finish_tasks
         self.selector = selector or FirstObservedPerson()
         self.extractor = extractor or ReIDFeatureClient(feature_url)
+        if text_extractor is None and text_enabled:
+            if feature_url is None:
+                raise ValueError('Text feature encoding requires a feature URL')
+            text_extractor = TextReIDFeatureClient(feature_url)
+        self.text_extractor = text_extractor
+        primary_role = 'text' if isinstance(self.extractor, TextReIDFeatureClient) else 'image'
+        self._encoders = [_FeatureEncoder(primary_role, self.extractor, associate=True)]
+        if text_extractor is not None:
+            self._encoders.append(_FeatureEncoder('text', text_extractor, associate=False))
         self.execution_for = execution_for
         self.poll_interval_seconds = poll_interval_seconds
         self.enrollment_only = bool(enrollment_only)
@@ -184,7 +208,7 @@ class LocalSamplePipeline:
         self._jobs, self._selected = {}, {}
         self._selection_cleanup_at = 0
         self._thread, self._stopping = None, False
-        self._space, self._space_request = None, None
+        self._spaces, self._space_requests = {}, {}
         self._completed = self._failed = self._full = 0
         self._last_error = None
         self._material_thread = None
@@ -276,6 +300,8 @@ class LocalSamplePipeline:
                                   'thread_alive': self._material_thread is not None and self._material_thread.is_alive()},
                     'strategy': self.selector.name,
                     'sample_purpose': self.sample_purpose,
+                    'feature_spaces': {encoder.role: (self._spaces.get(encoder.role) or {}).get(
+                        'feature_space_id') for encoder in self._encoders},
                     'mode': (self.sample_purpose + '_only') if self.enrollment_only else 'history'}
 
     def stop(self, timeout=5):
@@ -298,6 +324,10 @@ class LocalSamplePipeline:
             job.responses[name] = call(job.calls[name])
         return job.responses[name]
 
+    def _slot(self, encoder, name):
+        """Response key for a feature space; the primary space keeps its old names."""
+        return name if encoder is self._encoders[0] else encoder.role + ':' + name
+
     def _process(self, job):
         if job.image is None:
             import cv2
@@ -318,29 +348,48 @@ class LocalSamplePipeline:
             'occurred_at': job.occurred_at, 'expires_at': expiry, 'bbox': job.bbox,
             'quality': {'schema_version': '1', 'selection_strategy': self.selector.name},
         }, self.client.register_sample)
-        self._register_embedding(job, expiry)
+        errors = []
+        for encoder in self._encoders:
+            try:
+                self._register_embedding(job, expiry, associate=encoder.associate, encoder=encoder)
+            except Exception as error:
+                errors.append(error)
+        if errors and (len(errors) == len(self._encoders)
+                       or any(getattr(error, 'retryable', False) for error in errors)):
+            # Retry the failed space; completed spaces stay cached on the job.
+            raise next((error for error in errors if getattr(error, 'retryable', False)), errors[0])
+        if errors:
+            # One space may be permanently unavailable; the history/enrollment poller
+            # for that space will pick the sample up again on its next pass.
+            LOG.warning('Feature space skipped for sample %s: %s', job.sample_id, errors[0])
 
-    def _ensure_space(self):
+    def _ensure_space(self, encoder=None):
+        encoder = self._encoders[0] if encoder is None else encoder
         with self._space_lock:
-            if self._space is not None:
-                return
-            if self._space_request is None:
-                self._space_request = dict(self.extractor.definition(), request_id=str(uuid.uuid4()))
-            self.client.register_feature_space(self._space_request)
-            self._space = dict(self._space_request)
+            if encoder.role in self._spaces:
+                return self._spaces[encoder.role]
+            if encoder.role not in self._space_requests:
+                self._space_requests[encoder.role] = dict(
+                    encoder.extractor.definition(), request_id=str(uuid.uuid4()))
+            self.client.register_feature_space(self._space_requests[encoder.role])
+            self._spaces[encoder.role] = dict(self._space_requests[encoder.role])
+            return self._spaces[encoder.role]
 
-    def _register_embedding(self, job, expiry, *, identity_id=None, associate=True):
-        self._ensure_space()
+    def _register_embedding(self, job, expiry, *, identity_id=None, associate=True, encoder=None):
+        encoder = self._encoders[0] if encoder is None else encoder
+        space = self._ensure_space(encoder)
+        feature_id = (job.feature_id if encoder is self._encoders[0]
+                      else job.feature_ids.setdefault(encoder.role, str(uuid.uuid4())))
         if self.execution_for is not None:
-            if 'execution' not in job.responses:
-                job.responses['execution'] = self.execution_for(job)
-            execution = job.responses['execution']
+            if self._slot(encoder, 'execution') not in job.responses:
+                job.responses[self._slot(encoder, 'execution')] = self.execution_for(job)
+            execution = job.responses[self._slot(encoder, 'execution')]
         else:
-            created = self._once(job, 'task', lambda: {
+            created = self._once(job, self._slot(encoder, 'task'), lambda: {
                 'task_kind': self.capability_code,
                 # One sample yields one feature per run, and features are unique by
                 # (run_id, producer_feature_key): each feature space needs its own task.
-                'business_key': ('sample:' + job.sample_id + ':space:' + self._space['feature_space_id']
+                'business_key': ('sample:' + job.sample_id + ':space:' + space['feature_space_id']
                                  + ':instance:' + self.instance_id),
                 'capability_code': self.capability_code, 'task_mode': 'once',
                 'input': {'kind': 'image', 'asset_ids': [job.asset_id]},
@@ -348,33 +397,34 @@ class LocalSamplePipeline:
                 **({'expires_at': expiry} if expiry is not None else {}),
             }, self.client.create_task)
             if created.get('state') == 'pending':
-                execution = self._once(job, 'execution', lambda: {
+                execution = self._once(job, self._slot(encoder, 'execution'), lambda: {
                     'task_id': created['task_id'], 'expected_revision': created['revision'],
                     'instance_id': self.instance_id,
                 }, self.client.start_task)
             elif created.get('state') == 'running' and created.get('run_id'):
                 # A previous worker already started this key and stopped mid-run;
                 # resume that run instead of asking the backend to start it again.
-                execution = job.responses.setdefault('execution', {
+                execution = job.responses.setdefault(self._slot(encoder, 'execution'), {
                     'task_id': created['task_id'], 'run_id': created['run_id'],
                     'revision': created['revision']})
             else:
                 raise BusinessRequestError('BUSINESS_TASK_' + str(created.get('state')).upper())
-        if 'embedding' not in job.responses:
-            metadata = {'request_id': job.feature_id, 'source_asset_id': job.asset_id,
+        if self._slot(encoder, 'embedding') not in job.responses:
+            metadata = {'request_id': feature_id, 'source_asset_id': job.asset_id,
                         **({'stream_session_id': job.session_id} if job.session_id else {}),
                         **({'track_id': job.tracklet_id} if job.tracklet_id else {}),
                         **({'frame_ids': [job.frame_id]} if job.frame_id else {})}
-            embedding = (self.extractor.extract(job.image, metadata, bbox=job.pixel_bbox)
-                         if job.pixel_bbox is not None else self.extractor.extract(job.image, metadata))
-            if (embedding.get('feature_space_id') != self._space['feature_space_id']
-                    or embedding.get('embedding_dim') != self._space['dimensions']
+            embedding = (encoder.extractor.extract(job.image, metadata, bbox=job.pixel_bbox)
+                         if job.pixel_bbox is not None and encoder is self._encoders[0]
+                         else encoder.extractor.extract(job.image, metadata))
+            if (embedding.get('feature_space_id') != space['feature_space_id']
+                    or embedding.get('embedding_dim') != space['dimensions']
                     or embedding.get('normalized') is not True):
                 raise BusinessRequestError('FEATURE_SPACE_CHANGED')
-            job.responses['embedding'] = embedding
-        embedding = job.responses['embedding']
-        self._once(job, 'feature', lambda: {
-            'feature_id': job.feature_id, 'feature_space_id': self._space['feature_space_id'],
+            job.responses[self._slot(encoder, 'embedding')] = embedding
+        embedding = job.responses[self._slot(encoder, 'embedding')]
+        self._once(job, self._slot(encoder, 'feature'), lambda: {
+            'feature_id': feature_id, 'feature_space_id': space['feature_space_id'],
             'run_id': execution['run_id'], 'producer_feature_key': 'sample:' + job.sample_id,
             'embedding': embedding['embedding'], 'sample_id': job.sample_id,
             'tracklet_id': job.tracklet_id, 'identity_id': identity_id, 'aggregation_method': 'single',
@@ -382,14 +432,14 @@ class LocalSamplePipeline:
             'processed_at': datetime.now(timezone.utc).isoformat(), 'expires_at': expiry,
         }, self.client.register_feature)
         if associate:
-            self._once(job, 'identity', lambda: {
-                'tracklet_id': job.tracklet_id, 'feature_id': job.feature_id,
+            self._once(job, self._slot(encoder, 'identity'), lambda: {
+                'tracklet_id': job.tracklet_id, 'feature_id': feature_id,
                 'run_id': execution['run_id'], 'threshold': self.threshold,
             }, self.client.associate_identity)
         if self.finish_tasks:
-            self._once(job, 'finish', lambda: {
+            self._once(job, self._slot(encoder, 'finish'), lambda: {
                 'task_id': execution['task_id'], 'run_id': execution['run_id'],
-                'expected_revision': execution['revision'], 'feature_ids': [job.feature_id],
+                'expected_revision': execution['revision'], 'feature_ids': [feature_id],
             }, self.client.finish_task)
 
     def _material_job(self, kind, row):
@@ -409,23 +459,25 @@ class LocalSamplePipeline:
             self._material_cache[key] = job
         return self._material_cache[key]
 
-    def _enrollment(self, row):
+    def _enrollment(self, row, encoder=None):
         job = self._material_job('enrollment', row)
         if job.image is None:
             job.image = self.client.image_content(job.asset_id)
-        self._register_embedding(job, job.expires_at, identity_id=row['identity_id'], associate=False)
+        self._register_embedding(job, job.expires_at, identity_id=row['identity_id'],
+                                 associate=False, encoder=encoder)
         return job
 
-    def _history_sample(self, row):
-        """Encode a stored history crop into the text space for all-image search.
+    def _history_sample(self, row, encoder=None):
+        """Encode a stored history crop for all-image search.
 
-        The feature keeps the sample's tracklet so text candidates can be linked to
-        a real trajectory, but no identity association is created here.
+        In the text space the feature keeps the sample's tracklet so text candidates
+        can be linked to a real trajectory, but no identity association is created.
         """
         job = self._material_job('history', row)
         if job.image is None:
             job.image = self.client.image_content(job.asset_id)
-        self._register_embedding(job, job.expires_at, identity_id=None, associate=False)
+        self._register_embedding(job, job.expires_at, identity_id=None, associate=False,
+                                 encoder=encoder)
         return job
 
     def _query(self, row):
@@ -480,52 +532,71 @@ class LocalSamplePipeline:
         }, lambda payload: self.client.post('/search', payload))
         return job
 
+    def _lanes(self):
+        """Sample purposes each feature space consumes from the backend."""
+        if self.enrollment_only:
+            return [(self._encoders[0], (self.sample_purpose,))]
+        return [(encoder, (self.sample_purpose,) if encoder is self._encoders[0]
+                 else ('enrollment', 'history'))
+                for encoder in self._encoders]
+
+    def _pending_rows(self, kind, response):
+        name = 'query_id' if kind == 'query' else 'sample_id'
+        present = {row[name] for row in response['items']}
+        # Retry rows whose previous attempt did not finish, even if the next poll
+        # no longer returns them (pending queries exclude partially written features).
+        response['items'].extend(job.responses['_pending_row']
+                                 for key, job in list(self._material_cache.items())
+                                 if key[0] == kind and key[1] not in present)
+        return response['items']
+
+    def _process_pending(self, role, kind, rows, processor, blocked):
+        for row in rows:
+            if self._material_stop.is_set():
+                return False
+            identifier = row['sample_id'] if kind != 'query' else row['query_id']
+            key = role, kind, identifier, row.get('revision', 0)
+            if key in blocked:
+                continue
+            try:
+                job = processor(row)
+            except Exception as error:
+                self._material_error = type(error).__name__ + ': ' + str(error)
+                if not getattr(error, 'retryable', False):
+                    blocked.add(key)
+                    self._material_cache.pop((kind, identifier, 0), None)
+                    self._material_failed += 1
+                LOG.error('Pending %s processing failed: %s', kind, error)
+            else:
+                self._material_cache.pop(job.key, None)
+                self._material_completed += 1
+                self._material_error = None
+        return True
+
     def _poll_materials(self):
         """Consume backend-owned sample/query work; keep the original user owner."""
         blocked = set()
         while not self._material_stop.is_set():
             try:
-                self._ensure_space()
-                pending = self.client.get('/samples/pending', {
-                    'purpose': self.sample_purpose,
-                    'feature_space_id': self._space['feature_space_id'], 'limit': 4})
-                queries = (None if self.enrollment_only
-                           else self.client.get('/queries/pending', {'limit': 4}))
-                batches = [(self.sample_purpose, pending)]
-                if queries is not None:
-                    batches.append(('query', queries))
-                for kind, response in batches:
-                    name = 'query_id' if kind == 'query' else 'sample_id'
-                    present = {row[name] for row in response['items']}
-                    response['items'].extend(job.responses['_pending_row']
-                                             for key, job in list(self._material_cache.items())
-                                             if key[0] == kind and key[1] not in present)
-                sample_processor = (self._enrollment if self.sample_purpose == 'enrollment'
-                                    else self._history_sample)
-                processors = [(self.sample_purpose, pending['items'], sample_processor)]
-                if queries is not None:
-                    processors.append(('query', queries['items'], self._query))
-                for kind, rows, processor in processors:
-                    for row in rows:
-                        if self._material_stop.is_set():
+                for encoder, purposes in self._lanes():
+                    space = self._ensure_space(encoder)
+                    for purpose in purposes:
+                        response = self.client.get('/samples/pending', {
+                            'purpose': purpose,
+                            'feature_space_id': space['feature_space_id'], 'limit': 4})
+                        processor = (self._enrollment if purpose == 'enrollment'
+                                     else self._history_sample)
+                        if not self._process_pending(
+                                encoder.role, purpose, self._pending_rows(purpose, response),
+                                lambda row, processor=processor, encoder=encoder:
+                                    processor(row, encoder), blocked):
                             return
-                        identifier = row['sample_id'] if kind != 'query' else row['query_id']
-                        key = kind, identifier, row.get('revision', 0)
-                        if key in blocked:
-                            continue
-                        try:
-                            job = processor(row)
-                        except Exception as error:
-                            self._material_error = type(error).__name__ + ': ' + str(error)
-                            if not getattr(error, 'retryable', False):
-                                blocked.add(key)
-                                self._material_cache.pop((kind, identifier, 0), None)
-                                self._material_failed += 1
-                            LOG.error('Pending %s processing failed: %s', kind, error)
-                        else:
-                            self._material_cache.pop(job.key, None)
-                            self._material_completed += 1
-                            self._material_error = None
+                if not self.enrollment_only:
+                    response = self.client.get('/queries/pending', {'limit': 4})
+                    if not self._process_pending('primary', 'query',
+                                                 self._pending_rows('query', response),
+                                                 self._query, blocked):
+                        return
             except Exception as error:
                 self._material_error = type(error).__name__ + ': ' + str(error)
                 LOG.error('Pending material poll failed: %s', error)
