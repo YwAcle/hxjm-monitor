@@ -10,9 +10,11 @@
 ## 文件与复用
 
 - `server.py`：配置、两套模型初始化、截图检测裁剪、批量提取、池化、文字/图片编码、接口和独立启动入口。
+- `remote_server.py`：`ReID-接口规范.md` 的 JSON 契约适配层，复用 `server.py` 的模型类，独立入口与端口。
 - `requirements.txt`：新增 API 依赖，含测试客户端 httpx 与 Chinese-CLIP 所需的 transformers。
 - `tests/test_api.py`：合成图片与注入的 CLIP-ReID 测试提取器，验证图片接口和资源限制。
 - `tests/test_text_api.py`：注入的 Chinese-CLIP 测试提取器，验证文字接口、契约字段和故障隔离。
+- `tests/test_remote_api.py`：注入的假模型，验证远程契约的字段、错误码、坐标换算、数学性质与并发语义。
 - `tests/test_features.py`：数值验证，以及按开关启用的真实模型验证与基本性能测量。
 
 通过独立模块命名空间导入 `../reid/CLIP-ReID/model/make_model.py` 的
@@ -378,6 +380,49 @@ JSON 文本，校验方式为 `sha256(definition_text) == definition_sha256`；
 不可用（`TEXT_MODEL_NOT_READY`），500 表示推理异常。业务错误结构为
 `{"detail":{"error_code":"INVALID_IMAGE","message":"..."}}`；缺失表单字段等
 请求结构错误使用 FastAPI 原生 422 格式。
+
+## 远程契约接口（供其他服务器调用）
+
+`remote_server.py` 按 `ReID-接口规范.md` 实现了一套独立的 JSON 接口，供其他服务器
+的工作台调用。它是 `server.py` 模型加载代码之上的一层薄适配：模型类、特征空间和
+`/v1/reid/*` 本地接口均未改动，两个进程可以同时运行。规范第 7 节的
+`/api/analysis/reid/features` 属可选接口（工作台 v1 不调用），本实现未提供。
+
+启动方式与本地服务相同，只是入口和端口不同；模型路径仍用同一组 `REID_FEATURE_*`
+环境变量：
+
+```bash
+cd /data/nfs_storage/hxjm-zwd
+REID_REMOTE_HOST=0.0.0.0 REID_REMOTE_PORT=28025 REID_FEATURE_DEVICE=cuda:1 \
+REID_FEATURE_WEIGHTS=/data/nfs_storage/hxjm_datas/models/reid/MSMT17_clipreid_RN50_120.pth \
+REID_FEATURE_CONFIG=/data/nfs_storage/hxjm-zwd/python/reid/config/cnn_base.yml \
+REID_FEATURE_TEXT_MODEL=/data/nfs_storage/hxjm_datas/models/reid/chinese-clip-vit-base-patch16 \
+python python/reid_feature_service/remote_server.py
+```
+
+默认监听 `127.0.0.1:28025`（`REID_REMOTE_HOST` / `REID_REMOTE_PORT` 覆盖），避免与
+本地服务的 `28024` 冲突；单 Uvicorn worker、不启用 reload。接口：
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| `GET` | `/api/health` | 两套模型就绪、`model_sha256`、`feature_space_id`、`text_contract_id` |
+| `POST` | `/api/analysis/reid/compare` | 图 vs 多个图（CLIP-ReID，3072 维，余弦相似度） |
+| `POST` | `/api/analysis/reid/compare-text` | 中文描述 vs 多个图（Chinese-CLIP，512 维） |
+
+与本地接口的差异：请求为 `application/json`，图片必须是不超过 300 万字符的
+`data:image/jpeg;base64,...`（不接受文件路径、URL 或 multipart）；`box` 为归一化
+`[left, top, right, bottom]`，服务换算成像素后精确裁剪，不做 EXIF 旋转（带旋转标记
+返回 422 `EXIF_ROTATION`）、不加 padding；响应只返回 `similarity` 与模型标识，不返回
+向量、布尔结论或阈值；业务错误为字符串 `{"detail":"CODE：中文说明"}`；繁忙返回
+429；同一时刻只跑一个推理，超过 60 秒返回 500 `INFERENCE_TIMEOUT`（线程无法强杀，
+名额在该推理真正结束后才释放）。文字模型加载失败不影响 `compare`，`compare-text`
+返回 503。
+
+`feature_space_id`：文字空间与本地一致，为 `fs-` 加规范化定义的完整 64 位摘要；
+图像空间在远程契约中按规范写为完整摘要 `clipreid-rn50-<64 位摘要>`（本地业务接口
+使用的是同一摘要的前 24 位，即 `clipreid-rn50-<24 位>`，两者是同一特征空间）。
+`compare-text` 的 `model_sha256` 取模型目录中实际加载的主权重文件，共享目录下为
+`pytorch_model.bin`（无 `.bin` 时优先 `model.safetensors`，多文件取体积最大者）。
 
 ## 验证
 

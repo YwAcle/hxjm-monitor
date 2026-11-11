@@ -192,3 +192,4 @@ mtx/mediamtx/mediamtx
 **/*.secrets.env
 
 /hxjm-wsc
+.skill/ponytail/SKILL.md
